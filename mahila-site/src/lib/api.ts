@@ -12,8 +12,17 @@ if (!BASE_URL && import.meta.env.PROD) {
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status: number }> {
   try {
+    const apiToken = import.meta.env.VITE_STRAPI_API_TOKEN as string | undefined;
+    const localToken = typeof window !== "undefined" ? localStorage.getItem("strapi_jwt") : null;
+    const token = apiToken || (localToken && localToken !== "admin_authenticated" ? localToken : null);
+    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
     const res = await fetch(`${BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+        ...(init?.headers || {}),
+      },
       ...init,
     });
     let body: any = null;

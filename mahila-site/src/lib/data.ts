@@ -465,31 +465,25 @@ export function newEvent(): EventItem {
 }
 
 export async function saveEvent(ev: EventItem): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above, once admin-editing is re-enabled) ──
-  // Strapi identifies existing records by `documentId` in the URL, not a custom `id`
-  // field in the body — and every write must be wrapped in { data: {...} }.
-  // const isExisting = !ev.id.startsWith("evt_"); // adjust this check to however you detect "new"
-  // const body = {
-  //   data: {
-  //     title: ev.title, description: ev.description, eventDate: ev.eventDate,
-  //     location: ev.location, totalSeats: ev.totalSeats, windows: ev.windows,
-  //     category: ev.categoryId ?? null,
-  //   },
-  // };
-  // const res = isExisting
-  //   ? await api.put(`${ENDPOINTS.events}/${encodeURIComponent(ev.id)}`, body)
-  //   : await api.post(ENDPOINTS.events, body);
-  // if (!res.ok) console.error("saveEvent:", res.error);
-  // return res.ok;
+  const isExisting = !ev.id.startsWith("evt_");
+  const body = {
+    data: {
+      title: ev.title, description: ev.description, eventDate: ev.eventDate,
+      location: ev.location, totalSeats: ev.totalSeats, windows: ev.windows,
+      category: ev.categoryId ?? null,
+    },
+  };
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.events}/${encodeURIComponent(ev.id)}`, body)
+    : await api.post(ENDPOINTS.events, body);
+  if (!res.ok) console.error("saveEvent:", res.error);
+  return res.ok;
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
-  // if (!res.ok) console.error("deleteEvent:", res.error);
-  // return res.ok;
+  const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteEvent:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -504,28 +498,24 @@ export function newBlogPost(section: "story" | "event" | "impact", categoryId: s
 }
 
 export async function saveBlogPost(p: BlogPost): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const isExisting = !p.id.startsWith("post_") && !p.id.startsWith("story_");
-  // const body = {
-  //   data: {
-  //     section: p.section, title: p.title, excerpt: p.excerpt, content: p.content,
-  //     tags: p.tags, category: p.categoryId ?? null,
-  //   },
-  // };
-  // const res = isExisting
-  //   ? await api.put(`${ENDPOINTS.blogPosts}/${encodeURIComponent(p.id)}`, body)
-  //   : await api.post(ENDPOINTS.blogPosts, body);
-  // if (!res.ok) console.error("saveBlogPost:", res.error);
-  // return res.ok;
+  const isExisting = !p.id.startsWith("post_") && !p.id.startsWith("story_");
+  const body = {
+    data: {
+      section: p.section, title: p.title, excerpt: p.excerpt, content: p.content,
+      tags: p.tags, category: p.categoryId ?? null,
+    },
+  };
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.blogPosts}/${encodeURIComponent(p.id)}`, body)
+    : await api.post(ENDPOINTS.blogPosts, body);
+  if (!res.ok) console.error("saveBlogPost:", res.error);
+  return res.ok;
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-  // if (!res.ok) console.error("deleteBlogPost:", res.error);
-  // return res.ok;
+  const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteBlogPost:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -537,23 +527,19 @@ export function newCategory(): Category {
 }
 
 export async function saveCategory(c: Category): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const isExisting = !c.id.startsWith("cat_");
-  // const body = { data: { name: c.name } };
-  // const res = isExisting
-  //   ? await api.put(`${ENDPOINTS.categories}/${encodeURIComponent(c.id)}`, body)
-  //   : await api.post(ENDPOINTS.categories, body);
-  // if (!res.ok) console.error("saveCategory:", res.error);
-  // return res.ok;
+  const isExisting = !c.id.startsWith("cat_");
+  const body = { data: { name: c.name } };
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.categories}/${encodeURIComponent(c.id)}`, body)
+    : await api.post(ENDPOINTS.categories, body);
+  if (!res.ok) console.error("saveCategory:", res.error);
+  return res.ok;
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-  // if (!res.ok) console.error("deleteCategory:", res.error);
-  // return res.ok;
+  const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteCategory:", res.error);
+  return res.ok;
 }
 
 /** Reassign every post in `fromCategoryId` to `toCategoryId` (or null to leave uncategorized). */
@@ -583,23 +569,19 @@ export function newCouncilor(order: number): Councilor {
 }
 
 export async function saveCouncilor(c: Councilor): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const isExisting = !c.id.startsWith("coun_");
-  // const body = { data: { name: c.name, role: c.role, bio: c.bio, order: c.order } };
-  // const res = isExisting
-  //   ? await api.put(`${ENDPOINTS.councilors}/${encodeURIComponent(c.id)}`, body)
-  //   : await api.post(ENDPOINTS.councilors, body);
-  // if (!res.ok) console.error("saveCouncilor:", res.error);
-  // return res.ok;
+  const isExisting = !c.id.startsWith("coun_");
+  const body = { data: { name: c.name, role: c.role, bio: c.bio, order: c.order } };
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.councilors}/${encodeURIComponent(c.id)}`, body)
+    : await api.post(ENDPOINTS.councilors, body);
+  if (!res.ok) console.error("saveCouncilor:", res.error);
+  return res.ok;
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-  // if (!res.ok) console.error("deleteCouncilor:", res.error);
-  // return res.ok;
+  const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteCouncilor:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -611,23 +593,19 @@ export function newTimelineEntry(order: number): TimelineEntry {
 }
 
 export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const isExisting = !t.id.startsWith("tl_");
-  // const body = { data: { year: t.year, title: t.title, description: t.description, order: t.order } };
-  // const res = isExisting
-  //   ? await api.put(`${ENDPOINTS.timeline}/${encodeURIComponent(t.id)}`, body)
-  //   : await api.post(ENDPOINTS.timeline, body);
-  // if (!res.ok) console.error("saveTimelineEntry:", res.error);
-  // return res.ok;
+  const isExisting = !t.id.startsWith("tl_");
+  const body = { data: { year: t.year, title: t.title, description: t.description, order: t.order } };
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.timeline}/${encodeURIComponent(t.id)}`, body)
+    : await api.post(ENDPOINTS.timeline, body);
+  if (!res.ok) console.error("saveTimelineEntry:", res.error);
+  return res.ok;
 }
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-  // if (!res.ok) console.error("deleteTimelineEntry:", res.error);
-  // return res.ok;
+  const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteTimelineEntry:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -635,16 +613,14 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function saveContactInfo(c: ContactInfo): Promise<boolean> {
-  return comingSoon();
-  // ── Strapi logic (restore by deleting the line above) ──
-  // Single types don't take an id in the URL at all.
-  // const body = {
-  //   data: {
-  //     email: c.email, emailNote: c.emailNote, phone: c.phone, phoneNote: c.phoneNote,
-  //     address: c.address, addressNote: c.addressNote, hours: c.hours, hoursNote: c.hoursNote,
-  //   },
-  // };
-  // const res = await api.put(ENDPOINTS.contactInfo, body);
-  // if (!res.ok) console.error("saveContactInfo:", res.error);
-  // return res.ok;
+  const body = {
+    data: {
+      email: c.email, emailNote: c.emailNote, phone: c.phone, phoneNote: c.phoneNote,
+      address: c.address, addressNote: c.addressNote, hours: c.hours, hoursNote: c.hoursNote,
+    },
+  };
+  let res = await api.put(ENDPOINTS.contactInfo, body);
+  if (!res.ok) res = await api.post(ENDPOINTS.contactInfo, body);
+  if (!res.ok) console.error("saveContactInfo:", res.error);
+  return res.ok;
 }
