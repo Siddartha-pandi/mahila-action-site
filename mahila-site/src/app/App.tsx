@@ -563,12 +563,12 @@ function Footer({ setPage }: { setPage: (p: Page) => void }) {
 
         <div className={`${inter()} text-[#f4efe7]/50 text-[12px] text-center mt-12 pt-8 border-t border-[#f4efe7]/20 flex flex-col items-center gap-2`}>
           <span>© {new Date().getFullYear()} Mahila Action. All rights reserved. Empowering women since 1995.</span>
-          <button
+          {/* <button
             onClick={() => { nav("admin"); }}
             className="opacity-20 hover:opacity-60 transition-opacity cursor-pointer text-[10px] tracking-widest uppercase"
           >
             ⚙ Admin
-          </button>
+          </button> */}
         </div>
       </div>
     </footer>
