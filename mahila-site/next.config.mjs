@@ -2,6 +2,7 @@ import path from "node:path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: false,
   experimental: {
     serverComponentsExternalPackages: ["better-sqlite3", "pg", "bcryptjs"],
