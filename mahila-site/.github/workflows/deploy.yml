@@ -31,8 +31,6 @@ jobs:
 
       - name: Build Next.js Static Export
         run: npm run build
-        env:
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

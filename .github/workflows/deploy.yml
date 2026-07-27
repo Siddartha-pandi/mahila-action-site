@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -32,16 +32,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build (client + SSR prerender + sitemap)
+      - name: Build Next.js Static Export
         run: npm run build
-        env:
-          # Point this at your deployed /server API (see server/README.md).
-          # Set the real value in Settings → Secrets and variables → Actions → Variables.
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: mahila-site/dist
+          path: mahila-site/out
 
   deploy:
     needs: build
