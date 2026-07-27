@@ -1,32 +1,37 @@
 import { Router } from "express";
 import { nanoid } from "nanoid";
-import db from "../db.js";
+import pool from "../db.js";
 import { requireAdmin } from "../middleware/auth.js";
 import { sendVolunteerConfirmationEmail, sendReservationConfirmationEmail, sendVendorConfirmationEmail } from "../email.js";
+import { isValidPhoneNumber } from "../utils/validation.js";
 
 export const submissionsRouter = Router();
 
 function makeResource(router, { path, table, requiredFields, mapIn, afterCreate }) {
   // Public: create
-  router.post(`/${path}`, (req, res) => {
+  router.post(`/${path}`, async (req, res) => {
     const body = req.body || {};
     for (const field of requiredFields) {
       if (body[field] === undefined || body[field] === null || body[field] === "") {
         return res.status(400).json({ error: `${field} is required.` });
       }
     }
+    if (body.phone && !isValidPhoneNumber(String(body.phone))) {
+      return res.status(400).json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." });
+    }
     try {
       const row = mapIn(body);
       const id = nanoid();
       const columns = Object.keys(row);
-      const placeholders = columns.map(() => "?").join(", ");
-      db.prepare(
-        `INSERT INTO ${table} (id, ${columns.join(", ")}) VALUES (?, ${placeholders})`
-      ).run(id, ...Object.values(row));
+      const values = Object.values(row);
+      const placeholders = columns.map((_, i) => `$${i + 2}`).join(", ");
+
+      await pool.query(
+        `INSERT INTO ${table} (id, ${columns.join(", ")}) VALUES ($1, ${placeholders})`,
+        [id, ...values]
+      );
       res.status(201).json({ ok: true, id });
-      // Fire-and-forget: respond to the client immediately, don't make them
-      // wait on an email round-trip. Errors here are logged, not surfaced —
-      // the submission itself already succeeded.
+
       if (afterCreate) {
         Promise.resolve(afterCreate(body)).catch((err) =>
           console.error(`POST /${path}: afterCreate hook failed:`, err)
@@ -39,15 +44,23 @@ function makeResource(router, { path, table, requiredFields, mapIn, afterCreate 
   });
 
   // Admin: list
-  router.get(`/${path}`, requireAdmin, (_req, res) => {
-    const rows = db.prepare(`SELECT * FROM ${table} ORDER BY created_at DESC`).all();
-    res.json(rows);
+  router.get(`/${path}`, requireAdmin, async (_req, res, next) => {
+    try {
+      const result = await pool.query(`SELECT * FROM ${table} ORDER BY created_at DESC`);
+      res.json(result.rows);
+    } catch (err) {
+      next(err);
+    }
   });
 
   // Admin: delete
-  router.delete(`/${path}/:id`, requireAdmin, (req, res) => {
-    db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(req.params.id);
-    res.json({ ok: true });
+  router.delete(`/${path}/:id`, requireAdmin, async (req, res, next) => {
+    try {
+      await pool.query(`DELETE FROM ${table} WHERE id = $1`, [req.params.id]);
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
   });
 }
 
