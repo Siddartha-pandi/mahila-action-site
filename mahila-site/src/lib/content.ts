@@ -124,7 +124,7 @@ export async function saveAllContent(content: ContentMap): Promise<boolean> {
 
   const res = await api.put("/api/content", content);
   if (!res.ok) {
-    console.warn("saveAllContent: Strapi API not updated (saved locally):", res.error);
+    console.warn("saveAllContent: API not updated (saved locally):", res.error);
   }
   return true;
 }

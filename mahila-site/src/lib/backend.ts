@@ -1,33 +1,38 @@
-import { api } from "./api";
+import { api, BASE_URL } from "./api";
 
-// ── Admin authentication (Strapi /api/auth/local + JWT storage) ────────────────
+// ── Admin authentication ────────────────
 
 export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
-  const res = await api.post<{ jwt?: string; user?: any }>("/api/auth/local", {
-    identifier: email,
-    password: password,
-  });
-
-  if (res.ok && res.data?.jwt) {
-    localStorage.setItem("strapi_jwt", res.data.jwt);
-    return { ok: true };
+  if (BASE_URL) {
+    const res = await api.post<{ jwt?: string; token?: string; user?: any }>("/api/auth/login", {
+      email,
+      password,
+    });
+    const token = res.data?.jwt || res.data?.token;
+    if (res.ok && token) {
+      localStorage.setItem("admin_jwt", token);
+      return { ok: true };
+    }
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Invalid admin credentials" };
+    }
   }
 
-  // Fallback for frontend admin dashboard access
+  // Local admin dashboard authentication
   if (email && password && password.length >= 4) {
-    localStorage.setItem("strapi_jwt", "admin_authenticated");
+    localStorage.setItem("admin_jwt", "admin_authenticated");
     return { ok: true };
   }
 
-  return { ok: false, error: res.error || "Invalid login credentials" };
+  return { ok: false, error: "Invalid login credentials" };
 }
 
 export async function signOutAdmin() {
-  localStorage.removeItem("strapi_jwt");
+  localStorage.removeItem("admin_jwt");
 }
 
 export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
-  const check = () => cb(Boolean(localStorage.getItem("strapi_jwt")));
+  const check = () => cb(Boolean(localStorage.getItem("admin_jwt")));
   check();
   window.addEventListener("storage", check);
   return () => window.removeEventListener("storage", check);
@@ -159,20 +164,7 @@ export async function saveDonation(data: {
   campaign_name?: string;
 }): Promise<boolean> {
   saveLocalSubmission("donation", data);
-  const strapiBody = {
-    data: {
-      amount: data.amount,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      donationType: "one-time",
-      anonymous: data.anonymous,
-      eventName: data.event_name,
-      campaignName: data.campaign_name,
-    },
-  };
-  let res = await api.post("/api/donations", strapiBody);
-  if (!res.ok) res = await api.post("/api/donations", data);
+  if (BASE_URL) await api.post("/api/donations", data);
   return true;
 }
 
@@ -186,19 +178,7 @@ export async function saveReservation(data: {
   companions?: { name: string; phone: string }[];
 }): Promise<boolean> {
   saveLocalSubmission("reservation", data);
-  const strapiBody = {
-    data: {
-      eventName: data.event_name,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      seats: data.seats,
-      volunteerCommitment: data.volunteer_commitment,
-      companions: data.companions,
-    },
-  };
-  let res = await api.post("/api/event-registrations", strapiBody);
-  if (!res.ok) res = await api.post("/api/reservations", data);
+  if (BASE_URL) await api.post("/api/reservations", data);
   return true;
 }
 
@@ -212,19 +192,7 @@ export async function saveVendor(data: {
   event_name: string;
 }): Promise<boolean> {
   saveLocalSubmission("vendor", data);
-  const strapiBody = {
-    data: {
-      eventName: data.event_name,
-      businessName: data.business_name,
-      contactName: data.contact_name,
-      email: data.email,
-      phone: data.phone,
-      offering: data.offering,
-      needsSpace: data.needs_space,
-    },
-  };
-  let res = await api.post("/api/vendor-registrations", strapiBody);
-  if (!res.ok) res = await api.post("/api/vendors", data);
+  if (BASE_URL) await api.post("/api/vendors", data);
   return true;
 }
 
@@ -233,20 +201,11 @@ export async function saveVolunteer(data: {
   email: string;
   phone: string;
   skills: string;
+  volunteer_commitment?: string;
   selected_events: string[];
 }): Promise<boolean> {
   saveLocalSubmission("volunteer", data);
-  const strapiBody = {
-    data: {
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      skills: data.skills,
-      selectedEvents: data.selected_events,
-    },
-  };
-  let res = await api.post("/api/volunteer-registrations", strapiBody);
-  if (!res.ok) res = await api.post("/api/volunteers", data);
+  if (BASE_URL) await api.post("/api/volunteers", data);
   return true;
 }
 
@@ -258,17 +217,7 @@ export async function saveContact(data: {
   message: string;
 }): Promise<boolean> {
   saveLocalSubmission("contact", data);
-  const strapiBody = {
-    data: {
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      subject: data.subject,
-      message: data.message,
-    },
-  };
-  let res = await api.post("/api/contact-submissions", strapiBody);
-  if (!res.ok) res = await api.post("/api/contact", data);
+  if (BASE_URL) await api.post("/api/contact", data);
   return true;
 }
 

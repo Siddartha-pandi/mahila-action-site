@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useCallback, useEffect, createContext, useContext, useMemo, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router";
 import { Toaster, toast } from "sonner";
@@ -24,6 +26,7 @@ import { TimelineAdmin } from "./admin/TimelineAdmin";
 import { ContactAdmin } from "./admin/ContactAdmin";
 import { SubmissionsAdmin } from "./admin/SubmissionsAdmin";
 import { RolesAdmin } from "./admin/RolesAdmin";
+import { ContentTypeBuilderAdmin } from "./admin/ContentTypeBuilderAdmin";
 import {
   getCurrentAdminSession,
   setCurrentAdminSession,
@@ -65,29 +68,51 @@ import {
 } from "lucide-react";
 
 // ── Image imports from design assets ──────────────────────────────────────
-import imgLogo from "@/imports/Concept2Home/9d095694bb05f68181e7700b7124281eb76c32ec.png";
-import imgHeroCard from "@/imports/Concept2Home/574a812d0534a3409e7d3ed51ab995ae09ecd87a.png";
-import imgHeroMain from "@/imports/Concept2Home/4ee3403c1c1f677ea9374f8484c6313c017d1716.png";
-import imgHeroSide from "@/imports/Concept2Home/acf2f9e42e364c8ee9e324fb3c6d06a0a7d96de4.png";
-import imgImpact1 from "@/imports/Concept2Home/207f7c7263e14103baf5c0de63b15703fa9a8f0f.png";
-import imgImpact2 from "@/imports/Concept2Home/aa46b6c282e301c3380b3a4d31e5ab88cc44c53a.png";
-import imgImpact3 from "@/imports/Concept2Home/f28b554308160cb557d229aae64de1b275d2a425.png";
-import imgImpact4 from "@/imports/Concept2Home/de694d5098550aee3d3b0432e1a2a521925c2237.png";
-import imgEvent from "@/imports/Concept2Home/39242dfa2d4add5f76889c42da60d903f880be6f.png";
-import imgStory1 from "@/imports/Concept2Home/788d28db62c65b5f55d746c307e794795661454c.png";
-import imgStory2 from "@/imports/Concept2Home/b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
-import imgStory3 from "@/imports/Concept2Home/d4c160441601d59ba0b0f336d73394c0932d78d5.png";
-import imgTakeAction from "@/imports/Concept2Home/6bd40b4d49b728881886868554ea429eeb0d2e01.png";
-import imgHeroBackground from "@/imports/Concept2Home/9baa8187a2a80817e17111956702e6ca42b952ad.png";
-import imgAboutBanner from "@/imports/Concept2WhoWeAre/2d1b5465a5dfdae07df9d30b92aa1a1930398a6c.png";
+import _imgLogo from "@/imports/Concept2Home/9d095694bb05f68181e7700b7124281eb76c32ec.png";
+import _imgHeroCard from "@/imports/Concept2Home/574a812d0534a3409e7d3ed51ab995ae09ecd87a.png";
+import _imgHeroMain from "@/imports/Concept2Home/4ee3403c1c1f677ea9374f8484c6313c017d1716.png";
+import _imgHeroSide from "@/imports/Concept2Home/acf2f9e42e364c8ee9e324fb3c6d06a0a7d96de4.png";
+import _imgImpact1 from "@/imports/Concept2Home/207f7c7263e14103baf5c0de63b15703fa9a8f0f.png";
+import _imgImpact2 from "@/imports/Concept2Home/aa46b6c282e301c3380b3a4d31e5ab88cc44c53a.png";
+import _imgImpact3 from "@/imports/Concept2Home/f28b554308160cb557d229aae64de1b275d2a425.png";
+import _imgImpact4 from "@/imports/Concept2Home/de694d5098550aee3d3b0432e1a2a521925c2237.png";
+import _imgEvent from "@/imports/Concept2Home/39242dfa2d4add5f76889c42da60d903f880be6f.png";
+import _imgStory1 from "@/imports/Concept2Home/788d28db62c65b5f55d746c307e794795661454c.png";
+import _imgStory2 from "@/imports/Concept2Home/b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
+import _imgStory3 from "@/imports/Concept2Home/d4c160441601d59ba0b0f336d73394c0932d78d5.png";
+import _imgTakeAction from "@/imports/Concept2Home/6bd40b4d49b728881886868554ea429eeb0d2e01.png";
+import _imgHeroBackground from "@/imports/Concept2Home/9baa8187a2a80817e17111956702e6ca42b952ad.png";
+import _imgAboutBanner from "@/imports/Concept2WhoWeAre/2d1b5465a5dfdae07df9d30b92aa1a1930398a6c.png";
 import heroSvg from "@/imports/Concept2Home-1/svg-664soetde0";
-import imgDonateBanner from "@/imports/Concept2OurStories-1/61a25ebae5fc11149647a322766e8dc9b88b32ef.png";
-import imgContextBanner from "@/imports/OurImpactContext/3970bc7fdf4596cd43d76a5d0ccbcee6dcea96f4.png";
+import _imgDonateBanner from "@/imports/Concept2OurStories-1/61a25ebae5fc11149647a322766e8dc9b88b32ef.png";
+import _imgContextBanner from "@/imports/OurImpactContext/3970bc7fdf4596cd43d76a5d0ccbcee6dcea96f4.png";
 import statsSvg from "@/imports/Stats/svg-gzhi309knq";
-import imgGal1 from "@/imports/OurImpactContext/7b58b11459d66003eec9a212bdbdee039f5c987a.png";
-import imgGal2 from "@/imports/OurImpactContext/38021a4b2f63e6bac08244a7b1ff6424951cf374.png";
-import imgGal3 from "@/imports/OurImpactContext/2e8ff5608927ddd34602e508ea3a00685c3938da.png";
+import _imgGal1 from "@/imports/OurImpactContext/7b58b11459d66003eec9a212bdbdee039f5c987a.png";
+import _imgGal2 from "@/imports/OurImpactContext/38021a4b2f63e6bac08244a7b1ff6424951cf374.png";
+import _imgGal3 from "@/imports/OurImpactContext/2e8ff5608927ddd34602e508ea3a00685c3938da.png";
 import svgWho from "@/imports/Concept2WhoWeAre/svg-6fcsh0az5g";
+
+const toSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+const imgLogo = toSrc(_imgLogo);
+const imgHeroCard = toSrc(_imgHeroCard);
+const imgHeroMain = toSrc(_imgHeroMain);
+const imgHeroSide = toSrc(_imgHeroSide);
+const imgImpact1 = toSrc(_imgImpact1);
+const imgImpact2 = toSrc(_imgImpact2);
+const imgImpact3 = toSrc(_imgImpact3);
+const imgImpact4 = toSrc(_imgImpact4);
+const imgEvent = toSrc(_imgEvent);
+const imgStory1 = toSrc(_imgStory1);
+const imgStory2 = toSrc(_imgStory2);
+const imgStory3 = toSrc(_imgStory3);
+const imgTakeAction = toSrc(_imgTakeAction);
+const imgHeroBackground = toSrc(_imgHeroBackground);
+const imgAboutBanner = toSrc(_imgAboutBanner);
+const imgDonateBanner = toSrc(_imgDonateBanner);
+const imgContextBanner = toSrc(_imgContextBanner);
+const imgGal1 = toSrc(_imgGal1);
+const imgGal2 = toSrc(_imgGal2);
+const imgGal3 = toSrc(_imgGal3);
 
 // ── Types ────────────────────────────────────────────────────────────────
 type Page = "home" | "about" | "stories" | "eventsBlog" | "donate" | "contact" | "account" | "admin";
@@ -130,25 +155,27 @@ interface VolunteerProfile {
   skills: string;
 }
 
+const getSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+
 // Fallback banner/gallery images for the 4 default "Our Impact" pages, used only
 // when the admin hasn't set a cover image / gallery for that impact post yet.
 const IMPACT_FALLBACK_IMAGES: Record<string, { banner: string; gallery: string[] }> = {
-  "women-leadership": { banner: imgContextBanner, gallery: [imgGal1, imgGal2, imgGal3, imgImpact1, imgStory1] },
-  "education": { banner: imgImpact2, gallery: [imgGal2, imgGal3, imgGal1, imgImpact2, imgStory2] },
-  "livelihood": { banner: imgImpact3, gallery: [imgGal3, imgGal1, imgGal2, imgImpact3, imgStory3] },
-  "wellbeing": { banner: imgImpact4, gallery: [imgGal1, imgGal3, imgGal2, imgImpact4, imgStory1] },
+  "women-leadership": { banner: getSrc(imgContextBanner), gallery: [getSrc(imgGal1), getSrc(imgGal2), getSrc(imgGal3), getSrc(imgImpact1), getSrc(imgStory1)] },
+  "education": { banner: getSrc(imgImpact2), gallery: [getSrc(imgGal2), getSrc(imgGal3), getSrc(imgGal1), getSrc(imgImpact2), getSrc(imgStory2)] },
+  "livelihood": { banner: getSrc(imgImpact3), gallery: [getSrc(imgGal3), getSrc(imgGal1), getSrc(imgGal2), getSrc(imgImpact3), getSrc(imgStory3)] },
+  "wellbeing": { banner: getSrc(imgImpact4), gallery: [getSrc(imgGal1), getSrc(imgGal3), getSrc(imgGal2), getSrc(imgImpact4), getSrc(imgStory1)] },
 };
 
 // Fallback banner/gallery images for the default "Our Stories" posts, used only
 // when the admin hasn't set a cover image / gallery for that story post yet —
 // keyed by the story's own post id so modal=story looks as complete as modal=impact.
 const STORY_FALLBACK_IMAGES: Record<string, { banner: string; gallery: string[] }> = {
-  "story_she_found_voice": { banner: imgStory1, gallery: [imgGal1, imgGal2, imgGal3, imgImpact1] },
-  "story_new_dawn_priya": { banner: imgStory2, gallery: [imgGal2, imgGal3, imgGal1, imgImpact2] },
-  "story_building_futures": { banner: imgStory3, gallery: [imgGal3, imgGal1, imgGal2, imgImpact3] },
-  "story_health_all": { banner: imgImpact4, gallery: [imgGal1, imgGal3, imgGal2, imgStory1] },
-  "story_first_sarpanch": { banner: imgContextBanner, gallery: [imgGal2, imgGal1, imgGal3, imgStory2] },
-  "story_breaking_cycle": { banner: imgImpact1, gallery: [imgGal3, imgGal2, imgGal1, imgStory3] },
+  "story_she_found_voice": { banner: getSrc(imgStory1), gallery: [getSrc(imgGal1), getSrc(imgGal2), getSrc(imgGal3), getSrc(imgImpact1)] },
+  "story_new_dawn_priya": { banner: getSrc(imgStory2), gallery: [getSrc(imgGal2), getSrc(imgGal3), getSrc(imgGal1), getSrc(imgImpact2)] },
+  "story_building_futures": { banner: getSrc(imgStory3), gallery: [getSrc(imgGal3), getSrc(imgGal1), getSrc(imgGal2), getSrc(imgImpact3)] },
+  "story_health_all": { banner: getSrc(imgImpact4), gallery: [getSrc(imgGal1), getSrc(imgGal3), getSrc(imgGal2), getSrc(imgStory1)] },
+  "story_first_sarpanch": { banner: getSrc(imgContextBanner), gallery: [getSrc(imgGal2), getSrc(imgGal1), getSrc(imgGal3), getSrc(imgStory2)] },
+  "story_breaking_cycle": { banner: getSrc(imgImpact1), gallery: [getSrc(imgGal3), getSrc(imgGal2), getSrc(imgGal1), getSrc(imgStory3)] },
 };
 
 // Fallback image for each of the 6 default Impact Timeline chips ("1995", "2002" etc.)
@@ -156,12 +183,12 @@ const STORY_FALLBACK_IMAGES: Record<string, { banner: string; gallery: string[] 
 // by the entry's own id so every chip shows a different photo (1 chip : 1 image) instead
 // of every chip falling back to the same shared placeholder.
 const TIMELINE_FALLBACK_IMAGES: Record<string, string> = {
-  "tl_1995": imgEvent,
-  "tl_2002": imgImpact2,
-  "tl_2009": imgImpact1,
-  "tl_2016": imgImpact3,
-  "tl_2021": imgGal2,
-  "tl_2026": imgTakeAction,
+  "tl_1995": getSrc(imgEvent),
+  "tl_2002": getSrc(imgImpact2),
+  "tl_2009": getSrc(imgImpact1),
+  "tl_2016": getSrc(imgImpact3),
+  "tl_2021": getSrc(imgGal2),
+  "tl_2026": getSrc(imgTakeAction),
 };
 
 // The 4 default "Our Impact" home page cards map to a fixed category id — used to find
@@ -761,6 +788,7 @@ const VOLUNTEER_EVENTS = [
 ];
 
 function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events: EventItem[] }) {
+  const navigate = useNavigate();
   const { closeModal } = useModal();
   const handleClose = useCallback(() => {
     if (onClose) onClose();
@@ -845,42 +873,29 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
     const identifier = loginEmail.trim();
     if (!identifier) return toast.error("Enter your email address or username");
     if (!loginPass.trim()) return toast.error("Enter your password");
-    setAuthBusy(true);
-
     const lowerId = identifier.toLowerCase();
-    const lowerPass = loginPass.toLowerCase().trim();
 
-    // 1. Check Super Admin / Admin login credentials
-    const isAdminAttempt =
-      lowerId.includes("admin") ||
-      lowerId.includes("super") ||
-      lowerId === "superadmin" ||
-      lowerId === "super admin" ||
-      lowerPass === "admin123" ||
-      lowerPass === "superadmin" ||
-      lowerPass === "admin";
-
-    if (isAdminAttempt) {
-      const adminRes = await signInAdmin(identifier, loginPass);
-      if (adminRes.ok) {
-        let canonicalEmail = identifier;
-        if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-          canonicalEmail = "superadmin@organization.org";
-        } else if (lowerId === "admin") {
-          canonicalEmail = "admin@organization.org";
-        }
-        setCurrentAdminSession(canonicalEmail);
-        setAuthBusy(false);
-        handleClose();
-        setPage("admin");
-        toast.success("Signed in to Admin Panel!");
-        return;
+    // 1. Try Admin Login first
+    const adminRes = await signInAdmin(identifier, loginPass);
+    if (adminRes.ok) {
+      let canonicalEmail = identifier;
+      if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super" || lowerId === "mahilaaction.vsk@gmail.com") {
+        canonicalEmail = "mahilaaction.vsk@gmail.com";
+      } else if (lowerId === "admin") {
+        canonicalEmail = "admin@organization.org";
       }
+      setCurrentAdminSession(canonicalEmail);
+      setAuthBusy(false);
+      handleClose();
+      navigate("/admin");
+      toast.success("Signed in to Admin Panel!");
+      return;
     }
 
+    // 2. Try Volunteer / Member Login
     const result = await loginVolunteer(identifier, loginPass);
+    setAuthBusy(false);
     if (result.ok && result.profile) {
-      setAuthBusy(false);
       setProfile(result.profile);
       saveUserSession(result.profile);
 
@@ -896,29 +911,12 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
 
       handleClose();
       toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
-      setPage("account");
+      navigate("/account");
       window.scrollTo({ top: 0 });
       return;
     }
 
-    // Fallback: If user login failed, try signInAdmin as last resort
-    const fallbackAdmin = await signInAdmin(identifier, loginPass);
-    setAuthBusy(false);
-    if (fallbackAdmin.ok) {
-      let canonicalEmail = identifier;
-      if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-        canonicalEmail = "superadmin@organization.org";
-      } else if (lowerId === "admin") {
-        canonicalEmail = "admin@organization.org";
-      }
-      setCurrentAdminSession(canonicalEmail);
-      handleClose();
-      setPage("admin");
-      toast.success("Signed in to Admin Panel!");
-      return;
-    }
-
-    toast.error(result.error || "Incorrect email or password.");
+    toast.error(result.error || adminRes.error || "Incorrect email or password.");
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -949,7 +947,7 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
 
     handleClose();
     toast.success(`Registered as a Permanent Volunteer! Welcome, ${result.profile.name}!`);
-    setPage("account");
+    navigate("/account");
     window.scrollTo({ top: 0 });
   }
 
@@ -1001,16 +999,20 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
 
   const now = new Date();
   const realEvents = events
-    .filter((ev) => (Array.isArray(ev.windows) ? ev.windows : []).some((w) => w.enabled && new Date(w.regEnd) >= now))
+    .filter((ev) => {
+      const windows = Array.isArray(ev.windows) ? ev.windows : [];
+      if (windows.length === 0) return true;
+      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
+    })
     .map((ev) => ({
       id: ev.id,
       status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
       title: ev.title,
-      date: new Date(ev.eventDate).toLocaleDateString(),
-      location: ev.location,
+      date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
+      location: ev.location || "Online / TBD",
       category: "",
-      slots: ev.totalSeats,
-      desc: ev.description,
+      slots: ev.totalSeats || 0,
+      desc: ev.description || "",
     }));
   const filtered = realEvents.filter(e => filter === "all" || e.status === filter);
   const categoryColors: Record<string, string> = {
@@ -4183,6 +4185,7 @@ function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
 // ═══════════════════════════════════════════════════════════════════════════
 function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
+  const { openModal } = useModal();
   const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => getSavedUserSession());
   const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
@@ -4282,14 +4285,18 @@ function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
   const now = new Date();
   const realEvents = siteData.events
-    .filter((ev) => (Array.isArray(ev.windows) ? ev.windows : []).some((w) => w.enabled && new Date(w.regEnd) >= now))
+    .filter((ev) => {
+      const windows = Array.isArray(ev.windows) ? ev.windows : [];
+      if (windows.length === 0) return true;
+      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
+    })
     .map((ev) => ({
       id: ev.id,
       status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
       title: ev.title,
-      date: new Date(ev.eventDate).toLocaleDateString(),
-      location: ev.location,
-      desc: ev.description,
+      date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
+      location: ev.location || "Online / TBD",
+      desc: ev.description || "",
     }));
 
   return (
@@ -4607,6 +4614,7 @@ function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 // Custom admin tabs — each backed by real CRUD and RBAC permissions.
 const CUSTOM_TABS = [
   { id: "submissions", label: "Form Submissions & Applications" },
+  { id: "contentTypeBuilder", label: "🛠️ Content-Type Builder" },
   { id: "events", label: "Upcoming Events" },
   { id: "stories", label: "Community Stories" },
   { id: "impactStories", label: "Our Impact — Read More Pages" },
@@ -4869,6 +4877,9 @@ function AdminPage({
               )}
               {activeSection === "submissions" && (
                 <SubmissionsAdmin />
+              )}
+              {activeSection === "contentTypeBuilder" && (
+                <ContentTypeBuilderAdmin />
               )}
               {activeSection === "events" && (
                 <EventsAdmin events={siteData.events} categories={siteData.categories} onChange={(events) => updateSiteData({ events })} />

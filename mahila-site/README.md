@@ -1,19 +1,27 @@
 
-  # Mahila Action website
+# Mahila Action — Unified Web Application & Admin Panel
 
-  Originally exported from Figma Make: https://www.figma.com/design/xFA4uLg0za1YgwDlgWfUam/Functional-website-with-payment
+This repository contains the complete web application, built-in Admin Panel (`/admin`), and backend API connected to Neon PostgreSQL.
 
-  **See [README-SEO.md](./README-SEO.md) for the full picture:** static
-  pre-rendering, SEO, GitHub Pages deployment, and the Express/SQLite
-  backend in `/server` (which replaced Supabase). Start there.
+## Getting Started
 
-  ## Running the code
+1. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
 
-  Run `npm i` to install the dependencies.
+2. **Run Local Development**:
+   ```bash
+   npm run dev
+   ```
+   *Starts both the Vite frontend (`http://localhost:5173` / `5174`) and the backend API server (`http://localhost:4000`) concurrently.*
 
-  Run `npm run dev` to start the development server (frontend only — also
-  start the API in `/server`, see `server/README.md`).
+3. **Admin Panel**:
+   Navigate to `/admin` on your local dev server to log in and manage events, stories, councilors, categories, timeline, form submissions, and roles.
 
-  Run `npm run build` to produce the static, pre-rendered, SEO'd build in
-  `dist/`, ready for GitHub Pages.
+4. **Production Build**:
+   ```bash
+   npm run build
+   ```
+
   

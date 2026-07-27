@@ -286,6 +286,7 @@ export function RolesAdmin({
                 permissions: {
                   submissions: { view: true, edit: false, delete: false },
                   events: { view: true, edit: false, delete: false },
+                  contentTypeBuilder: { view: true, edit: false, delete: false },
                   stories: { view: true, edit: false, delete: false },
                   impactStories: { view: true, edit: false, delete: false },
                   categories: { view: true, edit: false, delete: false },

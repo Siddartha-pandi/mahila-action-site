@@ -1,18 +1,34 @@
 import svgPaths from "./svg-664soetde0";
-import imgHeroLeftTopCard from "./574a812d0534a3409e7d3ed51ab995ae09ecd87a.png";
-import imgHeroImageBackground from "./9baa8187a2a80817e17111956702e6ca42b952ad.png";
-import imgNationalCancerInstituteNAihp118P8Unsplash1 from "./4ee3403c1c1f677ea9374f8484c6313c017d1716.png";
-import imgLinaTrochezKtPKyUs3QjsUnsplash1 from "./acf2f9e42e364c8ee9e324fb3c6d06a0a7d96de4.png";
-import imgNationalCancerInstituteNAihp118P8Unsplash2 from "./207f7c7263e14103baf5c0de63b15703fa9a8f0f.png";
-import imgNationalCancerInstituteNAihp118P8Unsplash3 from "./aa46b6c282e301c3380b3a4d31e5ab88cc44c53a.png";
-import imgNationalCancerInstituteNAihp118P8Unsplash4 from "./f28b554308160cb557d229aae64de1b275d2a425.png";
-import imgNationalCancerInstituteNAihp118P8Unsplash5 from "./de694d5098550aee3d3b0432e1a2a521925c2237.png";
-import imgEventImage from "./39242dfa2d4add5f76889c42da60d903f880be6f.png";
-import imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
-import imgStoryImage1 from "./b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
-import imgStoryImage2 from "./d4c160441601d59ba0b0f336d73394c0932d78d5.png";
-import imgTakeActionImage from "./6bd40b4d49b728881886868554ea429eeb0d2e01.png";
-import imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+import _imgHeroLeftTopCard from "./574a812d0534a3409e7d3ed51ab995ae09ecd87a.png";
+import _imgHeroImageBackground from "./9baa8187a2a80817e17111956702e6ca42b952ad.png";
+import _imgNationalCancerInstituteNAihp118P8Unsplash1 from "./4ee3403c1c1f677ea9374f8484c6313c017d1716.png";
+import _imgLinaTrochezKtPKyUs3QjsUnsplash1 from "./acf2f9e42e364c8ee9e324fb3c6d06a0a7d96de4.png";
+import _imgNationalCancerInstituteNAihp118P8Unsplash2 from "./207f7c7263e14103baf5c0de63b15703fa9a8f0f.png";
+import _imgNationalCancerInstituteNAihp118P8Unsplash3 from "./aa46b6c282e301c3380b3a4d31e5ab88cc44c53a.png";
+import _imgNationalCancerInstituteNAihp118P8Unsplash4 from "./f28b554308160cb557d229aae64de1b275d2a425.png";
+import _imgNationalCancerInstituteNAihp118P8Unsplash5 from "./de694d5098550aee3d3b0432e1a2a521925c2237.png";
+import _imgEventImage from "./39242dfa2d4add5f76889c42da60d903f880be6f.png";
+import _imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
+import _imgStoryImage1 from "./b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
+import _imgStoryImage2 from "./d4c160441601d59ba0b0f336d73394c0932d78d5.png";
+import _imgTakeActionImage from "./6bd40b4d49b728881886868554ea429eeb0d2e01.png";
+import _imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+
+const toSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+const imgHeroLeftTopCard = toSrc(_imgHeroLeftTopCard);
+const imgHeroImageBackground = toSrc(_imgHeroImageBackground);
+const imgNationalCancerInstituteNAihp118P8Unsplash1 = toSrc(_imgNationalCancerInstituteNAihp118P8Unsplash1);
+const imgLinaTrochezKtPKyUs3QjsUnsplash1 = toSrc(_imgLinaTrochezKtPKyUs3QjsUnsplash1);
+const imgNationalCancerInstituteNAihp118P8Unsplash2 = toSrc(_imgNationalCancerInstituteNAihp118P8Unsplash2);
+const imgNationalCancerInstituteNAihp118P8Unsplash3 = toSrc(_imgNationalCancerInstituteNAihp118P8Unsplash3);
+const imgNationalCancerInstituteNAihp118P8Unsplash4 = toSrc(_imgNationalCancerInstituteNAihp118P8Unsplash4);
+const imgNationalCancerInstituteNAihp118P8Unsplash5 = toSrc(_imgNationalCancerInstituteNAihp118P8Unsplash5);
+const imgEventImage = toSrc(_imgEventImage);
+const imgStoryImage = toSrc(_imgStoryImage);
+const imgStoryImage1 = toSrc(_imgStoryImage1);
+const imgStoryImage2 = toSrc(_imgStoryImage2);
+const imgTakeActionImage = toSrc(_imgTakeActionImage);
+const imgLogo = toSrc(_imgLogo);
 
 function HeroContent() {
   return (

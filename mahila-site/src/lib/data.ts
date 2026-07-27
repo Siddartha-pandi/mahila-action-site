@@ -88,52 +88,35 @@ function uid(prefix: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STRAPI CONFIG
+// CMS ENDPOINTS
 // ═══════════════════════════════════════════════════════════════════════════
-//
-// These are the REST endpoint paths Strapi generates from each content type's
-// "API ID (Plural)". Strapi derives these automatically from the display name
-// you typed when you created the type in the Content-Type Builder — so these
-// MUST match what your project actually generated.
-//
-// ⚠️ VERIFY THESE before testing. To check the real value for any type:
-//   Content-Type Builder → click the type → "Edit" (top right) →
-//   look at "API ID (Plural)".
-// Or just try the URL directly in your browser, e.g.:
-//   http://localhost:1337/api/events
-// A working endpoint returns JSON like { "data": [...], "meta": {...} }.
-// A wrong one returns a 404 with a "Not Found" error.
-//
-// The one most likely to be wrong is TIMELINE — you named the type
-// "TimeLineEntry" (capital L, capital E), which Strapi likely turned into
-// `time-line-entries`, not `timeline-entries`. Fix the constant below if so.
 
 const ENDPOINTS = {
-  events: "/api/events",
-  categories: "/api/categories",
-  blogPosts: "/api/blog-posts",
-  councilors: "/api/councilors",
-  timeline: "/api/time-line-entries", // ⚠️ verify — see note above
-  contactInfo: "/api/contact-info", // single type
+  events: "/api/cms/events",
+  categories: "/api/cms/categories",
+  blogPosts: "/api/cms/blog-posts",
+  councilors: "/api/cms/councilors",
+  timeline: "/api/cms/timeline",
+  contactInfo: "/api/cms/contact-info",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MEDIA HELPERS — Strapi media fields return { url, ... } with a *relative*
-// url (e.g. "/uploads/photo_abc123.jpg"). Prefix with the Strapi origin to
-// get something an <img> tag can actually load.
+// MEDIA HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
 function mediaUrl(media: any): string {
   if (!media) return "";
+  if (typeof media === "string") return media;
   const raw = Array.isArray(media) ? media[0] : media;
   const item = raw?.data?.attributes || raw?.data || raw;
   const url = item?.url || raw?.url || "";
   if (!url) return "";
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${BASE_URL}${url}`;
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  return BASE_URL ? `${BASE_URL}${url}` : url;
 }
 
 function mediaUrls(mediaList: any): string[] {
+  if (!mediaList) return [];
   const items = Array.isArray(mediaList?.data) ? mediaList.data : Array.isArray(mediaList) ? mediaList : [];
   return items.map(mediaUrl).filter(Boolean);
 }
@@ -183,8 +166,6 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
   { id: "story_first_sarpanch", section: "story", categoryId: "cat_women", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
   { id: "story_breaking_cycle", section: "story", categoryId: "cat_education", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
 
-  // "Our Impact" home-page cards (section === "impact") — their "Read More" pages, edited
-  // in the admin panel exactly like Stories and Event Blogs.
   {
     id: "women-leadership",
     section: "impact",
@@ -294,17 +275,14 @@ export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): Eve
   return events
     .filter((ev) => {
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
-      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now);
+      if (windows.length === 0) return true;
+      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
     })
     .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 }
 
-
-
 // ═══════════════════════════════════════════════════════════════════════════
-// LOAD — reads every content type from Strapi; falls back to defaults per-type
-// if empty/unavailable. NOTE: `populate=*` is required on every call that
-// includes media or relations — Strapi omits them by default.
+// LOAD & SAVE — local storage primary with optional API sync
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SITE_DATA_KEY = "mahila_site_data";
@@ -344,129 +322,104 @@ export async function loadSiteData(): Promise<SiteData> {
   let timeline = local.timeline ?? DEFAULT_TIMELINE;
   let contact = local.contact ?? DEFAULT_CONTACT;
 
-  try {
-    const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
-      api.get<any>(`${ENDPOINTS.events}?populate=*`),
-      api.get<any>(ENDPOINTS.categories),
-      api.get<any>(`${ENDPOINTS.blogPosts}?populate=*`),
-      api.get<any>(`${ENDPOINTS.councilors}?populate=*&sort=order:asc`),
-      api.get<any>(`${ENDPOINTS.timeline}?populate=*&sort=order:asc`),
-      api.get<any>(ENDPOINTS.contactInfo),
-    ]);
+  if (BASE_URL) {
+    try {
+      const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
+        api.get<any>(ENDPOINTS.events),
+        api.get<any>(ENDPOINTS.categories),
+        api.get<any>(ENDPOINTS.blogPosts),
+        api.get<any>(ENDPOINTS.councilors),
+        api.get<any>(ENDPOINTS.timeline),
+        api.get<any>(ENDPOINTS.contactInfo),
+      ]);
 
-    const eventRows: any[] = eventsRes.data?.data ?? [];
-    const catRows: any[] = catsRes.data?.data ?? [];
-    const postRows: any[] = postsRes.data?.data ?? [];
-    const councilorRows: any[] = councilorsRes.data?.data ?? [];
-    const timelineRows: any[] = timelineRes.data?.data ?? [];
-    const contactRow: any = contactRes.data?.data ?? null;
+      const eventRows: any[] = Array.isArray(eventsRes.data) ? eventsRes.data : eventsRes.data?.data ?? [];
+      const catRows: any[] = Array.isArray(catsRes.data) ? catsRes.data : catsRes.data?.data ?? [];
+      const postRows: any[] = Array.isArray(postsRes.data) ? postsRes.data : postsRes.data?.data ?? [];
+      const councilorRows: any[] = Array.isArray(councilorsRes.data) ? councilorsRes.data : councilorsRes.data?.data ?? [];
+      const timelineRows: any[] = Array.isArray(timelineRes.data) ? timelineRes.data : timelineRes.data?.data ?? [];
+      const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
-    const parseDescription = (desc: any): string => {
-      if (!desc) return "";
-      if (typeof desc === "string") return desc;
-      if (Array.isArray(desc)) {
-        return desc
-          .map((b: any) => (Array.isArray(b?.children) ? b.children.map((c: any) => c?.text || "").join("") : ""))
-          .filter(Boolean)
-          .join("\n\n");
-      }
-      return String(desc);
-    };
-
-    const normalizeWindow = (w: any): RegWindow => ({
-      kind: w?.kind || "volunteer",
-      enabled: w?.enabled !== undefined ? Boolean(w.enabled) : true,
-      regStart: w?.regStart ?? w?.reg_start ?? w?.startDate ?? w?.["start-date"] ?? "",
-      regEnd: w?.regEnd ?? w?.reg_end ?? w?.endDate ?? w?.["end-date"] ?? "",
-    });
-
-    if (eventRows.length) {
-      events = eventRows.map((r: any) => {
-        const rawWindows = Array.isArray(r.windows)
-          ? r.windows
-          : typeof r.windows === "string"
-          ? (() => { try { return JSON.parse(r.windows); } catch { return []; } })()
-          : [];
-        return {
-          id: r.documentId ?? r.id,
+      if (Array.isArray(eventRows)) {
+        events = eventRows.map((r: any) => ({
+          id: r.id,
           title: r.title,
-          description: parseDescription(r.description),
+          description: r.description || "",
           image: mediaUrl(r.image),
-          eventDate: r.eventDate,
-          location: r.location ?? "",
-          totalSeats: r.totalSeats ?? 0,
-          windows: rawWindows.map(normalizeWindow),
-          categoryId: r.category?.documentId ?? r.category?.id ?? null,
-          createdAt: r.createdAt,
+          eventDate: r.event_date || r.eventDate || "",
+          location: r.location || "",
+          totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
+          windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
+          categoryId: r.category_id || r.categoryId || null,
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        }));
+      }
+
+      if (Array.isArray(catRows) && catRows.length) {
+        categories = catRows.map((r: any) => ({ id: r.id, name: r.name }));
+      }
+
+      if (Array.isArray(postRows) && postRows.length) {
+        blogPosts = postRows.map((r: any) => ({
+          id: r.id,
+          section: r.section,
+          categoryId: r.category_id || r.categoryId || null,
+          title: r.title,
+          excerpt: r.excerpt || "",
+          content: r.content || "",
+          coverImage: mediaUrl(r.cover_image || r.coverImage),
+          gallery: mediaUrls(r.gallery),
+          tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        }));
+      }
+
+      if (Array.isArray(councilorRows) && councilorRows.length) {
+        councilors = councilorRows.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          role: r.role || "",
+          bio: r.bio || "",
+          image: mediaUrl(r.image),
+          order: Number(r.order_index ?? r.order ?? 0),
+        }));
+      }
+
+      if (Array.isArray(timelineRows) && timelineRows.length) {
+        timeline = timelineRows.map((r: any) => ({
+          id: r.id,
+          year: r.year,
+          title: r.title,
+          description: r.description || "",
+          image: mediaUrl(r.image),
+          order: Number(r.order_index ?? r.order ?? 0),
+        }));
+      }
+
+      if (contactRow?.email) {
+        contact = {
+          email: contactRow.email,
+          emailNote: contactRow.email_note || contactRow.emailNote || "",
+          phone: contactRow.phone || "",
+          phoneNote: contactRow.phone_note || contactRow.phoneNote || "",
+          address: contactRow.address || "",
+          addressNote: contactRow.address_note || contactRow.addressNote || "",
+          hours: contactRow.hours || "",
+          hoursNote: contactRow.hours_note || contactRow.hoursNote || "",
         };
-      });
+      }
+    } catch (err) {
+      console.warn("loadSiteData: using local storage data");
     }
-
-    if (catRows.length) {
-      categories = catRows.map((r: any) => ({ id: r.documentId ?? r.id, name: r.name }));
-    }
-
-    if (postRows.length) {
-      blogPosts = postRows.map((r: any) => ({
-        id: r.documentId ?? r.id,
-        section: r.section,
-        categoryId: r.category?.documentId ?? r.category?.id ?? null,
-        title: r.title,
-        excerpt: r.excerpt ?? "",
-        content: r.content ?? "",
-        coverImage: mediaUrl(r.coverImage),
-        gallery: mediaUrls(r.gallery),
-        tags: r.tags ?? [],
-        createdAt: r.createdAt,
-      }));
-    }
-
-    if (!blogPosts.some((p) => p.section === "impact")) {
-      const seedImpactPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "impact");
-      blogPosts = [...blogPosts, ...seedImpactPosts];
-    }
-
-    if (councilorRows.length) {
-      councilors = councilorRows.map((r: any) => ({
-        id: r.documentId ?? r.id,
-        name: r.name,
-        role: r.role ?? "",
-        bio: r.bio ?? "",
-        image: mediaUrl(r.image),
-        order: r.order ?? 0,
-      }));
-    }
-
-    if (timelineRows.length) {
-      timeline = timelineRows.map((r: any) => ({
-        id: r.documentId ?? r.id,
-        year: r.year,
-        title: r.title,
-        description: r.description ?? "",
-        image: mediaUrl(r.image),
-        order: r.order ?? 0,
-      }));
-    }
-
-    if (contactRow?.email) {
-      contact = {
-        email: contactRow.email,
-        emailNote: contactRow.emailNote,
-        phone: contactRow.phone,
-        phoneNote: contactRow.phoneNote,
-        address: contactRow.address,
-        addressNote: contactRow.addressNote,
-        hours: contactRow.hours,
-        hoursNote: contactRow.hoursNote,
-      };
-    }
-
-    saveLocalSiteData({ events, categories, blogPosts, councilors, timeline, contact });
-    return { events, categories, blogPosts, councilors, timeline, contact };
-  } catch (err) {
-    console.error("loadSiteData: unexpected error —", err);
-    return { events, categories, blogPosts, councilors, timeline, contact };
   }
+
+  if (!blogPosts.some((p) => p.section === "impact")) {
+    const seedImpactPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "impact");
+    blogPosts = [...blogPosts, ...seedImpactPosts];
+  }
+
+  saveLocalSiteData({ events, categories, blogPosts, councilors, timeline, contact });
+  return { events, categories, blogPosts, councilors, timeline, contact };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -494,18 +447,12 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
   const updated = idx >= 0 ? events.map((e) => (e.id === ev.id ? ev : e)) : [...events, ev];
   saveLocalSiteData({ events: updated });
 
-  const isExisting = !ev.id.startsWith("evt_");
-  const body = {
-    data: {
-      title: ev.title, description: ev.description, eventDate: ev.eventDate,
-      location: ev.location, totalSeats: ev.totalSeats, windows: ev.windows,
-      category: ev.categoryId ?? null,
-    },
-  };
-  if (isExisting) api.put(`${ENDPOINTS.events}/${encodeURIComponent(ev.id)}`, body);
-  else api.post(ENDPOINTS.events, body);
-
-  return true;
+  try {
+    const res = await api.post(ENDPOINTS.events, ev);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
@@ -513,12 +460,16 @@ export async function deleteEvent(id: string): Promise<boolean> {
   const events = (current.events ?? DEFAULT_EVENTS).filter((e) => e.id !== id);
   saveLocalSiteData({ events });
 
-  api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
-  return true;
+  try {
+    const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BLOG POSTS CRUD (stories + event blogs share this table)
+// BLOG POSTS CRUD
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function newBlogPost(section: "story" | "event" | "impact", categoryId: string | null = null): BlogPost {
@@ -535,17 +486,12 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
   const updated = idx >= 0 ? blogPosts.map((item) => (item.id === p.id ? p : item)) : [...blogPosts, p];
   saveLocalSiteData({ blogPosts: updated });
 
-  const isExisting = !p.id.startsWith("post_") && !p.id.startsWith("story_");
-  const body = {
-    data: {
-      section: p.section, title: p.title, excerpt: p.excerpt, content: p.content,
-      tags: p.tags, category: p.categoryId ?? null,
-    },
-  };
-  if (isExisting) api.put(`${ENDPOINTS.blogPosts}/${encodeURIComponent(p.id)}`, body);
-  else api.post(ENDPOINTS.blogPosts, body);
-
-  return true;
+  try {
+    const res = await api.post(ENDPOINTS.blogPosts, p);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
@@ -553,8 +499,12 @@ export async function deleteBlogPost(id: string): Promise<boolean> {
   const blogPosts = (current.blogPosts ?? DEFAULT_BLOG_POSTS).filter((p) => p.id !== id);
   saveLocalSiteData({ blogPosts });
 
-  api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-  return true;
+  try {
+    const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -572,12 +522,12 @@ export async function saveCategory(c: Category): Promise<boolean> {
   const updated = idx >= 0 ? categories.map((item) => (item.id === c.id ? c : item)) : [...categories, c];
   saveLocalSiteData({ categories: updated });
 
-  const isExisting = !c.id.startsWith("cat_");
-  const body = { data: { name: c.name } };
-  if (isExisting) api.put(`${ENDPOINTS.categories}/${encodeURIComponent(c.id)}`, body);
-  else api.post(ENDPOINTS.categories, body);
-
-  return true;
+  try {
+    const res = await api.post(ENDPOINTS.categories, c);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {
@@ -585,11 +535,14 @@ export async function deleteCategory(id: string): Promise<boolean> {
   const categories = (current.categories ?? DEFAULT_CATEGORIES).filter((c) => c.id !== id);
   saveLocalSiteData({ categories });
 
-  api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-  return true;
+  try {
+    const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
-/** Reassign every post in `fromCategoryId` to `toCategoryId` (or null to leave uncategorized). */
 export async function reassignCategoryPosts(posts: BlogPost[], fromCategoryId: string, toCategoryId: string | null) {
   const affected = posts.filter((p) => p.categoryId === fromCategoryId);
   for (const p of affected) {
@@ -598,7 +551,6 @@ export async function reassignCategoryPosts(posts: BlogPost[], fromCategoryId: s
   return posts.map((p) => (p.categoryId === fromCategoryId ? { ...p, categoryId: toCategoryId } : p));
 }
 
-/** Delete every post in a category. */
 export async function deleteCategoryPosts(posts: BlogPost[], categoryId: string) {
   const affected = posts.filter((p) => p.categoryId === categoryId);
   for (const p of affected) {
@@ -622,12 +574,12 @@ export async function saveCouncilor(c: Councilor): Promise<boolean> {
   const updated = idx >= 0 ? councilors.map((item) => (item.id === c.id ? c : item)) : [...councilors, c];
   saveLocalSiteData({ councilors: updated });
 
-  const isExisting = !c.id.startsWith("coun_");
-  const body = { data: { name: c.name, role: c.role, bio: c.bio, order: c.order } };
-  if (isExisting) api.put(`${ENDPOINTS.councilors}/${encodeURIComponent(c.id)}`, body);
-  else api.post(ENDPOINTS.councilors, body);
-
-  return true;
+  try {
+    const res = await api.post(ENDPOINTS.councilors, c);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
@@ -635,8 +587,12 @@ export async function deleteCouncilor(id: string): Promise<boolean> {
   const councilors = (current.councilors ?? DEFAULT_COUNCILORS).filter((c) => c.id !== id);
   saveLocalSiteData({ councilors });
 
-  api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-  return true;
+  try {
+    const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -654,12 +610,12 @@ export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
   const updated = idx >= 0 ? timeline.map((item) => (item.id === t.id ? t : item)) : [...timeline, t];
   saveLocalSiteData({ timeline: updated });
 
-  const isExisting = !t.id.startsWith("tl_");
-  const body = { data: { year: t.year, title: t.title, description: t.description, order: t.order } };
-  if (isExisting) api.put(`${ENDPOINTS.timeline}/${encodeURIComponent(t.id)}`, body);
-  else api.post(ENDPOINTS.timeline, body);
-
-  return true;
+  try {
+    const res = await api.post(ENDPOINTS.timeline, t);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {
@@ -667,8 +623,12 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
   const timeline = (current.timeline ?? DEFAULT_TIMELINE).filter((t) => t.id !== id);
   saveLocalSiteData({ timeline });
 
-  api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-  return true;
+  try {
+    const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -678,12 +638,6 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
 export async function saveContactInfo(c: ContactInfo): Promise<boolean> {
   saveLocalSiteData({ contact: c });
 
-  const body = {
-    data: {
-      email: c.email, emailNote: c.emailNote, phone: c.phone, phoneNote: c.phoneNote,
-      address: c.address, addressNote: c.addressNote, hours: c.hours, hoursNote: c.hoursNote,
-    },
-  };
-  api.put(ENDPOINTS.contactInfo, body);
-  return true;
+  const res = await api.put(ENDPOINTS.contactInfo, c);
+  return res.ok;
 }

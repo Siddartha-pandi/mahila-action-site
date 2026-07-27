@@ -1,9 +1,16 @@
 import svgPaths from "./svg-0bdbl1er37";
-import imgFrame174 from "./3970bc7fdf4596cd43d76a5d0ccbcee6dcea96f4.png";
-import imgRectangle1 from "./7b58b11459d66003eec9a212bdbdee039f5c987a.png";
-import imgRectangle2 from "./38021a4b2f63e6bac08244a7b1ff6424951cf374.png";
-import imgRectangle3 from "./2e8ff5608927ddd34602e508ea3a00685c3938da.png";
-import imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+import _imgFrame174 from "./3970bc7fdf4596cd43d76a5d0ccbcee6dcea96f4.png";
+import _imgRectangle1 from "./7b58b11459d66003eec9a212bdbdee039f5c987a.png";
+import _imgRectangle2 from "./38021a4b2f63e6bac08244a7b1ff6424951cf374.png";
+import _imgRectangle3 from "./2e8ff5608927ddd34602e508ea3a00685c3938da.png";
+import _imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+
+const toSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+const imgFrame174 = toSrc(_imgFrame174);
+const imgRectangle1 = toSrc(_imgRectangle1);
+const imgRectangle2 = toSrc(_imgRectangle2);
+const imgRectangle3 = toSrc(_imgRectangle3);
+const imgLogo = toSrc(_imgLogo);
 
 function Frame1() {
   return (

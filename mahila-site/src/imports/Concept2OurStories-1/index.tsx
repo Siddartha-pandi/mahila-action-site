@@ -1,8 +1,14 @@
 import svgPaths from "./svg-pjqlicwkgv";
-import imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
-import imgEventImage from "./39242dfa2d4add5f76889c42da60d903f880be6f.png";
-import imgQuoteImage from "./61a25ebae5fc11149647a322766e8dc9b88b32ef.png";
-import imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+import _imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
+import _imgEventImage from "./39242dfa2d4add5f76889c42da60d903f880be6f.png";
+import _imgQuoteImage from "./61a25ebae5fc11149647a322766e8dc9b88b32ef.png";
+import _imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+
+const toSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+const imgStoryImage = toSrc(_imgStoryImage);
+const imgEventImage = toSrc(_imgEventImage);
+const imgQuoteImage = toSrc(_imgQuoteImage);
+const imgLogo = toSrc(_imgLogo);
 
 function Container4() {
   return (

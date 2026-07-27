@@ -1,10 +1,18 @@
 import svgPaths from "./svg-cwhv4yi45k";
-import imgQuoteImage from "./574a812d0534a3409e7d3ed51ab995ae09ecd87a.png";
-import imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
-import imgStoryImage1 from "./b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
-import imgStoryImage2 from "./d4c160441601d59ba0b0f336d73394c0932d78d5.png";
-import imgTakeActionImage from "./6bd40b4d49b728881886868554ea429eeb0d2e01.png";
-import imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+import _imgQuoteImage from "./574a812d0534a3409e7d3ed51ab995ae09ecd87a.png";
+import _imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
+import _imgStoryImage1 from "./b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
+import _imgStoryImage2 from "./d4c160441601d59ba0b0f336d73394c0932d78d5.png";
+import _imgTakeActionImage from "./6bd40b4d49b728881886868554ea429eeb0d2e01.png";
+import _imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+
+const toSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+const imgQuoteImage = toSrc(_imgQuoteImage);
+const imgStoryImage = toSrc(_imgStoryImage);
+const imgStoryImage1 = toSrc(_imgStoryImage1);
+const imgStoryImage2 = toSrc(_imgStoryImage2);
+const imgTakeActionImage = toSrc(_imgTakeActionImage);
+const imgLogo = toSrc(_imgLogo);
 
 function BannerSection() {
   return (

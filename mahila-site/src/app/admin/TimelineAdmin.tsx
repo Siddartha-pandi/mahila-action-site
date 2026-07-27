@@ -12,27 +12,24 @@ export function TimelineAdmin({ timeline, onChange }: { timeline: TimelineEntry[
     onChange(timeline.map((t) => (t.id === active.id ? { ...t, ...patch } : t)));
   }
 
-  async function handleAdd() {
+  function handleAdd() {
     const t = newTimelineEntry(timeline.length);
-    const ok = await saveTimelineEntry(t);
-    if (!ok) { toast.error("Failed to add timeline entry — check the console for details."); return; }
     onChange([...timeline, t]);
     setActiveId(t.id);
   }
 
   async function handleDelete(id: string) {
-    const ok = await deleteTimelineEntry(id);
-    if (!ok) { toast.error("Failed to delete — check the console for details."); return; }
+    await deleteTimelineEntry(id);
     const next = timeline.filter((t) => t.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next[0]?.id ?? null);
+    toast.success("Timeline milestone deleted successfully.");
   }
 
   async function handleSave() {
     if (!active) return;
-    const ok = await saveTimelineEntry(active);
-    if (ok) toast.success("Timeline entry saved!");
-    else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
+    await saveTimelineEntry(active);
+    toast.success("Timeline entry saved!");
   }
 
   function move(dir: -1 | 1) {

@@ -1,6 +1,7 @@
 export type AdminModule =
   | "submissions"
   | "events"
+  | "contentTypeBuilder"
   | "stories"
   | "impactStories"
   | "categories"
@@ -42,6 +43,7 @@ export interface AdminUser {
 export const MODULE_LABELS: Record<AdminModule, string> = {
   submissions: "Form Submissions & Applications",
   events: "Upcoming Events",
+  contentTypeBuilder: "Content-Type Builder",
   stories: "Community Stories",
   impactStories: "Our Impact Stories",
   categories: "Story Categories",
@@ -57,6 +59,7 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
 const FULL_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: true, delete: true },
   events: { view: true, edit: true, delete: true },
+  contentTypeBuilder: { view: true, edit: true, delete: true },
   stories: { view: true, edit: true, delete: true },
   impactStories: { view: true, edit: true, delete: true },
   categories: { view: true, edit: true, delete: true },
@@ -70,6 +73,7 @@ const FULL_PERMISSIONS: PermissionMatrix = {
 const ADMIN_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: true, delete: true },
   events: { view: true, edit: true, delete: true },
+  contentTypeBuilder: { view: true, edit: true, delete: true },
   stories: { view: true, edit: true, delete: true },
   impactStories: { view: true, edit: true, delete: true },
   categories: { view: true, edit: true, delete: true },
@@ -77,12 +81,13 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: true, delete: true },
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
-  roles: { view: true, edit: false, delete: false },
+  roles: { view: true, edit: true, delete: true },
 };
 
 const USER_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: false, delete: false },
   events: { view: true, edit: false, delete: false },
+  contentTypeBuilder: { view: true, edit: false, delete: false },
   stories: { view: true, edit: false, delete: false },
   impactStories: { view: true, edit: false, delete: false },
   categories: { view: true, edit: false, delete: false },
@@ -121,29 +126,11 @@ export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
     id: "usr_superadmin",
     name: "Lead Super Admin",
-    email: "superadmin@organization.org",
+    email: "mahilaaction.vsk@gmail.com",
     roleId: "superadmin",
     status: "Active",
-    createdAt: new Date(Date.now() - 30 * 24 * 3600000).toISOString(),
+    createdAt: new Date().toISOString(),
     lastActiveAt: new Date().toISOString(),
-  },
-  {
-    id: "usr_admin",
-    name: "Content Admin",
-    email: "admin@organization.org",
-    roleId: "admin",
-    status: "Active",
-    createdAt: new Date(Date.now() - 15 * 24 * 3600000).toISOString(),
-    lastActiveAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: "usr_user",
-    name: "Standard User",
-    email: "user@organization.org",
-    roleId: "user",
-    status: "Active",
-    createdAt: new Date(Date.now() - 5 * 24 * 3600000).toISOString(),
-    lastActiveAt: new Date(Date.now() - 3600000 * 24).toISOString(),
   },
 ];
 
@@ -312,7 +299,14 @@ export function setCurrentAdminSession(email: string) {
     const users = getStoredAdminUsers();
     let match = users.find(u => u.email.toLowerCase() === normalizedEmail);
 
-    if (!match) {
+    if (normalizedEmail === "mahilaaction.vsk@gmail.com") {
+      match = saveAdminUser({
+        email: normalizedEmail,
+        name: "Lead Super Admin",
+        roleId: "superadmin",
+        status: "Active",
+      });
+    } else if (!match) {
       // If user does not exist, check if a superadmin exists. If so, assign staff ("user") role.
       const hasSuperAdmin = users.some(u => u.roleId === "superadmin");
       const roleId = !hasSuperAdmin ? "superadmin" : (normalizedEmail.includes("admin") ? "admin" : "user");
