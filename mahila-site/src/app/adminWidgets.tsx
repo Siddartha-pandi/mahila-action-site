@@ -43,11 +43,11 @@ async function urlToDataUrl(url: string): Promise<string | null> {
 /** A single image field: paste a URL, or upload a file (stored as a data URL — no extra storage setup needed). */
 export function ImageField({
   label,
-  value,
+  value = "",
   onChange,
 }: {
   label: string;
-  value: string;
+  value?: string;
   onChange: (v: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,6 +55,8 @@ export function ImageField({
   const [cropping, setCropping] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [resolvingCrop, setResolvingCrop] = useState(false);
+
+  const safeVal = typeof value === "string" ? value : "";
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -70,15 +72,15 @@ export function ImageField({
   }
 
   async function openCrop() {
-    if (value.startsWith("data:")) {
-      setCropSrc(value);
+    if (safeVal.startsWith("data:")) {
+      setCropSrc(safeVal);
       setCropping(true);
       return;
     }
     setResolvingCrop(true);
-    const resolved = await urlToDataUrl(value);
+    const resolved = await urlToDataUrl(safeVal);
     setResolvingCrop(false);
-    setCropSrc(resolved ?? value); // falls back to cropping the URL directly if the host blocks cross-origin fetches
+    setCropSrc(resolved ?? safeVal); // falls back to cropping the URL directly if the host blocks cross-origin fetches
     setCropping(true);
   }
 
@@ -88,9 +90,9 @@ export function ImageField({
       <div className="flex gap-2">
         <input
           type="text"
-          value={value.startsWith("data:") ? "" : value}
+          value={safeVal.startsWith("data:") ? "" : safeVal}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={value.startsWith("data:") ? "(uploaded image)" : "Paste image URL…"}
+          placeholder={safeVal.startsWith("data:") ? "(uploaded image)" : "Paste image URL…"}
           className={inputBase}
         />
         <button
@@ -102,10 +104,10 @@ export function ImageField({
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
       </div>
-      {value && (
+      {safeVal && (
         <div className="relative w-fit mt-2">
           <img
-            src={value}
+            src={safeVal}
             alt="preview"
             className="h-24 rounded-lg object-cover border border-[#a65a4a]/20"
             onError={(e) => (e.currentTarget.style.display = "none")}
