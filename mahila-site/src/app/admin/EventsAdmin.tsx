@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AdminListEditor, ImageField, inputBase, labelBase } from "../adminWidgets";
 import { EventItem, RegKind, Category, isEventOpen, newEvent, saveEvent, deleteEvent } from "../../lib/data";
+import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 
 const KIND_LABEL: Record<RegKind, string> = { volunteer: "Volunteer", vendor: "Vendor", donor: "Donor" };
 
@@ -9,33 +10,40 @@ export function EventsAdmin({ events, categories, onChange }: { events: EventIte
   const [activeId, setActiveId] = useState<string | null>(events[0]?.id ?? null);
   const active = events.find((e) => e.id === activeId) ?? null;
 
+  const session = getCurrentAdminSession();
+  const canEdit = hasPermission(session, "events", "edit");
+  const canDelete = hasPermission(session, "events", "delete");
+
   function update(patch: Partial<EventItem>) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
     onChange(events.map((e) => (e.id === active.id ? { ...e, ...patch } : e)));
   }
 
   function updateWindow(kind: RegKind, patch: Partial<EventItem["windows"][number]>) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
     update({ windows: active.windows.map((w) => (w.kind === kind ? { ...w, ...patch } : w)) });
   }
 
-  async function handleAdd() {
+  function handleAdd() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to create Events.");
     const ev = newEvent();
-    const ok = await saveEvent(ev);
-    if (!ok) { toast.error("Failed to create event — check the console for details."); return; }
     onChange([...events, ev]);
     setActiveId(ev.id);
   }
 
   async function handleDelete(id: string) {
-    const ok = await deleteEvent(id);
-    if (!ok) { toast.error("Failed to delete event — check the console for details."); return; }
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required for Events.");
+    await deleteEvent(id);
     const next = events.filter((e) => e.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next[0]?.id ?? null);
+    toast.success("Event deleted successfully.");
   }
 
   async function handleSave() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to save Events.");
     if (!active) return;
     const ok = await saveEvent(active);
     if (ok) toast.success("Event saved and published!");

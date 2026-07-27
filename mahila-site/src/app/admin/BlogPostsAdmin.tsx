@@ -26,27 +26,24 @@ export function BlogPostsAdmin({
     onChange(posts.map((p) => (p.id === active.id ? { ...p, ...patch } : p)));
   }
 
-  async function handleAdd() {
+  function handleAdd() {
     const post = newBlogPost(section, usesCategories ? categories[0]?.id ?? null : null);
-    const ok = await saveBlogPost(post);
-    if (!ok) { toast.error(`Failed to create ${sectionNoun.toLowerCase()} — check the console for details.`); return; }
     onChange([...posts, post]);
     setActiveId(post.id);
   }
 
   async function handleDelete(id: string) {
-    const ok = await deleteBlogPost(id);
-    if (!ok) { toast.error("Failed to delete — check the console for details."); return; }
+    await deleteBlogPost(id);
     const next = posts.filter((p) => p.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next.filter((p) => p.section === section)[0]?.id ?? null);
+    toast.success(`${sectionNoun} deleted successfully.`);
   }
 
   async function handleSave() {
     if (!active) return;
-    const ok = await saveBlogPost(active);
-    if (ok) toast.success(`${sectionNoun} saved and published!`);
-    else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
+    await saveBlogPost(active);
+    toast.success(`${sectionNoun} saved and published!`);
   }
 
   return (

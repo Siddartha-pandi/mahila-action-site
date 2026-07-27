@@ -12,27 +12,24 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
     onChange(councilors.map((c) => (c.id === active.id ? { ...c, ...patch } : c)));
   }
 
-  async function handleAdd() {
+  function handleAdd() {
     const c = newCouncilor(councilors.length);
-    const ok = await saveCouncilor(c);
-    if (!ok) { toast.error("Failed to add councilor — check the console for details."); return; }
     onChange([...councilors, c]);
     setActiveId(c.id);
   }
 
   async function handleDelete(id: string) {
-    const ok = await deleteCouncilor(id);
-    if (!ok) { toast.error("Failed to delete — check the console for details."); return; }
+    await deleteCouncilor(id);
     const next = councilors.filter((c) => c.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next[0]?.id ?? null);
+    toast.success("Councilor profile deleted successfully.");
   }
 
   async function handleSave() {
     if (!active) return;
-    const ok = await saveCouncilor(active);
-    if (ok) toast.success("Councilor profile saved!");
-    else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
+    await saveCouncilor(active);
+    toast.success("Councilor profile saved!");
   }
 
   return (

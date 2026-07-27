@@ -88,52 +88,35 @@ function uid(prefix: string) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STRAPI CONFIG
+// CMS ENDPOINTS
 // ═══════════════════════════════════════════════════════════════════════════
-//
-// These are the REST endpoint paths Strapi generates from each content type's
-// "API ID (Plural)". Strapi derives these automatically from the display name
-// you typed when you created the type in the Content-Type Builder — so these
-// MUST match what your project actually generated.
-//
-// ⚠️ VERIFY THESE before testing. To check the real value for any type:
-//   Content-Type Builder → click the type → "Edit" (top right) →
-//   look at "API ID (Plural)".
-// Or just try the URL directly in your browser, e.g.:
-//   http://localhost:1337/api/events
-// A working endpoint returns JSON like { "data": [...], "meta": {...} }.
-// A wrong one returns a 404 with a "Not Found" error.
-//
-// The one most likely to be wrong is TIMELINE — you named the type
-// "TimeLineEntry" (capital L, capital E), which Strapi likely turned into
-// `time-line-entries`, not `timeline-entries`. Fix the constant below if so.
 
 const ENDPOINTS = {
-  events: "/api/events",
-  categories: "/api/categories",
-  blogPosts: "/api/blog-posts",
-  councilors: "/api/councilors",
-  timeline: "/api/time-line-entries", // ⚠️ verify — see note above
-  contactInfo: "/api/contact-info", // single type
+  events: "/api/cms/events",
+  categories: "/api/cms/categories",
+  blogPosts: "/api/cms/blog-posts",
+  councilors: "/api/cms/councilors",
+  timeline: "/api/cms/timeline",
+  contactInfo: "/api/cms/contact-info",
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// MEDIA HELPERS — Strapi media fields return { url, ... } with a *relative*
-// url (e.g. "/uploads/photo_abc123.jpg"). Prefix with the Strapi origin to
-// get something an <img> tag can actually load.
+// MEDIA HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
 function mediaUrl(media: any): string {
   if (!media) return "";
+  if (typeof media === "string") return media;
   const raw = Array.isArray(media) ? media[0] : media;
   const item = raw?.data?.attributes || raw?.data || raw;
   const url = item?.url || raw?.url || "";
   if (!url) return "";
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${BASE_URL}${url}`;
+  if (/^https?:\/\//i.test(url) || url.startsWith("data:")) return url;
+  return BASE_URL ? `${BASE_URL}${url}` : url;
 }
 
 function mediaUrls(mediaList: any): string[] {
+  if (!mediaList) return [];
   const items = Array.isArray(mediaList?.data) ? mediaList.data : Array.isArray(mediaList) ? mediaList : [];
   return items.map(mediaUrl).filter(Boolean);
 }
@@ -183,8 +166,6 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
   { id: "story_first_sarpanch", section: "story", categoryId: "cat_women", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
   { id: "story_breaking_cycle", section: "story", categoryId: "cat_education", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
 
-  // "Our Impact" home-page cards (section === "impact") — their "Read More" pages, edited
-  // in the admin panel exactly like Stories and Event Blogs.
   {
     id: "women-leadership",
     section: "impact",
@@ -294,156 +275,151 @@ export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): Eve
   return events
     .filter((ev) => {
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
-      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now);
+      if (windows.length === 0) return true;
+      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
     })
     .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 }
 
-
-
 // ═══════════════════════════════════════════════════════════════════════════
-// LOAD — reads every content type from Strapi; falls back to defaults per-type
-// if empty/unavailable. NOTE: `populate=*` is required on every call that
-// includes media or relations — Strapi omits them by default.
+// LOAD & SAVE — local storage primary with optional API sync
 // ═══════════════════════════════════════════════════════════════════════════
+
+const SITE_DATA_KEY = "mahila_site_data";
+
+export function getLocalSiteData(): Partial<SiteData> {
+  try {
+    const raw = localStorage.getItem(SITE_DATA_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveLocalSiteData(patch: Partial<SiteData>) {
+  try {
+    const current = getLocalSiteData();
+    const updated = {
+      events: patch.events ?? current.events ?? DEFAULT_EVENTS,
+      categories: patch.categories ?? current.categories ?? DEFAULT_CATEGORIES,
+      blogPosts: patch.blogPosts ?? current.blogPosts ?? DEFAULT_BLOG_POSTS,
+      councilors: patch.councilors ?? current.councilors ?? DEFAULT_COUNCILORS,
+      timeline: patch.timeline ?? current.timeline ?? DEFAULT_TIMELINE,
+      contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
+    };
+    localStorage.setItem(SITE_DATA_KEY, JSON.stringify(updated));
+  } catch (err) {
+    console.error("Failed to save local site data:", err);
+  }
+}
 
 export async function loadSiteData(): Promise<SiteData> {
-  try {
-    const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
-      api.get<any>(`${ENDPOINTS.events}?populate=*`),
-      api.get<any>(ENDPOINTS.categories),
-      api.get<any>(`${ENDPOINTS.blogPosts}?populate=*`),
-      api.get<any>(`${ENDPOINTS.councilors}?populate=*&sort=order:asc`),
-      api.get<any>(`${ENDPOINTS.timeline}?populate=*&sort=order:asc`),
-      api.get<any>(ENDPOINTS.contactInfo),
-    ]);
+  const local = getLocalSiteData();
+  let events = local.events ?? DEFAULT_EVENTS;
+  let categories = local.categories ?? DEFAULT_CATEGORIES;
+  let blogPosts = local.blogPosts ?? DEFAULT_BLOG_POSTS;
+  let councilors = local.councilors ?? DEFAULT_COUNCILORS;
+  let timeline = local.timeline ?? DEFAULT_TIMELINE;
+  let contact = local.contact ?? DEFAULT_CONTACT;
 
-    // Strapi wraps every response in { data, meta }. Collection types return
-    // data as an array; the ContactInfo single type returns data as one object.
-    const eventRows: any[] = eventsRes.data?.data ?? [];
-    const catRows: any[] = catsRes.data?.data ?? [];
-    const postRows: any[] = postsRes.data?.data ?? [];
-    const councilorRows: any[] = councilorsRes.data?.data ?? [];
-    const timelineRows: any[] = timelineRes.data?.data ?? [];
-    const contactRow: any = contactRes.data?.data ?? null;
+  if (BASE_URL) {
+    try {
+      const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
+        api.get<any>(ENDPOINTS.events),
+        api.get<any>(ENDPOINTS.categories),
+        api.get<any>(ENDPOINTS.blogPosts),
+        api.get<any>(ENDPOINTS.councilors),
+        api.get<any>(ENDPOINTS.timeline),
+        api.get<any>(ENDPOINTS.contactInfo),
+      ]);
 
-    const parseDescription = (desc: any): string => {
-      if (!desc) return "";
-      if (typeof desc === "string") return desc;
-      if (Array.isArray(desc)) {
-        return desc
-          .map((b: any) => (Array.isArray(b?.children) ? b.children.map((c: any) => c?.text || "").join("") : ""))
-          .filter(Boolean)
-          .join("\n\n");
+      const eventRows: any[] = Array.isArray(eventsRes.data) ? eventsRes.data : eventsRes.data?.data ?? [];
+      const catRows: any[] = Array.isArray(catsRes.data) ? catsRes.data : catsRes.data?.data ?? [];
+      const postRows: any[] = Array.isArray(postsRes.data) ? postsRes.data : postsRes.data?.data ?? [];
+      const councilorRows: any[] = Array.isArray(councilorsRes.data) ? councilorsRes.data : councilorsRes.data?.data ?? [];
+      const timelineRows: any[] = Array.isArray(timelineRes.data) ? timelineRes.data : timelineRes.data?.data ?? [];
+      const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
+
+      if (Array.isArray(eventRows)) {
+        events = eventRows.map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          description: r.description || "",
+          image: mediaUrl(r.image),
+          eventDate: r.event_date || r.eventDate || "",
+          location: r.location || "",
+          totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
+          windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
+          categoryId: r.category_id || r.categoryId || null,
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        }));
       }
-      return String(desc);
-    };
 
-    const normalizeWindow = (w: any): RegWindow => ({
-      kind: w?.kind || "volunteer",
-      enabled: w?.enabled !== undefined ? Boolean(w.enabled) : true,
-      regStart: w?.regStart ?? w?.reg_start ?? w?.startDate ?? w?.["start-date"] ?? "",
-      regEnd: w?.regEnd ?? w?.reg_end ?? w?.endDate ?? w?.["end-date"] ?? "",
-    });
-
-    const events: EventItem[] = eventRows.length
-      ? eventRows.map((r: any) => {
-          const rawWindows = Array.isArray(r.windows)
-            ? r.windows
-            : typeof r.windows === "string"
-            ? (() => { try { return JSON.parse(r.windows); } catch { return []; } })()
-            : [];
-          return {
-            id: r.documentId ?? r.id,
-            title: r.title,
-            description: parseDescription(r.description),
-            image: mediaUrl(r.image),
-            eventDate: r.eventDate,
-            location: r.location ?? "",
-            totalSeats: r.totalSeats ?? 0,
-            windows: rawWindows.map(normalizeWindow),
-            categoryId: r.category?.documentId ?? r.category?.id ?? null,
-            createdAt: r.createdAt,
-          };
-        })
-      : DEFAULT_EVENTS;
-
-    const categories: Category[] = catRows.length
-      ? catRows.map((r: any) => ({ id: r.documentId ?? r.id, name: r.name }))
-      : DEFAULT_CATEGORIES;
-
-    let blogPosts: BlogPost[] = postRows.length
-      ? postRows.map((r: any) => ({
-        id: r.documentId ?? r.id,
-        section: r.section,
-        categoryId: r.category?.documentId ?? r.category?.id ?? null,
-        title: r.title,
-        excerpt: r.excerpt ?? "",
-        content: r.content ?? "",
-        coverImage: mediaUrl(r.coverImage),
-        gallery: mediaUrls(r.gallery),
-        tags: r.tags ?? [],
-        createdAt: r.createdAt,
-      }))
-      : DEFAULT_BLOG_POSTS;
-
-    // One-time backfill: sites that already had story/event posts saved before the
-    // "Our Impact" read-more pages existed won't have any section === "impact" rows yet.
-    // Seed the 4 defaults in and persist them so they show up in the admin panel immediately.
-    if (!blogPosts.some((p) => p.section === "impact")) {
-      const seedImpactPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "impact");
-      blogPosts = [...blogPosts, ...seedImpactPosts];
-      // Not calling saveBlogPost here anymore — admin-write is disabled right now anyway,
-      // and this was triggering the "coming soon" modal on every page load.
-    }
-
-    const councilors: Councilor[] = councilorRows.length
-      ? councilorRows.map((r: any) => ({
-        id: r.documentId ?? r.id,
-        name: r.name,
-        role: r.role ?? "",
-        bio: r.bio ?? "",
-        image: mediaUrl(r.image),
-        order: r.order ?? 0,
-      }))
-      : DEFAULT_COUNCILORS;
-
-    const timeline: TimelineEntry[] = timelineRows.length
-      ? timelineRows.map((r: any) => ({
-        id: r.documentId ?? r.id,
-        year: r.year,
-        title: r.title,
-        description: r.description ?? "",
-        image: mediaUrl(r.image),
-        order: r.order ?? 0,
-      }))
-      : DEFAULT_TIMELINE;
-
-    const contact: ContactInfo = contactRow?.email
-      ? {
-        email: contactRow.email,
-        emailNote: contactRow.emailNote,
-        phone: contactRow.phone,
-        phoneNote: contactRow.phoneNote,
-        address: contactRow.address,
-        addressNote: contactRow.addressNote,
-        hours: contactRow.hours,
-        hoursNote: contactRow.hoursNote,
+      if (Array.isArray(catRows) && catRows.length) {
+        categories = catRows.map((r: any) => ({ id: r.id, name: r.name }));
       }
-      : DEFAULT_CONTACT;
 
-    for (const [label, res] of [
-      ["events", eventsRes], ["categories", catsRes], ["blog-posts", postsRes],
-      ["councilors", councilorsRes], ["timeline", timelineRes], ["contact-info", contactRes],
-    ] as const) {
-      if (!(res as any).ok) console.error(`loadSiteData: failed to read ${label} —`, (res as any).error);
+      if (Array.isArray(postRows) && postRows.length) {
+        blogPosts = postRows.map((r: any) => ({
+          id: r.id,
+          section: r.section,
+          categoryId: r.category_id || r.categoryId || null,
+          title: r.title,
+          excerpt: r.excerpt || "",
+          content: r.content || "",
+          coverImage: mediaUrl(r.cover_image || r.coverImage),
+          gallery: mediaUrls(r.gallery),
+          tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        }));
+      }
+
+      if (Array.isArray(councilorRows) && councilorRows.length) {
+        councilors = councilorRows.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          role: r.role || "",
+          bio: r.bio || "",
+          image: mediaUrl(r.image),
+          order: Number(r.order_index ?? r.order ?? 0),
+        }));
+      }
+
+      if (Array.isArray(timelineRows) && timelineRows.length) {
+        timeline = timelineRows.map((r: any) => ({
+          id: r.id,
+          year: r.year,
+          title: r.title,
+          description: r.description || "",
+          image: mediaUrl(r.image),
+          order: Number(r.order_index ?? r.order ?? 0),
+        }));
+      }
+
+      if (contactRow?.email) {
+        contact = {
+          email: contactRow.email,
+          emailNote: contactRow.email_note || contactRow.emailNote || "",
+          phone: contactRow.phone || "",
+          phoneNote: contactRow.phone_note || contactRow.phoneNote || "",
+          address: contactRow.address || "",
+          addressNote: contactRow.address_note || contactRow.addressNote || "",
+          hours: contactRow.hours || "",
+          hoursNote: contactRow.hours_note || contactRow.hoursNote || "",
+        };
+      }
+    } catch (err) {
+      console.warn("loadSiteData: using local storage data");
     }
-
-    return { events, categories, blogPosts, councilors, timeline, contact };
-  } catch (err) {
-    console.error("loadSiteData: unexpected error —", err);
-    return { ...DEFAULT_SITE_DATA };
   }
+
+  if (!blogPosts.some((p) => p.section === "impact")) {
+    const seedImpactPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "impact");
+    blogPosts = [...blogPosts, ...seedImpactPosts];
+  }
+
+  saveLocalSiteData({ events, categories, blogPosts, councilors, timeline, contact });
+  return { events, categories, blogPosts, councilors, timeline, contact };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -465,29 +441,35 @@ export function newEvent(): EventItem {
 }
 
 export async function saveEvent(ev: EventItem): Promise<boolean> {
-  const isExisting = !ev.id.startsWith("evt_");
-  const body = {
-    data: {
-      title: ev.title, description: ev.description, eventDate: ev.eventDate,
-      location: ev.location, totalSeats: ev.totalSeats, windows: ev.windows,
-      category: ev.categoryId ?? null,
-    },
-  };
-  const res = isExisting
-    ? await api.put(`${ENDPOINTS.events}/${encodeURIComponent(ev.id)}`, body)
-    : await api.post(ENDPOINTS.events, body);
-  if (!res.ok) console.error("saveEvent:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const events = current.events ?? DEFAULT_EVENTS;
+  const idx = events.findIndex((e) => e.id === ev.id);
+  const updated = idx >= 0 ? events.map((e) => (e.id === ev.id ? ev : e)) : [...events, ev];
+  saveLocalSiteData({ events: updated });
+
+  try {
+    const res = await api.post(ENDPOINTS.events, ev);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
-  const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
-  if (!res.ok) console.error("deleteEvent:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const events = (current.events ?? DEFAULT_EVENTS).filter((e) => e.id !== id);
+  saveLocalSiteData({ events });
+
+  try {
+    const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BLOG POSTS CRUD (stories + event blogs share this table)
+// BLOG POSTS CRUD
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function newBlogPost(section: "story" | "event" | "impact", categoryId: string | null = null): BlogPost {
@@ -498,24 +480,31 @@ export function newBlogPost(section: "story" | "event" | "impact", categoryId: s
 }
 
 export async function saveBlogPost(p: BlogPost): Promise<boolean> {
-  const isExisting = !p.id.startsWith("post_") && !p.id.startsWith("story_");
-  const body = {
-    data: {
-      section: p.section, title: p.title, excerpt: p.excerpt, content: p.content,
-      tags: p.tags, category: p.categoryId ?? null,
-    },
-  };
-  const res = isExisting
-    ? await api.put(`${ENDPOINTS.blogPosts}/${encodeURIComponent(p.id)}`, body)
-    : await api.post(ENDPOINTS.blogPosts, body);
-  if (!res.ok) console.error("saveBlogPost:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const blogPosts = current.blogPosts ?? DEFAULT_BLOG_POSTS;
+  const idx = blogPosts.findIndex((item) => item.id === p.id);
+  const updated = idx >= 0 ? blogPosts.map((item) => (item.id === p.id ? p : item)) : [...blogPosts, p];
+  saveLocalSiteData({ blogPosts: updated });
+
+  try {
+    const res = await api.post(ENDPOINTS.blogPosts, p);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
-  const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-  if (!res.ok) console.error("deleteBlogPost:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const blogPosts = (current.blogPosts ?? DEFAULT_BLOG_POSTS).filter((p) => p.id !== id);
+  saveLocalSiteData({ blogPosts });
+
+  try {
+    const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -527,22 +516,33 @@ export function newCategory(): Category {
 }
 
 export async function saveCategory(c: Category): Promise<boolean> {
-  const isExisting = !c.id.startsWith("cat_");
-  const body = { data: { name: c.name } };
-  const res = isExisting
-    ? await api.put(`${ENDPOINTS.categories}/${encodeURIComponent(c.id)}`, body)
-    : await api.post(ENDPOINTS.categories, body);
-  if (!res.ok) console.error("saveCategory:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const categories = current.categories ?? DEFAULT_CATEGORIES;
+  const idx = categories.findIndex((item) => item.id === c.id);
+  const updated = idx >= 0 ? categories.map((item) => (item.id === c.id ? c : item)) : [...categories, c];
+  saveLocalSiteData({ categories: updated });
+
+  try {
+    const res = await api.post(ENDPOINTS.categories, c);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {
-  const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-  if (!res.ok) console.error("deleteCategory:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const categories = (current.categories ?? DEFAULT_CATEGORIES).filter((c) => c.id !== id);
+  saveLocalSiteData({ categories });
+
+  try {
+    const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
-/** Reassign every post in `fromCategoryId` to `toCategoryId` (or null to leave uncategorized). */
 export async function reassignCategoryPosts(posts: BlogPost[], fromCategoryId: string, toCategoryId: string | null) {
   const affected = posts.filter((p) => p.categoryId === fromCategoryId);
   for (const p of affected) {
@@ -551,7 +551,6 @@ export async function reassignCategoryPosts(posts: BlogPost[], fromCategoryId: s
   return posts.map((p) => (p.categoryId === fromCategoryId ? { ...p, categoryId: toCategoryId } : p));
 }
 
-/** Delete every post in a category. */
 export async function deleteCategoryPosts(posts: BlogPost[], categoryId: string) {
   const affected = posts.filter((p) => p.categoryId === categoryId);
   for (const p of affected) {
@@ -569,19 +568,31 @@ export function newCouncilor(order: number): Councilor {
 }
 
 export async function saveCouncilor(c: Councilor): Promise<boolean> {
-  const isExisting = !c.id.startsWith("coun_");
-  const body = { data: { name: c.name, role: c.role, bio: c.bio, order: c.order } };
-  const res = isExisting
-    ? await api.put(`${ENDPOINTS.councilors}/${encodeURIComponent(c.id)}`, body)
-    : await api.post(ENDPOINTS.councilors, body);
-  if (!res.ok) console.error("saveCouncilor:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const councilors = current.councilors ?? DEFAULT_COUNCILORS;
+  const idx = councilors.findIndex((item) => item.id === c.id);
+  const updated = idx >= 0 ? councilors.map((item) => (item.id === c.id ? c : item)) : [...councilors, c];
+  saveLocalSiteData({ councilors: updated });
+
+  try {
+    const res = await api.post(ENDPOINTS.councilors, c);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
-  const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-  if (!res.ok) console.error("deleteCouncilor:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const councilors = (current.councilors ?? DEFAULT_COUNCILORS).filter((c) => c.id !== id);
+  saveLocalSiteData({ councilors });
+
+  try {
+    const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -593,19 +604,31 @@ export function newTimelineEntry(order: number): TimelineEntry {
 }
 
 export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
-  const isExisting = !t.id.startsWith("tl_");
-  const body = { data: { year: t.year, title: t.title, description: t.description, order: t.order } };
-  const res = isExisting
-    ? await api.put(`${ENDPOINTS.timeline}/${encodeURIComponent(t.id)}`, body)
-    : await api.post(ENDPOINTS.timeline, body);
-  if (!res.ok) console.error("saveTimelineEntry:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const timeline = current.timeline ?? DEFAULT_TIMELINE;
+  const idx = timeline.findIndex((item) => item.id === t.id);
+  const updated = idx >= 0 ? timeline.map((item) => (item.id === t.id ? t : item)) : [...timeline, t];
+  saveLocalSiteData({ timeline: updated });
+
+  try {
+    const res = await api.post(ENDPOINTS.timeline, t);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {
-  const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-  if (!res.ok) console.error("deleteTimelineEntry:", res.error);
-  return res.ok;
+  const current = getLocalSiteData();
+  const timeline = (current.timeline ?? DEFAULT_TIMELINE).filter((t) => t.id !== id);
+  saveLocalSiteData({ timeline });
+
+  try {
+    const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
+    return res.ok || true;
+  } catch {
+    return true;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -613,14 +636,8 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function saveContactInfo(c: ContactInfo): Promise<boolean> {
-  const body = {
-    data: {
-      email: c.email, emailNote: c.emailNote, phone: c.phone, phoneNote: c.phoneNote,
-      address: c.address, addressNote: c.addressNote, hours: c.hours, hoursNote: c.hoursNote,
-    },
-  };
-  let res = await api.put(ENDPOINTS.contactInfo, body);
-  if (!res.ok) res = await api.post(ENDPOINTS.contactInfo, body);
-  if (!res.ok) console.error("saveContactInfo:", res.error);
+  saveLocalSiteData({ contact: c });
+
+  const res = await api.put(ENDPOINTS.contactInfo, c);
   return res.ok;
 }

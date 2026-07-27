@@ -1,9 +1,16 @@
 import svgPaths from "./svg-6fcsh0az5g";
-import imgBannerSection from "./2d1b5465a5dfdae07df9d30b92aa1a1930398a6c.png";
-import imgTakeActionImage from "./6bd40b4d49b728881886868554ea429eeb0d2e01.png";
-import imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
-import imgEventImage from "./39242dfa2d4add5f76889c42da60d903f880be6f.png";
-import imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+import _imgBannerSection from "./2d1b5465a5dfdae07df9d30b92aa1a1930398a6c.png";
+import _imgTakeActionImage from "./6bd40b4d49b728881886868554ea429eeb0d2e01.png";
+import _imgStoryImage from "./788d28db62c65b5f55d746c307e794795661454c.png";
+import _imgEventImage from "./39242dfa2d4add5f76889c42da60d903f880be6f.png";
+import _imgLogo from "./9d095694bb05f68181e7700b7124281eb76c32ec.png";
+
+const toSrc = (img: any): string => (typeof img === "string" ? img : img?.src || "");
+const imgBannerSection = toSrc(_imgBannerSection);
+const imgTakeActionImage = toSrc(_imgTakeActionImage);
+const imgStoryImage = toSrc(_imgStoryImage);
+const imgEventImage = toSrc(_imgEventImage);
+const imgLogo = toSrc(_imgLogo);
 
 function BannerSection() {
   return (
