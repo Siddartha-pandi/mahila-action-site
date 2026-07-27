@@ -61,70 +61,31 @@ export const DEFAULTS: Record<string, string> = {
 
 export type ContentMap = typeof DEFAULTS;
 
-// ── Load all content from local storage and API ────────────────────────────
+// ── Load all content from the API ─────────────────────────────────────────
 export async function loadContent(): Promise<ContentMap> {
-  const map = { ...DEFAULTS };
-
-  // 1. Load local cache/overrides first
-  try {
-    const cached = localStorage.getItem("mahila_site_content");
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      for (const [key, value] of Object.entries(parsed)) {
-        if (key in map && typeof value === "string") {
-          map[key as keyof ContentMap] = value;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("Failed to load local content cache:", err);
-  }
-
-  // 2. Fetch from API if reachable
   const res = await api.get<Record<string, string>>("/api/content");
-  if (res.ok && res.data) {
-    for (const [key, value] of Object.entries(res.data)) {
-      if (key in map && typeof value === "string") {
-        map[key as keyof ContentMap] = value;
-      }
-    }
-    // Update local cache
-    try {
-      localStorage.setItem("mahila_site_content", JSON.stringify(map));
-    } catch {
-      // ignore quota limits
-    }
+  if (!res.ok || !res.data) return { ...DEFAULTS };
+  const map = { ...DEFAULTS };
+  for (const [key, value] of Object.entries(res.data)) {
+    if (key in map) map[key as keyof ContentMap] = value;
   }
-
   return map;
 }
 
 // ── Save a single key ──────────────────────────────────────────────────────
 export async function saveContentKey(key: string, value: string): Promise<boolean> {
-  try {
-    const cached = localStorage.getItem("mahila_site_content");
-    const current = cached ? JSON.parse(cached) : { ...DEFAULTS };
-    current[key] = value;
-    localStorage.setItem("mahila_site_content", JSON.stringify(current));
-  } catch (err) {
-    console.error("Failed to save content key locally:", err);
-  }
-
-  const res = await api.put(`/api/content/${encodeURIComponent(key)}`, { value });
-  return true; // Returns true since local state was saved successfully
+  return comingSoon();
+  // ── Original logic (restore by deleting the line above) ──
+  // const res = await api.put(`/api/content/${encodeURIComponent(key)}`, { value });
+  // if (!res.ok) console.error(`saveContentKey: failed to save "${key}" —`, res.error);
+  // return res.ok;
 }
 
 // ── Save all keys at once ─────────────────────────────────────────────────
 export async function saveAllContent(content: ContentMap): Promise<boolean> {
-  try {
-    localStorage.setItem("mahila_site_content", JSON.stringify(content));
-  } catch (err) {
-    console.error("Failed to save all content locally:", err);
-  }
-
-  const res = await api.put("/api/content", content);
-  if (!res.ok) {
-    console.warn("saveAllContent: Strapi API not updated (saved locally):", res.error);
-  }
-  return true;
+  return comingSoon();
+  // ── Original logic (restore by deleting the line above) ──
+  // const res = await api.put("/api/content", content);
+  // if (!res.ok) console.error("saveAllContent: failed to save site content —", res.error);
+  // return res.ok;
 }
