@@ -286,6 +286,28 @@ export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): Eve
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SITE_DATA_KEY = "mahila_site_data";
+const DELETED_EVENT_IDS_KEY = "mahila_deleted_event_ids";
+
+function getDeletedEventIds(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_EVENT_IDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordDeletedEventId(id: string) {
+  try {
+    const ids = getDeletedEventIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      localStorage.setItem(DELETED_EVENT_IDS_KEY, JSON.stringify(ids));
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function getLocalSiteData(): Partial<SiteData> {
   try {
@@ -340,18 +362,21 @@ export async function loadSiteData(): Promise<SiteData> {
     const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
     if (Array.isArray(eventRows) && eventRows.length > 0) {
-      events = eventRows.map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description || "",
-        image: mediaUrl(r.image),
-        eventDate: r.event_date || r.eventDate || "",
-        location: r.location || "",
-        totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
-        windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
-        categoryId: r.category_id || r.categoryId || null,
-        createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-      }));
+      const deletedIds = getDeletedEventIds();
+      events = eventRows
+        .filter((r: any) => !deletedIds.includes(String(r.id)))
+        .map((r: any) => ({
+          id: r.id,
+          title: r.title,
+          description: r.description || "",
+          image: mediaUrl(r.image),
+          eventDate: r.event_date || r.eventDate || "",
+          location: r.location || "",
+          totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
+          windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
+          categoryId: r.category_id || r.categoryId || null,
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        }));
     }
 
     if (Array.isArray(catRows) && catRows.length > 0) {
@@ -454,6 +479,9 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
+  // Record the deletion so it survives refresh even if the API doesn't persist it
+  recordDeletedEventId(id);
+
   const current = getLocalSiteData();
   const events = (current.events ?? DEFAULT_EVENTS).filter((e) => e.id !== id);
   saveLocalSiteData({ events });

@@ -18,8 +18,17 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
     }
   }
 
-  // Local admin dashboard authentication
-  if (email && password && password.length >= 4) {
+  // Local admin dashboard authentication — only for known admin identifiers
+  const knownAdminIds = [
+    "superadmin",
+    "super admin",
+    "super",
+    "admin",
+    "mahilaaction.vsk@gmail.com",
+    "admin@organization.org",
+  ];
+  const lowerEmail = email.toLowerCase().trim();
+  if (knownAdminIds.includes(lowerEmail) && password && password.length >= 4) {
     localStorage.setItem("admin_jwt", "admin_authenticated");
     return { ok: true };
   }
@@ -56,7 +65,30 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
     if (!raw) return getInitialMockSubmissions();
     const items = JSON.parse(raw);
     if (!Array.isArray(items)) return getInitialMockSubmissions();
-    const valid: SubmissionItem[] = items.filter(item => item && typeof item === "object" && item.id && item.type);
+    let valid: SubmissionItem[] = items.filter((item: any) => item && typeof item === "object" && item.id && item.type);
+
+    // ── Migration: remove legacy "Permanent Community Volunteer Membership" entries ──
+    const LEGACY_TITLE = "Permanent Community Volunteer Membership";
+    let changed = false;
+    valid = valid.filter(item => {
+      if (item.type !== "volunteer") return true;
+      const events: string[] = Array.isArray(item.data?.selected_events) ? item.data.selected_events : [];
+      // Drop the entire submission if all it has is the legacy title
+      if (events.length > 0 && events.every((e: string) => e === LEGACY_TITLE)) {
+        changed = true;
+        return false;
+      }
+      // Strip the legacy title from mixed arrays
+      if (events.includes(LEGACY_TITLE)) {
+        item.data.selected_events = events.filter((e: string) => e !== LEGACY_TITLE);
+        changed = true;
+      }
+      return true;
+    });
+    if (changed) {
+      localStorage.setItem(SUBMISSION_KEY, JSON.stringify(valid));
+    }
+
     return type ? valid.filter(item => item.type === type) : valid;
   } catch {
     return getInitialMockSubmissions();
