@@ -2,10 +2,8 @@ import path from "node:path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "export",
   reactStrictMode: false,
-  experimental: {
-    serverComponentsExternalPackages: ["better-sqlite3", "pg", "bcryptjs"],
-  },
   images: {
     unoptimized: true,
   },

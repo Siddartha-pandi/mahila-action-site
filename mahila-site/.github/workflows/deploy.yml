@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mahila-site
     steps:
       - uses: actions/checkout@v4
 
@@ -27,21 +24,19 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: mahila-site/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build (client + SSR prerender + sitemap)
+      - name: Build Next.js Static Export
         run: npm run build
         env:
-          # Point this at your deployed /server API (see server/README.md).
-          # Set the real value in Settings → Secrets and variables → Actions → Variables.
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: mahila-site/dist
+          path: out
 
   deploy:
     needs: build

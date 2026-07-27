@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
+export function generateStaticParams() {
+  return [];
+}
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const result = await queryDb("SELECT * FROM cms_blog_posts WHERE id = $1", [params.id]);
