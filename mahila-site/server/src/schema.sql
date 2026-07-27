@@ -1,15 +1,18 @@
--- PostgreSQL schema for the Mahila Action backend.
+-- SQLite schema for the Mahila Action backend.
+-- JSON-ish columns (companions, windows, gallery, tags, selected_events) are
+-- stored as TEXT and JSON.stringify/parse'd in the route handlers, since
+-- SQLite has no native json/jsonb type.
 
-CREATE TABLE IF NOT EXISTS app_admin_users (
+CREATE TABLE IF NOT EXISTS admin_users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS donations (
   id TEXT PRIMARY KEY,
-  amount DOUBLE PRECISION NOT NULL,
+  amount REAL NOT NULL,
   name TEXT,
   email TEXT,
   phone TEXT,
@@ -17,7 +20,7 @@ CREATE TABLE IF NOT EXISTS donations (
   anonymous INTEGER DEFAULT 0,
   event_name TEXT,
   campaign_name TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS event_reservations (
@@ -29,7 +32,7 @@ CREATE TABLE IF NOT EXISTS event_reservations (
   seats INTEGER NOT NULL DEFAULT 1,
   volunteer_commitment TEXT CHECK (volunteer_commitment IN ('event_only', 'ongoing')),
   companions TEXT DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS vendor_registrations (
@@ -41,7 +44,7 @@ CREATE TABLE IF NOT EXISTS vendor_registrations (
   phone TEXT NOT NULL,
   offering TEXT NOT NULL,
   needs_space INTEGER DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS volunteer_accounts (
@@ -53,7 +56,7 @@ CREATE TABLE IF NOT EXISTS volunteer_accounts (
   skills TEXT,
   reset_token_hash TEXT,
   reset_token_expires TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS volunteer_registrations (
@@ -63,7 +66,7 @@ CREATE TABLE IF NOT EXISTS volunteer_registrations (
   phone TEXT NOT NULL,
   skills TEXT,
   selected_events TEXT DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS contact_submissions (
@@ -73,13 +76,13 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
   phone TEXT,
   subject TEXT,
   message TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS site_content (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS cms_events (
@@ -91,13 +94,13 @@ CREATE TABLE IF NOT EXISTS cms_events (
   location TEXT,
   total_seats INTEGER DEFAULT 0,
   windows TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS cms_categories (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS cms_blog_posts (
@@ -110,7 +113,7 @@ CREATE TABLE IF NOT EXISTS cms_blog_posts (
   cover_image TEXT,
   gallery TEXT DEFAULT '[]',
   tags TEXT DEFAULT '[]',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS cms_councilors (

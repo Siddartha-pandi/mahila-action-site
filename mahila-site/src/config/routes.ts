@@ -50,11 +50,6 @@ export const ROUTES: RouteMeta[] = [
     description: "Get in touch with Mahila Action — email, phone, office address, and hours.",
   },
   {
-    path: "/account",
-    title: `My Account & Registered Events — ${SITE_NAME}`,
-    description: "View your registered events, volunteer activities, seat reservations, and contribution history.",
-  },
-  {
     path: "/admin",
     title: `Admin — ${SITE_NAME}`,
     description: "Private administration area.",

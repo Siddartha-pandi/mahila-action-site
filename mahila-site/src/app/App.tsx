@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect, createContext, useContext, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, createContext, useContext } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router";
 import { Toaster, toast } from "sonner";
 import { loadContent, saveAllContent, DEFAULTS, type ContentMap } from "@/lib/content";
-import { saveReservation, saveVolunteer, saveContact, saveDonation, saveVendor, signInAdmin, signOutAdmin, onAdminAuthChange, registerVolunteer, loginVolunteer, requestVolunteerPasswordReset, resetVolunteerPassword, getUserSubmissions, getSavedUserSession, saveUserSession, type VolunteerAccountProfile, type SubmissionItem } from "@/lib/backend";
+import { saveReservation, saveVolunteer, saveContact, saveDonation, saveVendor, signInAdmin, signOutAdmin, onAdminAuthChange, registerVolunteer, loginVolunteer, requestVolunteerPasswordReset, resetVolunteerPassword } from "@/lib/backend";
 import { showComingSoonModal } from "@/lib/comingSoon";
 import { ComingSoonModal } from "./ComingSoonModal";
 import {
@@ -22,19 +22,6 @@ import { CategoriesAdmin } from "./admin/CategoriesAdmin";
 import { CouncilorsAdmin } from "./admin/CouncilorsAdmin";
 import { TimelineAdmin } from "./admin/TimelineAdmin";
 import { ContactAdmin } from "./admin/ContactAdmin";
-import { SubmissionsAdmin } from "./admin/SubmissionsAdmin";
-import { RolesAdmin } from "./admin/RolesAdmin";
-import {
-  getCurrentAdminSession,
-  setCurrentAdminSession,
-  clearAdminSession,
-  hasPermission,
-  getRoleById,
-  AdminUser,
-  AdminModule,
-} from "@/lib/permissions";
-import { isValidPhoneNumber } from "@/lib/validation";
-import { ImageField } from "./adminWidgets";
 import { BlogDetailModal } from "./BlogDetailModal";
 import { EventsBlogPage } from "./EventsBlogPage";
 import { Seo } from "./components/seo/Seo";
@@ -52,16 +39,6 @@ import {
   X,
   CheckCircle,
   ChevronRight,
-  LogIn,
-  User,
-  ShieldCheck,
-  ChevronDown,
-  LogOut,
-  UserCheck,
-  Clock,
-  Sparkles,
-  Plus,
-  UserPlus,
 } from "lucide-react";
 
 // ── Image imports from design assets ──────────────────────────────────────
@@ -90,7 +67,7 @@ import imgGal3 from "@/imports/OurImpactContext/2e8ff5608927ddd34602e508ea3a0068
 import svgWho from "@/imports/Concept2WhoWeAre/svg-6fcsh0az5g";
 
 // ── Types ────────────────────────────────────────────────────────────────
-type Page = "home" | "about" | "stories" | "eventsBlog" | "donate" | "contact" | "account" | "admin";
+type Page = "home" | "about" | "stories" | "eventsBlog" | "donate" | "contact" | "admin";
 
 // ── Page <-> URL mapping (real routes, used for prerendering + navigation) ─
 const PAGE_TO_PATH: Record<Page, string> = {
@@ -100,7 +77,6 @@ const PAGE_TO_PATH: Record<Page, string> = {
   eventsBlog: "/events",
   donate: "/donate",
   contact: "/contact",
-  account: "/account",
   admin: "/admin",
 };
 
@@ -280,20 +256,6 @@ function Navigation({
   setPage: (p: Page) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [userSession, setUserSession] = useState<VolunteerAccountProfile | null>(getSavedUserSession);
-  const { openModal } = useModal();
-
-  useEffect(() => {
-    function syncSession() {
-      setUserSession(getSavedUserSession());
-    }
-    window.addEventListener("mahila_user_session_changed", syncSession);
-    window.addEventListener("storage", syncSession);
-    return () => {
-      window.removeEventListener("mahila_user_session_changed", syncSession);
-      window.removeEventListener("storage", syncSession);
-    };
-  }, []);
 
   const links: { label: string; page: Page }[] = [
     { label: "Home", page: "home" },
@@ -335,41 +297,16 @@ function Navigation({
           ))}
         </nav>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Donate Now Button */}
+        <div className="flex items-center gap-3">
           <button
             onClick={() => nav("donate")}
             className={`hidden md:flex ${inter()} bg-[#a65a4a] text-[#f4efe7] text-[15px] font-medium px-7 py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}
           >
             Donate Now
           </button>
-
-          {/* User Auth Status: Show Login button (opens overlay modal) when unauthenticated; Hide Login button and show User Name pill (navigates to /account) to the right of Donate Now when authenticated */}
-          {!userSession ? (
-            <button
-              onClick={() => openModal("login")}
-              className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[13px] sm:text-[15px] font-medium px-4 sm:px-6 py-2 sm:py-2.5 rounded-full transition-colors cursor-pointer flex items-center gap-1.5 sm:gap-2`}
-            >
-              <LogIn size={15} />
-              <span>Login</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => nav("account")}
-              className={`${inter()} bg-[#a65a4a]/10 border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[13px] sm:text-[14px] font-semibold px-3 sm:px-4.5 py-1.5 sm:py-2.5 rounded-full transition-colors cursor-pointer flex items-center gap-2 shadow-sm ${page === "account" ? "bg-[#a65a4a] text-[#f4efe7]" : ""}`}
-              title="View My Registered Events & Account Profile"
-            >
-              <div className="size-5 sm:size-6 rounded-full bg-[#a65a4a] text-[#f4efe7] font-bold text-[11px] sm:text-[12px] flex items-center justify-center shrink-0">
-                {userSession.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="max-w-[75px] sm:max-w-[120px] truncate">{userSession.name.split(" ")[0]}</span>
-            </button>
-          )}
-
           <button
-            className="md:hidden p-2 cursor-pointer text-[#1e1e1e] hover:text-[#a65a4a]"
+            className="md:hidden p-2 cursor-pointer"
             onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle navigation menu"
           >
             {menuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -378,7 +315,7 @@ function Navigation({
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="md:hidden bg-[#f4efe7] border-t border-[#a65a4a]/20 px-6 pb-5 pt-2">
+        <div className="md:hidden bg-[#f4efe7] border-t border-[#a65a4a]/20 px-6 pb-5">
           {links.map((l) => (
             <button
               key={l.page}
@@ -391,33 +328,12 @@ function Navigation({
               {l.label}
             </button>
           ))}
-
-          <div className="pt-4 flex flex-col gap-2.5">
-            <button
-              onClick={() => nav("donate")}
-              className={`w-full ${inter()} bg-[#a65a4a] text-[#f4efe7] text-[15px] font-medium px-7 py-3 rounded-full cursor-pointer hover:bg-[#993925] transition-colors`}
-            >
-              Donate Now
-            </button>
-
-            {!userSession ? (
-              <button
-                onClick={() => { setMenuOpen(false); openModal("login"); }}
-                className={`${inter()} w-full border-2 border-[#a65a4a] text-[#a65a4a] text-[15px] font-medium px-6 py-3 rounded-full flex items-center justify-center gap-2 cursor-pointer hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-colors`}
-              >
-                <LogIn size={16} />
-                Login
-              </button>
-            ) : (
-              <button
-                onClick={() => nav("account")}
-                className={`${inter()} w-full bg-[#a65a4a]/10 border-2 border-[#a65a4a] text-[#a65a4a] text-[15px] font-semibold px-6 py-3 rounded-full flex items-center justify-center gap-2 cursor-pointer`}
-              >
-                <User size={16} />
-                {userSession.name} (My Account)
-              </button>
-            )}
-          </div>
+          <button
+            onClick={() => nav("donate")}
+            className={`mt-4 w-full ${inter()} bg-[#a65a4a] text-[#f4efe7] text-[15px] font-medium px-7 py-3 rounded-full cursor-pointer`}
+          >
+            Donate Now
+          </button>
         </div>
       )}
     </header>
@@ -761,41 +677,13 @@ const VOLUNTEER_EVENTS = [
 ];
 
 function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events: EventItem[] }) {
-  const { closeModal } = useModal();
-  const handleClose = useCallback(() => {
-    if (onClose) onClose();
-    closeModal();
-  }, [onClose, closeModal]);
-
-  const [step, setStep] = useState<VolAuthStep>(initialStep ?? "login");
+  const [step, setStep] = useState<VolAuthStep>(initialStep ?? "choice");
   const [profile, setProfile] = useState<VolunteerProfile | null>(null);
-  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
-
-  useEffect(() => {
-    if (initialStep) setStep(initialStep);
-  }, [initialStep]);
 
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
-
-  // User's recorded submissions from storage
-  const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
-
-  useEffect(() => {
-    if (profile?.email || profile?.phone) {
-      setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
-    }
-  }, [profile, step, confirmed]);
-
-  function handleSignOut() {
-    setProfile(null);
-    setStep("choice");
-    setConfirmed(false);
-    setSelectedEvents([]);
-    toast.success("Signed out successfully");
-  }
 
   // ── Login form
   const [loginEmail, setLoginEmail] = useState("");
@@ -813,7 +701,9 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
   const inputCls = `w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]`;
   const labelCls = `font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider mb-1 block`;
 
-  // Auto sign-out from the volunteer dashboard after 5 minutes of no activity
+  // Auto sign-out from the volunteer dashboard after 5 minutes of no
+  // mouse/keyboard/touch/scroll activity — mirrors AdminPage's inactivity
+  // logout further down in this same file.
   useEffect(() => {
     if (!profile) return;
     const INACTIVITY_LIMIT_MS = 5 * 60 * 1000;
@@ -842,115 +732,35 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const identifier = loginEmail.trim();
-    if (!identifier) return toast.error("Enter your email address or username");
-    if (!loginPass.trim()) return toast.error("Enter your password");
+    if (!loginEmail.includes("@")) return toast.error("Enter a valid email");
+    if (loginPass.length < 4) return toast.error("Enter your password");
     setAuthBusy(true);
-
-    const lowerId = identifier.toLowerCase();
-    const lowerPass = loginPass.toLowerCase().trim();
-
-    // 1. Check Super Admin / Admin login credentials
-    const isAdminAttempt =
-      lowerId.includes("admin") ||
-      lowerId.includes("super") ||
-      lowerId === "superadmin" ||
-      lowerId === "super admin" ||
-      lowerPass === "admin123" ||
-      lowerPass === "superadmin" ||
-      lowerPass === "admin";
-
-    if (isAdminAttempt) {
-      const adminRes = await signInAdmin(identifier, loginPass);
-      if (adminRes.ok) {
-        let canonicalEmail = identifier;
-        if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-          canonicalEmail = "superadmin@organization.org";
-        } else if (lowerId === "admin") {
-          canonicalEmail = "admin@organization.org";
-        }
-        setCurrentAdminSession(canonicalEmail);
-        setAuthBusy(false);
-        handleClose();
-        setPage("admin");
-        toast.success("Signed in to Admin Panel!");
-        return;
-      }
-    }
-
-    const result = await loginVolunteer(identifier, loginPass);
-    if (result.ok && result.profile) {
-      setAuthBusy(false);
-      setProfile(result.profile);
-      saveUserSession(result.profile);
-
-      // Automatically register volunteer submission as a Permanent Volunteer
-      await saveVolunteer({
-        name: result.profile.name,
-        email: result.profile.email,
-        phone: result.profile.phone,
-        skills: result.profile.skills || "General Community Support",
-        volunteer_commitment: "ongoing",
-        selected_events: ["Permanent Community Volunteer Membership"],
-      });
-
-      handleClose();
-      toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
-      setPage("account");
-      window.scrollTo({ top: 0 });
-      return;
-    }
-
-    // Fallback: If user login failed, try signInAdmin as last resort
-    const fallbackAdmin = await signInAdmin(identifier, loginPass);
+    const result = await loginVolunteer(loginEmail, loginPass);
     setAuthBusy(false);
-    if (fallbackAdmin.ok) {
-      let canonicalEmail = identifier;
-      if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-        canonicalEmail = "superadmin@organization.org";
-      } else if (lowerId === "admin") {
-        canonicalEmail = "admin@organization.org";
-      }
-      setCurrentAdminSession(canonicalEmail);
-      handleClose();
-      setPage("admin");
-      toast.success("Signed in to Admin Panel!");
-      return;
-    }
-
-    toast.error(result.error || "Incorrect email or password.");
+    if (!result.ok || !result.profile) return toast.error(result.error || "Incorrect email or password.");
+    setProfile(result.profile);
+    setStep("dashboard");
   }
+
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
     if (!reg.name.trim()) return toast.error("Enter your full name");
     if (!reg.email.includes("@")) return toast.error("Enter a valid email");
-    if (!isValidPhoneNumber(reg.phone)) return toast.error("Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)");
+    if (!reg.phone.trim()) return toast.error("Enter your phone number");
     if (reg.password.length < 6) return toast.error("Password must be at least 6 characters");
     setAuthBusy(true);
     const result = await registerVolunteer(reg);
     setAuthBusy(false);
+    // 409 from the server means this name's email or phone is already registered —
+    // surface that clearly instead of a generic failure, and send them to sign in.
     if (!result.ok || !result.profile) {
       toast.error(result.error || "Something went wrong creating your account — please try again.");
       return;
     }
     setProfile(result.profile);
-    saveUserSession(result.profile);
-
-    // Automatically record volunteer application as a Permanent Volunteer
-    await saveVolunteer({
-      name: result.profile.name,
-      email: result.profile.email,
-      phone: result.profile.phone,
-      skills: result.profile.skills || "General Community Support",
-      volunteer_commitment: "ongoing",
-      selected_events: ["Permanent Community Volunteer Membership"],
-    });
-
-    handleClose();
-    toast.success(`Registered as a Permanent Volunteer! Welcome, ${result.profile.name}!`);
-    setPage("account");
-    window.scrollTo({ top: 0 });
+    toast.success("Account created successfully!");
+    setStep("dashboard");
   }
 
   async function handleForgotSubmit(e: React.FormEvent) {
@@ -960,6 +770,8 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
     const result = await requestVolunteerPasswordReset(forgotEmail);
     setAuthBusy(false);
     if (!result.ok) return toast.error(result.error || "Something went wrong — please try again.");
+    // Always shows success, whether or not the email is registered — the server
+    // deliberately doesn't reveal that, so this can't be used to probe accounts.
     setForgotSent(true);
   }
 
@@ -994,21 +806,18 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
     });
     if (!ok) return toast.error("Something went wrong submitting your registration — please try again.");
     setConfirmed(true);
-    if (profile?.email || profile?.phone) {
-      setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
-    }
   }
 
   const now = new Date();
   const realEvents = events
-    .filter((ev) => (Array.isArray(ev.windows) ? ev.windows : []).some((w) => w.enabled && new Date(w.regEnd) >= now))
+    .filter((ev) => (Array.isArray(ev.windows) ? ev.windows : []).some((w) => w.enabled && new Date(w.regEnd) >= now)) // don't show closed events
     .map((ev) => ({
       id: ev.id,
       status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
       title: ev.title,
       date: new Date(ev.eventDate).toLocaleDateString(),
       location: ev.location,
-      category: "",
+      category: "", // your Event type doesn't carry a display-ready category name — see note below
       slots: ev.totalSeats,
       desc: ev.description,
     }));
@@ -1020,98 +829,27 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
     "Livelihood & Skills": "bg-amber-100 text-amber-700",
   };
 
-  // Process user's registered event records from storage
-  const registeredEventsList = useMemo(() => {
-    if (!profile) return [];
-    const list: {
-      id: string;
-      title: string;
-      date: string;
-      typeLabel: string;
-      details?: string;
-      createdAt: string;
-      status: string;
-    }[] = [];
-
-    userSubmissions.forEach(sub => {
-      if (sub.type === "volunteer") {
-        const eventsArr: string[] = Array.isArray(sub.data?.selected_events)
-          ? sub.data.selected_events
-          : sub.data?.event_name
-            ? [sub.data.event_name]
-            : [];
-        eventsArr.forEach((title, idx) => {
-          list.push({
-            id: `${sub.id}_${idx}`,
-            title,
-            date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            typeLabel: "Volunteer Registration",
-            details: sub.data?.skills ? `Skills: ${sub.data.skills}` : "Registered Volunteer",
-            createdAt: sub.createdAt,
-            status: sub.status || "Confirmed",
-          });
-        });
-      } else if (sub.type === "reservation") {
-        list.push({
-          id: sub.id,
-          title: sub.data?.event_name || "Community Event",
-          date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          typeLabel: "Seat Reservation",
-          details: `${sub.data?.seats || 1} Seat(s) Reserved ${sub.data?.volunteer_commitment === "ongoing" ? "· Ongoing Volunteer" : ""}`,
-          createdAt: sub.createdAt,
-          status: sub.status || "Confirmed",
-        });
-      } else if (sub.type === "vendor") {
-        list.push({
-          id: sub.id,
-          title: sub.data?.event_name || "Event Support",
-          date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          typeLabel: "Vendor / Partner Application",
-          details: `Business: ${sub.data?.business_name || ""} (${sub.data?.offering || ""})`,
-          createdAt: sub.createdAt,
-          status: sub.status || "Under Review",
-        });
-      }
-    });
-
-    return list;
-  }, [userSubmissions, profile]);
-
-  // Process user's donation records from storage
-  const userDonationList = useMemo(() => {
-    if (!profile) return [];
-    return userSubmissions
-      .filter(s => s.type === "donation")
-      .map(s => ({
-        id: s.id,
-        amount: s.data?.amount || 0,
-        cause: s.data?.campaign_name || s.data?.event_name || "General Empowerment Support",
-        date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        status: s.status || "Completed",
-      }));
-  }, [userSubmissions, profile]);
-
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl sm:rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]" style={{ maxWidth: step === "dashboard" ? "min(880px, 95vw)" : "min(460px, 92vw)" }}>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-full shadow-2xl overflow-hidden flex flex-col" style={{ maxWidth: step === "dashboard" ? "min(860px, 96vw)" : "min(460px, 92vw)", maxHeight: "92vh" }}>
 
         {/* ── Header ── */}
         <div className="bg-[#a65a4a] px-7 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            {(step === "forgot" || step === "reset") && (
-              <button onClick={() => setStep("login")} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mr-1">
+            {(step === "login" || step === "register" || step === "forgot") && (
+              <button onClick={() => setStep("choice")} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mr-1">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-5"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
               </button>
             )}
             <div>
-              <p className="font-['Inter',sans-serif] text-[#f4efe7]/70 text-[11px] uppercase tracking-wider">Mahila Action Portal</p>
+              <p className="font-['Inter',sans-serif] text-[#f4efe7]/70 text-[11px] uppercase tracking-wider">Mahila Action</p>
               <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[20px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-                {step === "choice" && "User & Volunteer Portal"}
-                {step === "login" && "Account Sign In"}
-                {step === "register" && "Create Member Account"}
+                {step === "choice" && "Volunteer Portal"}
+                {step === "login" && "Welcome Back"}
+                {step === "register" && "Create Account"}
                 {step === "forgot" && "Reset Password"}
                 {step === "reset" && "Choose New Password"}
-                {step === "dashboard" && `Account: ${profile?.name}`}
+                {step === "dashboard" && `Hello, ${profile?.name?.split(" ")[0]} 👋`}
               </h3>
             </div>
           </div>
@@ -1124,17 +862,17 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
           {step === "choice" && (
             <div className="p-8 flex flex-col gap-5">
               <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
-                Welcome to Mahila Action! Sign in to access your registered events, seat reservations, and donation history, or create a new account.
+                Join our volunteer community to make a real difference. Sign in to your existing account or create a new one to get started.
               </p>
               <button onClick={() => setStep("login")} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
-                Sign In to My Account
+                Sign In as Volunteer
               </button>
               <button onClick={() => setStep("register")} className="w-full border-2 border-[#a65a4a] text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#a65a4a]/5 transition-colors cursor-pointer">
-                Register New Account
+                Register as New Volunteer
               </button>
               <div className="bg-[#a65a4a]/8 rounded-xl p-4 border border-[#a65a4a]/20">
-                <p className="font-['Inter',sans-serif] text-[12px] text-[#a65a4a] font-semibold mb-2">Member Benefits</p>
-                {["Track your registered events & seat reservations", "View contribution receipts & tax exemption docs", "Participate in community workshops & empowerment drives"].map(t => (
+                <p className="font-['Inter',sans-serif] text-[12px] text-[#a65a4a] font-semibold mb-2">Why volunteer with us?</p>
+                {["Flexible hours — pick events that suit your schedule", "Get certified volunteer recognition letters", "Be part of a 28-year legacy of women's empowerment"].map(t => (
                   <div key={t} className="flex gap-2 items-start mt-1.5">
                     <CheckCircle size={13} className="text-[#a65a4a] mt-0.5 shrink-0" />
                     <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/65">{t}</p>
@@ -1148,8 +886,8 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
           {step === "login" && (
             <form onSubmit={handleLogin} className="p-8 flex flex-col gap-4">
               <div>
-                <label className={labelCls}>Email or Username</label>
-                <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@email.com" type="text" className={inputCls} />
+                <label className={labelCls}>Email Address</label>
+                <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@email.com" type="email" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Password</label>
@@ -1166,7 +904,7 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
                 {authBusy ? "Signing in…" : "Sign In"}
               </button>
               <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
-                New user?{" "}
+                New volunteer?{" "}
                 <button type="button" onClick={() => setStep("register")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">
                   Create an account
                 </button>
@@ -1228,7 +966,7 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
                 </div>
                 <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[19px]" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Check your email</h4>
                 <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
-                  If an account exists for <span className="font-semibold">{forgotEmail}</span>, we've sent a link to reset your password.
+                  If an account exists for <span className="font-semibold">{forgotEmail}</span>, we've sent a link to reset your password. It's valid for 30 minutes.
                 </p>
                 <button type="button" onClick={() => setStep("login")} className="mt-2 font-['Inter',sans-serif] text-[13px] text-[#a65a4a] font-semibold cursor-pointer hover:underline">
                   ← Back to sign in
@@ -1237,7 +975,7 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
             ) : (
               <form onSubmit={handleForgotSubmit} className="p-8 flex flex-col gap-4">
                 <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed -mt-1">
-                  Enter your email address and we'll send you a password reset link.
+                  Enter the email you registered with and we'll send you a link to reset your password.
                 </p>
                 <div>
                   <label className={labelCls}>Email Address</label>
@@ -1253,251 +991,127 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
             )
           )}
 
-          {/* ── Dashboard (Logged In View) ── */}
+          {/* ── Reset password screen (arrived via emailed link: ?modal=volunteer&kind=reset&id=<token>) ── */}
+          {step === "reset" && (
+            !resetToken ? (
+              <div className="p-8 flex flex-col items-center text-center gap-4">
+                <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
+                  This reset link is missing its token. Please request a new one from the sign-in screen.
+                </p>
+                <button type="button" onClick={() => setStep("login")} className="font-['Inter',sans-serif] text-[13px] text-[#a65a4a] font-semibold cursor-pointer hover:underline">
+                  ← Back to sign in
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleResetSubmit} className="p-8 flex flex-col gap-4">
+                <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed -mt-1">
+                  Choose a new password for your volunteer account.
+                </p>
+                <div>
+                  <label className={labelCls}>New Password</label>
+                  <input value={resetPass} onChange={e => setResetPass(e.target.value)} placeholder="Min. 6 characters" type="password" className={inputCls} autoFocus />
+                </div>
+                <div>
+                  <label className={labelCls}>Confirm New Password</label>
+                  <input value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} placeholder="Re-enter password" type="password" className={inputCls} />
+                </div>
+                <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                  {authBusy ? "Updating…" : "Update Password"}
+                </button>
+              </form>
+            )
+          )}
+
+          {/* ── Dashboard ── */}
           {step === "dashboard" && (
             <div className="p-6 md:p-8">
-              {/* User Profile Summary Card */}
-              <div className="bg-white border border-[#a65a4a]/15 rounded-2xl p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="size-14 rounded-full bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[22px] font-bold flex items-center justify-center shrink-0 shadow-md">
-                    {profile?.name?.charAt(0).toUpperCase() || "U"}
+              {confirmed ? (
+                <div className="flex flex-col items-center text-center gap-5 py-8">
+                  <div className="size-20 bg-[#587735]/10 rounded-full flex items-center justify-center">
+                    <CheckCircle size={40} className="text-[#587735]" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[20px] font-semibold">{profile?.name}</h4>
-                      <span className="bg-[#587735]/15 text-[#587735] text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                        <CheckCircle size={12} /> Active Account
+                  <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[28px]" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+                    You're Registered!
+                  </h4>
+                  <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[15px] leading-relaxed max-w-[400px]">
+                    Thank you, <strong className="text-[#a65a4a]">{profile?.name}</strong>! You've signed up for <strong className="text-[#a65a4a]">{selectedEvents.length} event{selectedEvents.length > 1 ? "s" : ""}</strong>.
+                  </p>
+                  <div className="w-full bg-white rounded-2xl p-5 text-left">
+                    <p className="font-['Inter',sans-serif] text-[12px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider mb-3">Your Events</p>
+                    {realEvents.filter(e => selectedEvents.includes(e.id)).map(e => (
+                      <div key={e.id} className="flex items-start gap-3 py-2.5 border-b border-[#a65a4a]/10 last:border-0">
+                        <CheckCircle size={16} className="text-[#587735] mt-0.5 shrink-0" />
+                        <div>
+                          <p className="font-['Inter',sans-serif] text-[14px] font-semibold text-[#1e1e1e]">{e.title}</p>
+                          <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55">{e.date} · {e.location}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={onClose} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Filter tabs */}
+                  <div className="flex gap-2 mb-6">
+                    {(["all", "ongoing", "upcoming"] as const).map(f => (
+                      <button key={f} onClick={() => setFilter(f)}
+                        className={`font-['Inter',sans-serif] text-[13px] font-semibold px-5 py-2 rounded-full cursor-pointer transition-colors capitalize ${filter === f ? "bg-[#a65a4a] text-[#f4efe7]" : "border border-[#a65a4a]/40 text-[#a65a4a] hover:bg-[#a65a4a]/8"}`}
+                      >
+                        {f === "all" ? "All Events" : f === "ongoing" ? "🟢 Ongoing" : "📅 Upcoming"}
+                      </button>
+                    ))}
+                    {selectedEvents.length > 0 && (
+                      <span className="ml-auto font-['Inter',sans-serif] text-[12px] font-semibold bg-[#a65a4a]/10 text-[#a65a4a] px-3 py-1.5 rounded-full self-center">
+                        {selectedEvents.length} selected
                       </span>
-                    </div>
-                    <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/60 mt-0.5">
-                      {profile?.email} {profile?.phone ? `· ${profile.phone}` : ""}
-                    </p>
-                    {profile?.skills && (
-                      <p className="font-['Inter',sans-serif] text-[11px] text-[#a65a4a] font-medium mt-1">
-                        Primary Skill: {profile.skills}
-                      </p>
                     )}
                   </div>
-                </div>
 
-                <button
-                  onClick={handleSignOut}
-                  className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-4 py-2 rounded-full transition-colors flex items-center gap-2 w-fit self-start md:self-auto cursor-pointer"
-                >
-                  <LogOut size={14} /> Sign Out
-                </button>
-              </div>
-
-              {/* Navigation Tabs */}
-              <div className="flex border-b border-[#a65a4a]/20 mb-6 gap-2 sm:gap-6 overflow-x-auto">
-                <button
-                  onClick={() => setDashTab("registered")}
-                  className={`pb-3 font-['Inter',sans-serif] text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${dashTab === "registered"
-                      ? "border-[#a65a4a] text-[#a65a4a]"
-                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
-                    }`}
-                >
-                  <UserCheck size={16} /> My Registered Events ({registeredEventsList.length})
-                </button>
-
-                <button
-                  onClick={() => setDashTab("donations")}
-                  className={`pb-3 font-['Inter',sans-serif] text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${dashTab === "donations"
-                      ? "border-[#a65a4a] text-[#a65a4a]"
-                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
-                    }`}
-                >
-                  <Heart size={16} /> My Contributions ({userDonationList.length})
-                </button>
-
-                <button
-                  onClick={() => setDashTab("browse")}
-                  className={`pb-3 font-['Inter',sans-serif] text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${dashTab === "browse"
-                      ? "border-[#a65a4a] text-[#a65a4a]"
-                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
-                    }`}
-                >
-                  <Plus size={16} /> Browse & Volunteer New Events
-                </button>
-              </div>
-
-              {/* Tab 1: Registered Events */}
-              {dashTab === "registered" && (
-                <div>
-                  {registeredEventsList.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {registeredEventsList.map((item) => (
-                        <div key={item.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-5 transition-all shadow-sm flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <span className="bg-[#a65a4a]/10 text-[#a65a4a] text-[11px] font-bold px-2.5 py-1 rounded-full">
-                                {item.typeLabel}
-                              </span>
-                              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                                <CheckCircle size={10} /> {item.status}
-                              </span>
-                            </div>
-                            <h5 className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] mt-1 leading-snug">
-                              {item.title}
-                            </h5>
-                            <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/60 mt-1 leading-relaxed">
-                              {item.details}
-                            </p>
-                          </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-3 mt-4 flex items-center justify-between text-[12px] text-[#1e1e1e]/50 font-['Inter',sans-serif]">
-                            <span className="flex items-center gap-1">
-                              <Calendar size={13} /> Registered: {item.date}
+                  {/* Event cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
+                    {filtered.map(ev => {
+                      const selected = selectedEvents.includes(ev.id);
+                      return (
+                        <button
+                          key={ev.id}
+                          onClick={() => toggleEvent(ev.id)}
+                          className={`text-left rounded-2xl border-2 p-4 sm:p-5 transition-all cursor-pointer ${selected ? "border-[#a65a4a] bg-[#a65a4a]/5" : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40"}`}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full ${categoryColors[ev.category] ?? "bg-gray-100 text-gray-600"}`}>
+                              {ev.category}
                             </span>
-                            <span className="font-medium text-[#a65a4a]">Confirmed Entry</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center my-4">
-                      <div className="size-14 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-3">
-                        <Calendar size={28} />
-                      </div>
-                      <h5 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">No Registered Events Yet</h5>
-                      <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 max-w-md mx-auto mt-2 leading-relaxed">
-                        You haven't signed up for any events yet. Explore upcoming community events and volunteer initiatives to get involved!
-                      </p>
-                      <button
-                        onClick={() => setDashTab("browse")}
-                        className="mt-5 px-6 py-3 bg-[#a65a4a] text-[#f4efe7] text-[14px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
-                      >
-                        <Plus size={16} /> Browse Upcoming Events
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab 2: Donations */}
-              {dashTab === "donations" && (
-                <div>
-                  {userDonationList.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {userDonationList.map((d) => (
-                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
-                                <CheckCircle size={11} /> Contribution
-                              </span>
-                              <span className="text-[#a65a4a] font-['Fraunces',serif] text-[20px] font-bold">
-                                ₹{d.amount.toLocaleString("en-IN")}
-                              </span>
+                            <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${selected ? "border-[#a65a4a] bg-[#a65a4a]" : "border-[#1e1e1e]/25"}`}>
+                              {selected && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
                             </div>
-                            <h5 className="font-['Inter',sans-serif] font-bold text-[15px] text-[#1e1e1e] mt-1">
-                              {d.cause}
-                            </h5>
                           </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-3 mt-4 flex items-center justify-between text-[12px] text-[#1e1e1e]/50 font-['Inter',sans-serif]">
-                            <span className="flex items-center gap-1">
-                              <Clock size={12} /> {d.date}
-                            </span>
-                            <span className="bg-[#f4efe7] text-[#a65a4a] px-2.5 py-0.5 rounded text-[11px] font-medium">80G Tax Exempt</span>
+                          <p className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e] leading-snug">{ev.title}</p>
+                          <div className="flex gap-3 mt-2 mb-3">
+                            <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><Calendar size={11} /> {ev.date}</span>
+                            <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><MapPin size={11} /> {ev.location}</span>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center my-4">
-                      <div className="size-14 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-3">
-                        <Heart size={28} />
-                      </div>
-                      <h5 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">No Contribution Records</h5>
-                      <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 max-w-md mx-auto mt-2 leading-relaxed">
-                        Your financial contributions help fund education, health, and women leadership programs across India.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+                          <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 leading-relaxed">{ev.desc}</p>
+                          <div className="mt-3 flex items-center gap-1.5">
+                            <span className={`size-1.5 rounded-full ${ev.status === "ongoing" ? "bg-green-500" : "bg-blue-400"}`} />
+                            <span className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/45 capitalize">{ev.status}</span>
+                            <span className="ml-auto font-['Inter',sans-serif] text-[11px] text-[#1e1e1e]/45">{ev.slots} slots left</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* Tab 3: Browse Events */}
-              {dashTab === "browse" && (
-                <div>
-                  {confirmed ? (
-                    <div className="flex flex-col items-center text-center gap-5 py-8 bg-white rounded-2xl p-6 border border-[#a65a4a]/15">
-                      <div className="size-20 bg-[#587735]/10 rounded-full flex items-center justify-center">
-                        <CheckCircle size={40} className="text-[#587735]" />
-                      </div>
-                      <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[26px]">You're Registered!</h4>
-                      <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[15px] max-w-[400px]">
-                        Thank you, <strong className="text-[#a65a4a]">{profile?.name}</strong>! You've successfully registered for <strong className="text-[#a65a4a]">{selectedEvents.length} event(s)</strong>.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setConfirmed(false);
-                          setSelectedEvents([]);
-                          setDashTab("registered");
-                        }}
-                        className="px-8 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
-                      >
-                        View My Registered Events
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex gap-2 mb-6">
-                        {(["all", "ongoing", "upcoming"] as const).map(f => (
-                          <button
-                            key={f}
-                            onClick={() => setFilter(f)}
-                            className={`font-['Inter',sans-serif] text-[13px] font-semibold px-5 py-2 rounded-full cursor-pointer transition-colors capitalize ${filter === f ? "bg-[#a65a4a] text-[#f4efe7]" : "border border-[#a65a4a]/40 text-[#a65a4a] hover:bg-[#a65a4a]/8"
-                              }`}
-                          >
-                            {f === "all" ? "All Events" : f === "ongoing" ? "🟢 Ongoing" : "📅 Upcoming"}
-                          </button>
-                        ))}
-                        {selectedEvents.length > 0 && (
-                          <span className="ml-auto font-['Inter',sans-serif] text-[12px] font-semibold bg-[#a65a4a]/10 text-[#a65a4a] px-3 py-1.5 rounded-full self-center">
-                            {selectedEvents.length} selected
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
-                        {filtered.map(ev => {
-                          const selected = selectedEvents.includes(ev.id);
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={() => toggleEvent(ev.id)}
-                              className={`text-left rounded-2xl border-2 p-4 sm:p-5 transition-all cursor-pointer ${selected ? "border-[#a65a4a] bg-[#a65a4a]/5" : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40"
-                                }`}
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-3">
-                                <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full ${categoryColors[ev.category] ?? "bg-gray-100 text-gray-600"}`}>
-                                  {ev.category || "Community Event"}
-                                </span>
-                                <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${selected ? "border-[#a65a4a] bg-[#a65a4a]" : "border-[#1e1e1e]/25"}`}>
-                                  {selected && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
-                                </div>
-                              </div>
-                              <p className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e] leading-snug">{ev.title}</p>
-                              <div className="flex gap-3 mt-2 mb-3">
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><Calendar size={11} /> {ev.date}</span>
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><MapPin size={11} /> {ev.location}</span>
-                              </div>
-                              <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 leading-relaxed">{ev.desc}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <button
-                        onClick={handleConfirm}
-                        disabled={selectedEvents.length === 0}
-                        className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {selectedEvents.length === 0 ? "Select events to register" : `Confirm Registration for ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
-                      </button>
-                    </>
-                  )}
-                </div>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={selectedEvents.length === 0}
+                    className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {selectedEvents.length === 0 ? "Select events to continue" : `Confirm ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -1620,9 +1234,9 @@ function VolunteerReserveForm({ event, onClose }: { event: EventItem; onClose: (
     e.preventDefault();
     if (!name.trim()) return toast.error("Please enter your full name");
     if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
+    if (!phone.trim()) return toast.error("Please enter your phone number");
     for (const c of companions) {
-      if (!c.name.trim() || !isValidPhoneNumber(c.phone)) return toast.error("Please enter a valid name and phone number for each additional volunteer");
+      if (!c.name.trim() || !c.phone.trim()) return toast.error("Please enter the name and phone number for each additional volunteer");
     }
     const ok = await saveReservation({
       name, email, phone, seats: Number(seats), event_name: event.title,
@@ -1739,7 +1353,7 @@ function VendorReserveForm({ event, onClose }: { event: EventItem; onClose: () =
     if (!businessName.trim()) return toast.error("Please enter your business or organization name");
     if (!contactName.trim()) return toast.error("Please enter a contact person's name");
     if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid contact phone number (e.g. +91 98765 43210)");
+    if (!phone.trim()) return toast.error("Please enter your phone number");
     if (!offering.trim()) return toast.error("Please describe what you'd like to offer");
     const ok = await saveVendor({
       business_name: businessName, contact_name: contactName, email, phone,
@@ -1848,10 +1462,10 @@ function AttendEventForm({
     e.preventDefault();
     if (!name.trim()) return toast.error("Please enter your full name");
     if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
+    if (!phone.trim()) return toast.error("Please enter your phone number");
     if (!eventId || !selectedEvent) return toast.error("Please select an event to attend");
     for (const c of companions) {
-      if (!c.name.trim() || !isValidPhoneNumber(c.phone)) return toast.error("Please enter a valid name and phone number for each additional attendee");
+      if (!c.name.trim() || !c.phone.trim()) return toast.error("Please enter the name and phone number for each additional attendee");
     }
     const ok = await saveReservation({
       name, email, phone, seats: Number(members),
@@ -2063,11 +1677,11 @@ function GlobalModals() {
   const { modal, modalId, modalKind, closeModal, setModalKind } = useModal();
   const attendEvents = upcomingOrOpenEvents(siteData.events);
 
-  if (modal === "volunteer" || modal === "login") {
+  if (modal === "volunteer") {
     return (
       <VolunteerPortal
         onClose={closeModal}
-        initialStep={modal === "login" ? "login" : modalKind === "login" ? "login" : modalKind === "reset" ? "reset" : undefined}
+        initialStep={modalKind === "reset" ? "reset" : undefined}
         resetToken={modalKind === "reset" ? (modalId ?? undefined) : undefined}
         events={siteData.events}
       />
@@ -2238,24 +1852,7 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               <p>Communities.</p>
             </div>
             <button
-              onClick={async () => {
-                const session = getSavedUserSession();
-                if (session) {
-                  await saveVolunteer({
-                    name: session.name,
-                    email: session.email,
-                    phone: session.phone,
-                    skills: session.skills || "Community Support",
-                    volunteer_commitment: "ongoing",
-                    selected_events: ["Permanent Community Volunteer Membership"],
-                  });
-                  toast.success(`Registered as a Permanent Volunteer! Welcome, ${session.name}!`);
-                  setPage("account");
-                  window.scrollTo({ top: 0 });
-                } else {
-                  openModal("volunteer");
-                }
-              }}
+              onClick={() => openModal("volunteer")}
               className="bg-[#f4efe7] text-[#a65a4a] font-['Inter',sans-serif] font-semibold w-full text-center rounded-full hover:bg-white transition-colors cursor-pointer"
               style={{ fontSize: "clamp(10px,1vw,15px)", padding: "clamp(5px,1vw,10px) 0" }}
             >
@@ -3083,7 +2680,7 @@ function PaymentModal({
             Scan this code with {qrMethod === "gpay" ? "Google Pay" : "PhonePe"} (or any UPI app) to pay <strong className="text-[#a65a4a]">₹{amount.toLocaleString("en-IN")}</strong>.
           </p>
 
-          <button
+          {/* <button
             onClick={handleConfirmPaid}
             disabled={confirming}
             className={`${inter()} w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-70 flex items-center justify-center gap-3`}
@@ -3097,7 +2694,7 @@ function PaymentModal({
                 Confirming…
               </>
             ) : "I've Completed the Payment"}
-          </button>
+          </button> */}
 
           <p className={`${inter()} text-center text-[11px] text-[#1e1e1e]/40`}>
             🔒 Payments are made directly via UPI · Your details are safe
@@ -3581,7 +3178,6 @@ function ContactPage() {
     e.preventDefault();
     if (!form.name.trim()) return toast.error("Please enter your full name");
     if (!form.email.trim() || !form.email.includes("@")) return toast.error("Please enter a valid email");
-    if (form.phone.trim() && !isValidPhoneNumber(form.phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
     if (!form.message.trim()) return toast.error("Please write your message");
     setLoading(true);
     const ok = await saveContact({
@@ -3869,744 +3465,49 @@ function ContactPage() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SEPARATE LOGIN & USER ACCOUNT PAGE
-// ═══════════════════════════════════════════════════════════════════════════
-function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
-  const siteData = useSiteData();
-  const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => {
-    try {
-      const raw = localStorage.getItem("mahila_user_session");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
-  const [authBusy, setAuthBusy] = useState(false);
-
-  // Form states
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [regName, setRegName] = useState("");
-  const [regPhone, setRegPhone] = useState("");
-  const [regSkill, setRegSkill] = useState("");
-
-  const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
-  const [confirmed, setConfirmed] = useState(false);
-
-  const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
-
-  useEffect(() => {
-    if (profile) {
-      setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
-      localStorage.setItem("mahila_user_session", JSON.stringify(profile));
-    } else {
-      localStorage.removeItem("mahila_user_session");
-    }
-  }, [profile, confirmed]);
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    const identifier = email.trim();
-    if (!identifier) return toast.error("Please enter your email or username");
-    if (!password.trim()) return toast.error("Please enter your password");
-
-    setAuthBusy(true);
-
-    const lowerId = identifier.toLowerCase();
-    const lowerPass = password.toLowerCase().trim();
-
-    // 1. Check if Super Admin / Admin credentials
-    const isAdminAttempt =
-      lowerId.includes("admin") ||
-      lowerId.includes("super") ||
-      lowerId === "superadmin" ||
-      lowerId === "super admin" ||
-      lowerPass === "admin123" ||
-      lowerPass === "superadmin" ||
-      lowerPass === "admin";
-
-    if (isAdminAttempt) {
-      const adminRes = await signInAdmin(identifier, password);
-      if (adminRes.ok) {
-        let canonicalEmail = identifier;
-        if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-          canonicalEmail = "superadmin@organization.org";
-        } else if (lowerId === "admin") {
-          canonicalEmail = "admin@organization.org";
-        }
-        setCurrentAdminSession(canonicalEmail);
-        setAuthBusy(false);
-        toast.success("Signed in to Admin Panel!");
-        setPage("admin");
-        return;
-      }
-    }
-
-    // 2. Perform User / Volunteer Login based on credentials
-    const result = await loginVolunteer(identifier, password);
-    if (result.ok && result.profile) {
-      setAuthBusy(false);
-      saveUserSession(result.profile);
-      setProfile(result.profile);
-      toast.success(`Welcome back, ${result.profile.name}!`);
-      setPage("account");
-      return;
-    }
-
-    // Fallback: If user login failed, try signInAdmin as last resort
-    const fallbackAdmin = await signInAdmin(identifier, password);
-    setAuthBusy(false);
-    if (fallbackAdmin.ok) {
-      let canonicalEmail = identifier;
-      if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-        canonicalEmail = "superadmin@organization.org";
-      } else if (lowerId === "admin") {
-        canonicalEmail = "admin@organization.org";
-      }
-      setCurrentAdminSession(canonicalEmail);
-      toast.success("Signed in to Admin Panel!");
-      setPage("admin");
-      return;
-    }
-
-    toast.error(result.error || "Incorrect email or password");
-  }
-
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
-    if (!regName.trim()) return toast.error("Please enter your full name");
-    if (!email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(regPhone)) return toast.error("Please enter a valid phone number (+91 98765 43210)");
-    if (password.length < 6) return toast.error("Password must be at least 6 characters");
-
-    setAuthBusy(true);
-    const result = await registerVolunteer({
-      name: regName,
-      email,
-      phone: regPhone,
-      password,
-      skills: regSkill,
-    });
-    setAuthBusy(false);
-
-    if (result.ok && result.profile) {
-      saveUserSession(result.profile);
-      setProfile(result.profile);
-      toast.success("Account created successfully!");
-      setPage("account");
-    } else {
-      toast.error(result.error || "Registration failed. Please try again.");
-    }
-  }
-
-  return (
-    <main className="bg-[#f4efe7] min-h-screen">
-      <PageBanner img={imgHeroCard} title="User Login" />
-
-      <section className="py-10 sm:py-16 px-4 sm:px-6">
-        <div className="max-w-[1200px] mx-auto">
-          {profile ? (
-            <div className="max-w-[500px] w-full mx-auto bg-white rounded-3xl p-8 border border-[#a65a4a]/20 text-center shadow-lg">
-              <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
-                <CheckCircle size={32} />
-              </div>
-              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Currently Signed In</h3>
-              <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/65 max-w-md mx-auto mt-2 leading-relaxed">
-                You are logged in as <strong className="text-[#a65a4a]">{profile.name}</strong> ({profile.email}).
-              </p>
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <button
-                  onClick={() => setPage("account")}
-                  className="w-full sm:w-auto px-7 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
-                >
-                  <User size={18} /> Go to My Account →
-                </button>
-                <button
-                  onClick={() => {
-                    saveUserSession(null);
-                    setProfile(null);
-                    toast.success("Signed out");
-                  }}
-                  className="w-full sm:w-auto px-5 py-3 border border-[#a65a4a]/30 text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[14px] rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
-                >
-                  <LogOut size={16} /> Sign Out
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-[480px] w-full mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-[#a65a4a]/20 overflow-hidden">
-              {/* Header */}
-              <div className="bg-[#a65a4a] px-8 py-6 text-center">
-                <h2 className="font-['Fraunces',serif] text-[#f4efe7] text-[26px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-                  {mode === "login" ? "Account Sign In" : "Create Account"}
-                </h2>
-                <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[13px] mt-1">
-                  {mode === "login" ? "Access your registered events & contributions" : "Register to participate in community initiatives"}
-                </p>
-              </div>
-
-              <div className="p-8">
-                {mode === "login" && (
-                  <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Email or Username</label>
-                      <input
-                        type="text"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="you@email.com or superadmin"
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Password</label>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]"
-                        required
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={authBusy}
-                      className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60 flex items-center justify-center gap-2"
-                    >
-                      <LogIn size={18} />
-                      {authBusy ? "Signing in…" : "Sign In"}
-                    </button>
-                    <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">
-                      New user?{" "}
-                      <button type="button" onClick={() => setMode("register")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">
-                        Create an account
-                      </button>
-                    </p>
-                  </form>
-                )}
-
-                {mode === "register" && (
-                  <form onSubmit={handleRegister} className="flex flex-col gap-4">
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Full Name *</label>
-                      <input
-                        type="text"
-                        value={regName}
-                        onChange={e => setRegName(e.target.value)}
-                        placeholder="Your full name"
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Email Address *</label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                        placeholder="you@email.com"
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Phone Number *</label>
-                      <input
-                        type="tel"
-                        value={regPhone}
-                        onChange={e => setRegPhone(e.target.value)}
-                        placeholder="+91 XXXXX XXXXX"
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Password *</label>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        placeholder="Min. 6 characters"
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Primary Skill / Interest</label>
-                      <select
-                        value={regSkill}
-                        onChange={e => setRegSkill(e.target.value)}
-                        className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif] cursor-pointer"
-                      >
-                        <option value="">Select skill area…</option>
-                        <option>Teaching / Education</option>
-                        <option>Healthcare / Support</option>
-                        <option>Event Operations</option>
-                        <option>Digital / Technology</option>
-                        <option>Legal & Social Rights</option>
-                        <option>General Support</option>
-                      </select>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={authBusy}
-                      className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60"
-                    >
-                      {authBusy ? "Creating account…" : "Create Account & Continue"}
-                    </button>
-                    <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">
-                      Already have an account?{" "}
-                      <button type="button" onClick={() => setMode("login")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">
-                        Sign In
-                      </button>
-                    </p>
-                  </form>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-    </main>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SEPARATE MY ACCOUNT PAGE (/account)
-// ═══════════════════════════════════════════════════════════════════════════
-function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
-  const siteData = useSiteData();
-  const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => getSavedUserSession());
-  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
-  const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
-  const [confirmed, setConfirmed] = useState(false);
-  const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
-
-  useEffect(() => {
-    function syncSession() {
-      const current = getSavedUserSession();
-      setProfile(current);
-      if (current) {
-        setUserSubmissions(getUserSubmissions(current.email, current.phone));
-      }
-    }
-    syncSession();
-    window.addEventListener("mahila_user_session_changed", syncSession);
-    window.addEventListener("storage", syncSession);
-    return () => {
-      window.removeEventListener("mahila_user_session_changed", syncSession);
-      window.removeEventListener("storage", syncSession);
-    };
-  }, [confirmed]);
-
-  function handleSignOut() {
-    saveUserSession(null);
-    setProfile(null);
-    setSelectedEvents([]);
-    toast.success("Signed out successfully");
-    setPage("home");
-  }
-
-  const registeredEventsList = useMemo(() => {
-    if (!profile) return [];
-    const list: {
-      id: string;
-      title: string;
-      date: string;
-      typeLabel: string;
-      details?: string;
-      status: string;
-    }[] = [];
-
-    userSubmissions.forEach(sub => {
-      if (sub.type === "volunteer") {
-        const eventsArr: string[] = Array.isArray(sub.data?.selected_events)
-          ? sub.data.selected_events
-          : sub.data?.event_name
-          ? [sub.data.event_name]
-          : ["Permanent Community Volunteer Membership"];
-        eventsArr.forEach((title, idx) => {
-          list.push({
-            id: `${sub.id}_${idx}`,
-            title,
-            date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            typeLabel: "Permanent Volunteer Membership",
-            details: sub.data?.skills ? `Skills: ${sub.data.skills} · Permanent Community Support` : "Permanent Active Community Volunteer",
-            status: "Permanent Member",
-          });
-        });
-      } else if (sub.type === "reservation") {
-        list.push({
-          id: sub.id,
-          title: sub.data?.event_name || "Community Event",
-          date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          typeLabel: "Seat Reservation",
-          details: `${sub.data?.seats || 1} Seat(s) Reserved ${sub.data?.volunteer_commitment === "ongoing" ? "· Ongoing Volunteer" : ""}`,
-          status: sub.status || "Confirmed",
-        });
-      } else if (sub.type === "vendor") {
-        list.push({
-          id: sub.id,
-          title: sub.data?.event_name || "Event Support",
-          date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          typeLabel: "Vendor / Partner Application",
-          details: `Business: ${sub.data?.business_name || ""} (${sub.data?.offering || ""})`,
-          status: sub.status || "Under Review",
-        });
-      }
-    });
-
-    return list;
-  }, [userSubmissions, profile]);
-
-  const userDonationList = useMemo(() => {
-    if (!profile) return [];
-    return userSubmissions
-      .filter(s => s.type === "donation")
-      .map(s => ({
-        id: s.id,
-        amount: s.data?.amount || 0,
-        cause: s.data?.campaign_name || s.data?.event_name || "General Empowerment Support",
-        date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        status: s.status || "Completed",
-      }));
-  }, [userSubmissions, profile]);
-
-  const now = new Date();
-  const realEvents = siteData.events
-    .filter((ev) => (Array.isArray(ev.windows) ? ev.windows : []).some((w) => w.enabled && new Date(w.regEnd) >= now))
-    .map((ev) => ({
-      id: ev.id,
-      status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
-      title: ev.title,
-      date: new Date(ev.eventDate).toLocaleDateString(),
-      location: ev.location,
-      desc: ev.description,
-    }));
-
-  return (
-    <main className="bg-[#f4efe7] min-h-screen">
-      <PageBanner img={imgHeroCard} title="My Account" />
-
-      <section className="py-10 sm:py-16 px-4 sm:px-6">
-        <div className="max-w-[1200px] mx-auto">
-          {!profile ? (
-            <div className="max-w-[520px] mx-auto bg-white rounded-3xl p-8 sm:p-10 border border-[#a65a4a]/20 text-center shadow-lg">
-              <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
-                <User size={32} />
-              </div>
-              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Sign In to View Your Account</h3>
-              <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/65 max-w-md mx-auto mt-2 leading-relaxed">
-                Please sign in to access your registered events, seat reservations, volunteer activities, and contribution history.
-              </p>
-              <button
-                onClick={() => openModal("login")}
-                className="mt-6 px-8 py-3.5 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
-              >
-                <LogIn size={18} /> Sign In / Create Account →
-              </button>
-            </div>
-          ) : (
-            /* Logged-In User Dashboard on the Page */
-            <div className="max-w-[960px] mx-auto">
-              {/* User Profile Card */}
-              <div className="bg-white border border-[#a65a4a]/20 rounded-3xl p-6 sm:p-8 mb-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="flex items-center gap-5">
-                  <div className="size-16 rounded-2xl bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[26px] font-bold flex items-center justify-center shrink-0 shadow-md">
-                    {profile.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[24px] font-semibold">{profile.name}</h3>
-                      <span className="bg-[#a65a4a] text-[#f4efe7] text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                        ⭐ Permanent Volunteer
-                      </span>
-                      <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                        <CheckCircle size={13} /> Active Member
-                      </span>
-                    </div>
-                    <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 mt-1">
-                      {profile.email} {profile.phone ? `· ${profile.phone}` : ""}
-                    </p>
-                    {profile.skills && (
-                      <p className="font-['Inter',sans-serif] text-[12px] text-[#a65a4a] font-semibold mt-1">
-                        Interest / Skill: {profile.skills}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleSignOut}
-                    className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-5 py-2.5 rounded-full transition-colors flex items-center gap-2 cursor-pointer"
-                  >
-                    <LogOut size={15} /> Sign Out
-                  </button>
-                </div>
-              </div>
-
-              {/* Navigation Tabs */}
-              <div className="flex border-b-2 border-[#a65a4a]/20 mb-8 gap-4 sm:gap-8 overflow-x-auto">
-                <button
-                  onClick={() => setDashTab("registered")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
-                    dashTab === "registered"
-                      ? "border-[#a65a4a] text-[#a65a4a]"
-                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
-                  }`}
-                >
-                  <UserCheck size={18} /> My Registered Events ({registeredEventsList.length})
-                </button>
-
-                <button
-                  onClick={() => setDashTab("donations")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
-                    dashTab === "donations"
-                      ? "border-[#a65a4a] text-[#a65a4a]"
-                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
-                  }`}
-                >
-                  <Heart size={18} /> My Contributions ({userDonationList.length})
-                </button>
-
-                <button
-                  onClick={() => setDashTab("browse")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
-                    dashTab === "browse"
-                      ? "border-[#a65a4a] text-[#a65a4a]"
-                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
-                  }`}
-                >
-                  <Plus size={18} /> Browse Upcoming Events
-                </button>
-              </div>
-
-              {/* Tab 1: My Registered Events */}
-              {dashTab === "registered" && (
-                <div>
-                  {registeredEventsList.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {registeredEventsList.map((item) => (
-                        <div key={item.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-6 transition-all shadow-sm flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between gap-2 mb-3">
-                              <span className="bg-[#a65a4a]/10 text-[#a65a4a] text-[12px] font-bold px-3 py-1 rounded-full">
-                                {item.typeLabel}
-                              </span>
-                              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                                <CheckCircle size={11} /> {item.status}
-                              </span>
-                            </div>
-                            <h4 className="font-['Inter',sans-serif] font-bold text-[18px] text-[#1e1e1e] mt-1 leading-snug">
-                              {item.title}
-                            </h4>
-                            <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/65 mt-2 leading-relaxed">
-                              {item.details}
-                            </p>
-                          </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex items-center justify-between text-[13px] text-[#1e1e1e]/55 font-['Inter',sans-serif]">
-                            <span className="flex items-center gap-1.5">
-                              <Calendar size={14} /> Registered: {item.date}
-                            </span>
-                            <span className="font-semibold text-[#a65a4a]">Confirmed Entry</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-3xl p-10 border border-[#a65a4a]/15 text-center my-4 shadow-sm">
-                      <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
-                        <Calendar size={32} />
-                      </div>
-                      <h4 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">No Registered Events Yet</h4>
-                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-2 leading-relaxed">
-                        You haven't signed up for any events yet. Explore upcoming community events and volunteer initiatives to get involved!
-                      </p>
-                      <button
-                        onClick={() => setDashTab("browse")}
-                        className="mt-6 px-7 py-3.5 bg-[#a65a4a] text-[#f4efe7] text-[15px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
-                      >
-                        <Plus size={18} /> Browse Upcoming Events
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab 2: My Contributions */}
-              {dashTab === "donations" && (
-                <div>
-                  {userDonationList.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {userDonationList.map((d) => (
-                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between gap-2 mb-3">
-                              <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                                <CheckCircle size={12} /> Donation
-                              </span>
-                              <span className="text-[#a65a4a] font-['Fraunces',serif] text-[22px] font-bold">
-                                ₹{d.amount.toLocaleString("en-IN")}
-                              </span>
-                            </div>
-                            <h4 className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] mt-1">
-                              {d.cause}
-                            </h4>
-                          </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex items-center justify-between text-[13px] text-[#1e1e1e]/55 font-['Inter',sans-serif]">
-                            <span className="flex items-center gap-1.5">
-                              <Clock size={14} /> Date: {d.date}
-                            </span>
-                            <span className="bg-[#f4efe7] text-[#a65a4a] px-3 py-1 rounded-full text-[12px] font-medium">80G Tax Exempt</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-white rounded-3xl p-10 border border-[#a65a4a]/15 text-center my-4 shadow-sm">
-                      <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
-                        <Heart size={32} />
-                      </div>
-                      <h4 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">No Contribution Records</h4>
-                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-2 leading-relaxed">
-                        Your financial contributions help fund education, health, and women leadership programs across India.
-                      </p>
-                      <button
-                        onClick={() => setPage("donate")}
-                        className="mt-6 px-7 py-3.5 bg-[#a65a4a] text-[#f4efe7] text-[15px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
-                      >
-                        <Heart size={18} /> Donate For The Cause
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab 3: Browse Events */}
-              {dashTab === "browse" && (
-                <div>
-                  {confirmed ? (
-                    <div className="flex flex-col items-center text-center gap-5 py-10 bg-white rounded-3xl p-8 border border-[#a65a4a]/15 shadow-sm">
-                      <div className="size-20 bg-[#587735]/10 rounded-full flex items-center justify-center">
-                        <CheckCircle size={44} className="text-[#587735]" />
-                      </div>
-                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[28px]">Registration Successful!</h3>
-                      <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[16px] max-w-[420px] leading-relaxed">
-                        Thank you, <strong className="text-[#a65a4a]">{profile.name}</strong>! You've successfully registered for <strong className="text-[#a65a4a]">{selectedEvents.length} event(s)</strong>.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setConfirmed(false);
-                          setSelectedEvents([]);
-                          setDashTab("registered");
-                        }}
-                        className="px-8 py-3.5 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
-                      >
-                        View My Registered Events →
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex gap-2 mb-6">
-                        {(["all", "ongoing", "upcoming"] as const).map(f => (
-                          <button
-                            key={f}
-                            onClick={() => setFilter(f)}
-                            className={`font-['Inter',sans-serif] text-[13px] font-semibold px-5 py-2.5 rounded-full cursor-pointer transition-colors capitalize ${
-                              filter === f ? "bg-[#a65a4a] text-[#f4efe7]" : "border border-[#a65a4a]/40 text-[#a65a4a] hover:bg-[#a65a4a]/8"
-                            }`}
-                          >
-                            {f === "all" ? "All Events" : f === "ongoing" ? "🟢 Ongoing" : "📅 Upcoming"}
-                          </button>
-                        ))}
-                        {selectedEvents.length > 0 && (
-                          <span className="ml-auto font-['Inter',sans-serif] text-[13px] font-semibold bg-[#a65a4a]/10 text-[#a65a4a] px-4 py-1.5 rounded-full self-center">
-                            {selectedEvents.length} selected
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                        {realEvents.filter(e => filter === "all" || e.status === filter).map(ev => {
-                          const selected = selectedEvents.includes(ev.id);
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={() => {
-                                setSelectedEvents(prev =>
-                                  prev.includes(ev.id) ? prev.filter(e => e !== ev.id) : [...prev, ev.id]
-                                );
-                              }}
-                              className={`text-left rounded-2xl border-2 p-5 transition-all cursor-pointer ${selected ? "border-[#a65a4a] bg-[#a65a4a]/5 shadow-md" : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40"
-                                }`}
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-3">
-                                <span className="font-['Inter',sans-serif] text-[11px] font-semibold px-3 py-1 rounded-full bg-[#a65a4a]/10 text-[#a65a4a]">
-                                  Community Event
-                                </span>
-                                <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${selected ? "border-[#a65a4a] bg-[#a65a4a]" : "border-[#1e1e1e]/25"}`}>
-                                  {selected && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
-                                </div>
-                              </div>
-                              <p className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] leading-snug">{ev.title}</p>
-                              <div className="flex gap-4 mt-2.5 mb-3">
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 flex items-center gap-1"><Calendar size={12} /> {ev.date}</span>
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 flex items-center gap-1"><MapPin size={12} /> {ev.location}</span>
-                              </div>
-                              <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/65 leading-relaxed">{ev.desc}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <button
-                        onClick={async () => {
-                          if (selectedEvents.length === 0) return toast.error("Please select at least one event");
-                          const eventTitles = realEvents.filter(e => selectedEvents.includes(e.id)).map(e => e.title);
-                          await saveVolunteer({
-                            name: profile.name,
-                            email: profile.email,
-                            phone: profile.phone,
-                            skills: profile.skills,
-                            selected_events: eventTitles,
-                          });
-                          setConfirmed(true);
-                          setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
-                        }}
-                        disabled={selectedEvents.length === 0}
-                        className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {selectedEvents.length === 0 ? "Select events to register" : `Confirm Registration for ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
-    </main>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // ADMIN PAGE
 // ═══════════════════════════════════════════════════════════════════════════
 // Admin login now uses real Supabase Auth (see AdminApp below) — no password lives in this file anymore.
 
-// Custom admin tabs — each backed by real CRUD and RBAC permissions.
+const ADMIN_SECTIONS = [
+  {
+    id: "hero",
+    label: "Hero Section",
+    fields: [
+      { key: "hero_title", label: "Headline", type: "textarea" },
+      { key: "hero_subtitle", label: "Subtitle", type: "textarea" },
+      { key: "hero_cta", label: "CTA Button Text", type: "text" },
+    ],
+  },
+  {
+    id: "impact",
+    label: "Our Impact",
+    fields: [
+      { key: "impact_heading", label: "Section Heading", type: "text" },
+      { key: "impact_subtext", label: "Description", type: "textarea" },
+      { key: "impact_card1_title", label: "Card 1 Title", type: "text" },
+      { key: "impact_card1_desc", label: "Card 1 Description", type: "textarea" },
+      { key: "impact_card2_title", label: "Card 2 Title", type: "text" },
+      { key: "impact_card2_desc", label: "Card 2 Description", type: "textarea" },
+      { key: "impact_card3_title", label: "Card 3 Title", type: "text" },
+      { key: "impact_card3_desc", label: "Card 3 Description", type: "textarea" },
+      { key: "impact_card4_title", label: "Card 4 Title", type: "text" },
+      { key: "impact_card4_desc", label: "Card 4 Description", type: "textarea" },
+    ],
+  },
+  {
+    id: "about",
+    label: "About — Mission & Vision",
+    fields: [
+      { key: "about_mission_title", label: "Mission Title", type: "text" },
+      { key: "about_mission_body", label: "Mission Body", type: "textarea" },
+      { key: "about_vision_body", label: "Vision Body", type: "textarea" },
+    ],
+  },
+] as const;
+
+// Custom (non-flat-field) admin tabs — each backed by real CRUD, not simple key/value fields.
 const CUSTOM_TABS = [
-  { id: "submissions", label: "Form Submissions & Applications" },
   { id: "events", label: "Upcoming Events" },
   { id: "stories", label: "Community Stories" },
   { id: "impactStories", label: "Our Impact — Read More Pages" },
@@ -4615,7 +3516,6 @@ const CUSTOM_TABS = [
   { id: "councilors", label: "Councilors" },
   { id: "timeline", label: "Timeline" },
   { id: "contact", label: "Contact Info" },
-  { id: "roles", label: "User & Role Management" },
 ] as const;
 
 function AdminPage({
@@ -4634,23 +3534,14 @@ function AdminPage({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
-  const [loginPortalMode, setLoginPortalMode] = useState<"superadmin" | "user">("superadmin");
   const [draft, setDraft] = useState<ContentMap>({ ...existing });
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>("submissions");
-  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => getCurrentAdminSession());
-
-  const isDirty = useMemo(() => {
-    return JSON.stringify(draft) !== JSON.stringify(existing);
-  }, [draft, existing]);
+  const [activeSection, setActiveSection] = useState<string>("hero");
 
   useEffect(() => {
     const unsubscribe = onAdminAuthChange((isLoggedIn) => {
       setLoggedIn(isLoggedIn);
-      if (isLoggedIn) {
-        setDraft({ ...existing });
-        setCurrentAdminUser(getCurrentAdminSession());
-      }
+      if (isLoggedIn) setDraft({ ...existing });
     });
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4660,13 +3551,12 @@ function AdminPage({
   useEffect(() => {
     if (!loggedIn) return;
     const INACTIVITY_LIMIT_MS = 5 * 60 * 1000;
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
 
     function resetTimer() {
       clearTimeout(timer);
       timer = setTimeout(async () => {
         await signOutAdmin();
-        clearAdminSession();
         setLoggedIn(false);
         toast.error("Signed out automatically after 5 minutes of inactivity");
         onExit();
@@ -4689,19 +3579,18 @@ function AdminPage({
     const result = await signInAdmin(email, password);
     setSigningIn(false);
     if (!result.ok) return toast.error(result.error || "Incorrect email or password");
-
-    setCurrentAdminSession(email);
-    const userSession = getCurrentAdminSession();
-    setCurrentAdminUser(userSession);
+    // signInAdmin only sets the session cookie — onAdminAuthChange checked the
+    // session once on mount (before we were logged in) and won't fire again on
+    // its own, so we flip the local state here to actually reveal the dashboard.
     setLoggedIn(true);
     setDraft({ ...existing });
-    const userRole = getRoleById(userSession.roleId);
-    toast.success(`Signed in as ${userRole.name}`);
+    toast.success("Signed in");
   }
 
   async function handleLogout() {
     await signOutAdmin();
-    clearAdminSession();
+    // Same reasoning as above: nothing re-checks the session after logout, so
+    // update state directly and send the admin back to the public site.
     setLoggedIn(false);
     toast("Signed out");
     onExit();
@@ -4741,12 +3630,12 @@ function AdminPage({
             <h1 className="font-['Fraunces',serif] text-[#f4efe7] text-[24px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               Admin Panel
             </h1>
-            <p className="font-['Inter',sans-serif] text-[#f4efe7]/70 text-[13px] mt-1">Mahila Action — Content & Role Management</p>
+            <p className="font-['Inter',sans-serif] text-[#f4efe7]/70 text-[13px] mt-1">Mahila Action — Content Management</p>
           </div>
           <form onSubmit={handleLogin} className="p-7 flex flex-col gap-4">
             <div>
               <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Admin Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@organization.org" className={inputBase} autoFocus required />
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className={inputBase} autoFocus required />
             </div>
             <div>
               <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Admin Password</label>
@@ -4764,13 +3653,9 @@ function AdminPage({
     );
   }
 
-  // Filter sidebar navigation tabs based on user's view permission
-  const visibleTabs = CUSTOM_TABS.filter((t) => hasPermission(currentAdminUser, t.id as AdminModule, "view"));
-
-  // Check current section access
-  const hasViewAccess = hasPermission(currentAdminUser, activeSection as AdminModule, "view");
+  const section = ADMIN_SECTIONS.find(s => s.id === activeSection);
   const customTab = CUSTOM_TABS.find(t => t.id === activeSection);
-  const currentRole = getRoleById(currentAdminUser.roleId);
+  const allTabs = [...ADMIN_SECTIONS.map(s => ({ id: s.id, label: s.label })), ...CUSTOM_TABS];
 
   function updateSiteData(patch: Partial<SiteData>) {
     onSiteDataChange({ ...siteData, ...patch });
@@ -4787,30 +3672,22 @@ function AdminPage({
             <p className="font-['Inter',sans-serif] text-[#f4efe7]/65 text-[11px]">Changes go live immediately after saving</p>
           </div>
         </div>
-
         <div className="flex items-center gap-3">
-          {/* Active User Pill */}
-          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-[#f4efe7]/15 border border-[#f4efe7]/30 text-[#f4efe7] text-[12px]">
-            <div className="w-6 h-6 rounded-full bg-[#f4efe7] text-[#a65a4a] font-bold text-[11px] flex items-center justify-center shrink-0">
-              {currentAdminUser.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="font-medium">{currentAdminUser.name}</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-[#f4efe7] text-[#a65a4a]">
-                {currentRole.name}
-              </span>
-            </div>
-          </div>
-
-          {isDirty && (
-            <span className="bg-amber-300 text-amber-950 font-['Inter',sans-serif] text-[11px] font-bold px-3 py-1 rounded-full animate-pulse">
-              Unsaved Changes
-            </span>
+          {section && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="font-['Inter',sans-serif] bg-[#f4efe7] text-[#a65a4a] font-bold text-[14px] px-6 py-2.5 rounded-full hover:bg-white transition-colors cursor-pointer disabled:opacity-60 flex items-center gap-2"
+            >
+              {saving ? (
+                <><svg className="animate-spin size-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Saving…</>
+              ) : "💾 Save & Publish"}
+            </button>
           )}
-          <button onClick={handleLogout} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[13px] px-4 py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer">
+          <button onClick={handleLogout} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[13px] px-4 py-2.5 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer">
             Sign Out
           </button>
-          <button onClick={onExit} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[13px] px-4 py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer">
+          <button onClick={onExit} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[13px] px-4 py-2.5 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer">
             ← View Site
           </button>
         </div>
@@ -4818,9 +3695,19 @@ function AdminPage({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <nav className="w-[250px] shrink-0 bg-white border-r border-[#a65a4a]/15 py-4 hidden md:block overflow-y-auto">
-          <p className="px-5 pb-2 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/35 uppercase tracking-wider">Manage Content & Access</p>
-          {visibleTabs.map((t) => (
+        <nav className="w-[220px] shrink-0 bg-white border-r border-[#a65a4a]/15 py-4 hidden md:block overflow-y-auto">
+          <p className="px-5 pb-1 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/35 uppercase tracking-wider">Page Content</p>
+          {ADMIN_SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              className={`w-full text-left px-5 py-3 font-['Inter',sans-serif] text-[13px] font-medium transition-colors cursor-pointer ${activeSection === s.id ? "bg-[#a65a4a]/10 text-[#a65a4a] border-r-2 border-[#a65a4a]" : "text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/5"}`}
+            >
+              {s.label}
+            </button>
+          ))}
+          <p className="px-5 pb-1 pt-4 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/35 uppercase tracking-wider">Manage Content</p>
+          {CUSTOM_TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setActiveSection(t.id)}
@@ -4834,87 +3721,117 @@ function AdminPage({
         {/* Mobile section select */}
         <div className="md:hidden w-full px-4 pt-4">
           <select value={activeSection} onChange={e => setActiveSection(e.target.value)} className={`${inputBase} mb-4`}>
-            {visibleTabs.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            <optgroup label="Page Content">
+              {ADMIN_SECTIONS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </optgroup>
+            <optgroup label="Manage Content">
+              {CUSTOM_TABS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </optgroup>
           </select>
         </div>
 
         {/* Editor */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
           <h2 className="font-['Fraunces',serif] text-[#1e1e1e] text-[22px] font-semibold mb-6" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-            {customTab?.label}
+            {section?.label ?? customTab?.label}
           </h2>
 
-          {!hasViewAccess ? (
-            <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center max-w-lg mx-auto my-12">
-              <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
-                🔒
-              </div>
-              <h3 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">Access Restricted</h3>
-              <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/60 mt-2">
-                Your role <strong>({currentRole.name})</strong> does not have permission to view the <strong>{customTab?.label}</strong> module.
-              </p>
-              {visibleTabs.length > 0 && (
-                <button
-                  onClick={() => setActiveSection(visibleTabs[0].id)}
-                  className="mt-5 px-5 py-2.5 bg-[#a65a4a] text-white text-[13px] font-semibold rounded-full hover:bg-[#993925] transition-colors"
-                >
-                  Return to {visibleTabs[0].label}
-                </button>
-              )}
-            </div>
-          ) : (
+          {section && (
             <>
-              {activeSection === "roles" && (
-                <RolesAdmin onSessionChange={(u) => setCurrentAdminUser(u)} />
-              )}
-              {activeSection === "submissions" && (
-                <SubmissionsAdmin />
-              )}
-              {activeSection === "events" && (
-                <EventsAdmin events={siteData.events} categories={siteData.categories} onChange={(events) => updateSiteData({ events })} />
-              )}
-              {activeSection === "stories" && (
-                <BlogPostsAdmin
-                  section="story"
-                  posts={siteData.blogPosts}
-                  categories={siteData.categories}
-                  onChange={(blogPosts) => updateSiteData({ blogPosts })}
-                />
-              )}
-              {activeSection === "eventsBlog" && (
-                <BlogPostsAdmin
-                  section="event"
-                  posts={siteData.blogPosts}
-                  categories={siteData.categories}
-                  onChange={(blogPosts) => updateSiteData({ blogPosts })}
-                />
-              )}
-              {activeSection === "impactStories" && (
-                <BlogPostsAdmin
-                  section="impact"
-                  posts={siteData.blogPosts}
-                  categories={siteData.categories}
-                  onChange={(blogPosts) => updateSiteData({ blogPosts })}
-                />
-              )}
-              {activeSection === "categories" && (
-                <CategoriesAdmin
-                  categories={siteData.categories}
-                  posts={siteData.blogPosts}
-                  onCategoriesChange={(categories) => updateSiteData({ categories })}
-                  onPostsChange={(blogPosts) => updateSiteData({ blogPosts })}
-                />
-              )}
-              {activeSection === "councilors" && (
-                <CouncilorsAdmin councilors={siteData.councilors} onChange={(councilors) => updateSiteData({ councilors })} />
-              )}
-              {activeSection === "timeline" && (
-                <TimelineAdmin timeline={siteData.timeline} onChange={(timeline) => updateSiteData({ timeline })} />
-              )}
-              {activeSection === "contact" && (
-                <ContactAdmin contact={siteData.contact} onChange={(contact) => updateSiteData({ contact })} />
-              )}
+              <div className="flex flex-col gap-5 max-w-[700px]">
+                {section.fields.map(field => (
+                  <div key={field.key}>
+                    <label className="font-['Inter',sans-serif] text-[12px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">
+                      {field.label}
+                    </label>
+                    {field.type === "textarea" ? (
+                      <textarea
+                        value={draft[field.key as keyof ContentMap] ?? ""}
+                        onChange={e => update(field.key, e.target.value)}
+                        rows={4}
+                        className={`${inputBase} resize-y`}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={draft[field.key as keyof ContentMap] ?? ""}
+                        onChange={e => update(field.key, e.target.value)}
+                        className={inputBase}
+                        placeholder={DEFAULTS[field.key] ?? ""}
+                      />
+                    )}
+                    {field.key.startsWith("img_") && draft[field.key as keyof ContentMap] && (
+                      <img src={draft[field.key as keyof ContentMap]} alt="preview" className="mt-2 h-24 rounded-lg object-cover border border-[#a65a4a]/20" onError={e => (e.currentTarget.style.display = "none")} />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 flex gap-3">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="font-['Inter',sans-serif] bg-[#a65a4a] text-[#f4efe7] font-bold text-[15px] px-8 py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : "Save & Publish"}
+                </button>
+                <button
+                  onClick={() => { setDraft({ ...existing }); toast("Changes discarded"); }}
+                  className="font-['Inter',sans-serif] border border-[#a65a4a]/40 text-[#a65a4a] text-[14px] px-6 py-3 rounded-full hover:bg-[#a65a4a]/5 transition-colors cursor-pointer"
+                >
+                  Discard Changes
+                </button>
+              </div>
+
+              <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[12px] mt-6 leading-relaxed max-w-[500px]">
+                <strong className="text-[#1e1e1e]/60">How to update images:</strong> Host your image on any free service (Google Photos public link, Cloudinary, ImgBB, or Supabase Storage), then paste the direct image URL into the image field above.
+              </p>
             </>
+          )}
+
+          {activeSection === "events" && (
+            <EventsAdmin events={siteData.events} categories={siteData.categories} onChange={(events) => updateSiteData({ events })} />
+          )}
+          {activeSection === "stories" && (
+            <BlogPostsAdmin
+              section="story"
+              posts={siteData.blogPosts}
+              categories={siteData.categories}
+              onChange={(blogPosts) => updateSiteData({ blogPosts })}
+            />
+          )}
+          {activeSection === "eventsBlog" && (
+            <BlogPostsAdmin
+              section="event"
+              posts={siteData.blogPosts}
+              categories={siteData.categories}
+              onChange={(blogPosts) => updateSiteData({ blogPosts })}
+            />
+          )}
+          {activeSection === "impactStories" && (
+            <BlogPostsAdmin
+              section="impact"
+              posts={siteData.blogPosts}
+              categories={siteData.categories}
+              onChange={(blogPosts) => updateSiteData({ blogPosts })}
+            />
+          )}
+          {activeSection === "categories" && (
+            <CategoriesAdmin
+              categories={siteData.categories}
+              posts={siteData.blogPosts}
+              onCategoriesChange={(categories) => updateSiteData({ categories })}
+              onPostsChange={(blogPosts) => updateSiteData({ blogPosts })}
+            />
+          )}
+          {activeSection === "councilors" && (
+            <CouncilorsAdmin councilors={siteData.councilors} onChange={(councilors) => updateSiteData({ councilors })} />
+          )}
+          {activeSection === "timeline" && (
+            <TimelineAdmin timeline={siteData.timeline} onChange={(timeline) => updateSiteData({ timeline })} />
+          )}
+          {activeSection === "contact" && (
+            <ContactAdmin contact={siteData.contact} onChange={(contact) => updateSiteData({ contact })} />
           )}
         </div>
       </div>
@@ -4988,7 +3905,6 @@ export default function App() {
           {page === "eventsBlog" && <EventsBlogPage posts={siteData.blogPosts.filter(p => p.section === "event")} bannerImg={imgAboutBanner} />}
           {page === "donate" && <DonatePage />}
           {page === "contact" && <ContactPage />}
-          {page === "account" && <AccountPage setPage={setPage} />}
           <Footer setPage={setPage} />
           <GlobalModals />
         </div>

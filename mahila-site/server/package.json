@@ -21,8 +21,7 @@
     "express-rate-limit": "^7.4.0",
     "jsonwebtoken": "^9.0.2",
     "nanoid": "^5.0.7",
-    "nodemailer": "^9.0.3",
-    "pg": "^8.22.0"
+    "nodemailer": "^9.0.3"
   },
   "allowScripts": {
     "better-sqlite3@11.10.0": true

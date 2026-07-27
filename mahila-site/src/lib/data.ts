@@ -307,43 +307,7 @@ export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): Eve
 // includes media or relations — Strapi omits them by default.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SITE_DATA_KEY = "mahila_site_data";
-
-export function getLocalSiteData(): Partial<SiteData> {
-  try {
-    const raw = localStorage.getItem(SITE_DATA_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveLocalSiteData(patch: Partial<SiteData>) {
-  try {
-    const current = getLocalSiteData();
-    const updated = {
-      events: patch.events ?? current.events ?? DEFAULT_EVENTS,
-      categories: patch.categories ?? current.categories ?? DEFAULT_CATEGORIES,
-      blogPosts: patch.blogPosts ?? current.blogPosts ?? DEFAULT_BLOG_POSTS,
-      councilors: patch.councilors ?? current.councilors ?? DEFAULT_COUNCILORS,
-      timeline: patch.timeline ?? current.timeline ?? DEFAULT_TIMELINE,
-      contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
-    };
-    localStorage.setItem(SITE_DATA_KEY, JSON.stringify(updated));
-  } catch (err) {
-    console.error("Failed to save local site data:", err);
-  }
-}
-
 export async function loadSiteData(): Promise<SiteData> {
-  const local = getLocalSiteData();
-  let events = local.events ?? DEFAULT_EVENTS;
-  let categories = local.categories ?? DEFAULT_CATEGORIES;
-  let blogPosts = local.blogPosts ?? DEFAULT_BLOG_POSTS;
-  let councilors = local.councilors ?? DEFAULT_COUNCILORS;
-  let timeline = local.timeline ?? DEFAULT_TIMELINE;
-  let contact = local.contact ?? DEFAULT_CONTACT;
-
   try {
     const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
       api.get<any>(`${ENDPOINTS.events}?populate=*`),
@@ -354,6 +318,8 @@ export async function loadSiteData(): Promise<SiteData> {
       api.get<any>(ENDPOINTS.contactInfo),
     ]);
 
+    // Strapi wraps every response in { data, meta }. Collection types return
+    // data as an array; the ContactInfo single type returns data as one object.
     const eventRows: any[] = eventsRes.data?.data ?? [];
     const catRows: any[] = catsRes.data?.data ?? [];
     const postRows: any[] = postsRes.data?.data ?? [];
@@ -380,34 +346,34 @@ export async function loadSiteData(): Promise<SiteData> {
       regEnd: w?.regEnd ?? w?.reg_end ?? w?.endDate ?? w?.["end-date"] ?? "",
     });
 
-    if (eventRows.length) {
-      events = eventRows.map((r: any) => {
-        const rawWindows = Array.isArray(r.windows)
-          ? r.windows
-          : typeof r.windows === "string"
-          ? (() => { try { return JSON.parse(r.windows); } catch { return []; } })()
-          : [];
-        return {
-          id: r.documentId ?? r.id,
-          title: r.title,
-          description: parseDescription(r.description),
-          image: mediaUrl(r.image),
-          eventDate: r.eventDate,
-          location: r.location ?? "",
-          totalSeats: r.totalSeats ?? 0,
-          windows: rawWindows.map(normalizeWindow),
-          categoryId: r.category?.documentId ?? r.category?.id ?? null,
-          createdAt: r.createdAt,
-        };
-      });
-    }
+    const events: EventItem[] = eventRows.length
+      ? eventRows.map((r: any) => {
+          const rawWindows = Array.isArray(r.windows)
+            ? r.windows
+            : typeof r.windows === "string"
+            ? (() => { try { return JSON.parse(r.windows); } catch { return []; } })()
+            : [];
+          return {
+            id: r.documentId ?? r.id,
+            title: r.title,
+            description: parseDescription(r.description),
+            image: mediaUrl(r.image),
+            eventDate: r.eventDate,
+            location: r.location ?? "",
+            totalSeats: r.totalSeats ?? 0,
+            windows: rawWindows.map(normalizeWindow),
+            categoryId: r.category?.documentId ?? r.category?.id ?? null,
+            createdAt: r.createdAt,
+          };
+        })
+      : DEFAULT_EVENTS;
 
-    if (catRows.length) {
-      categories = catRows.map((r: any) => ({ id: r.documentId ?? r.id, name: r.name }));
-    }
+    const categories: Category[] = catRows.length
+      ? catRows.map((r: any) => ({ id: r.documentId ?? r.id, name: r.name }))
+      : DEFAULT_CATEGORIES;
 
-    if (postRows.length) {
-      blogPosts = postRows.map((r: any) => ({
+    let blogPosts: BlogPost[] = postRows.length
+      ? postRows.map((r: any) => ({
         id: r.documentId ?? r.id,
         section: r.section,
         categoryId: r.category?.documentId ?? r.category?.id ?? null,
@@ -418,38 +384,43 @@ export async function loadSiteData(): Promise<SiteData> {
         gallery: mediaUrls(r.gallery),
         tags: r.tags ?? [],
         createdAt: r.createdAt,
-      }));
-    }
+      }))
+      : DEFAULT_BLOG_POSTS;
 
+    // One-time backfill: sites that already had story/event posts saved before the
+    // "Our Impact" read-more pages existed won't have any section === "impact" rows yet.
+    // Seed the 4 defaults in and persist them so they show up in the admin panel immediately.
     if (!blogPosts.some((p) => p.section === "impact")) {
       const seedImpactPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "impact");
       blogPosts = [...blogPosts, ...seedImpactPosts];
+      // Not calling saveBlogPost here anymore — admin-write is disabled right now anyway,
+      // and this was triggering the "coming soon" modal on every page load.
     }
 
-    if (councilorRows.length) {
-      councilors = councilorRows.map((r: any) => ({
+    const councilors: Councilor[] = councilorRows.length
+      ? councilorRows.map((r: any) => ({
         id: r.documentId ?? r.id,
         name: r.name,
         role: r.role ?? "",
         bio: r.bio ?? "",
         image: mediaUrl(r.image),
         order: r.order ?? 0,
-      }));
-    }
+      }))
+      : DEFAULT_COUNCILORS;
 
-    if (timelineRows.length) {
-      timeline = timelineRows.map((r: any) => ({
+    const timeline: TimelineEntry[] = timelineRows.length
+      ? timelineRows.map((r: any) => ({
         id: r.documentId ?? r.id,
         year: r.year,
         title: r.title,
         description: r.description ?? "",
         image: mediaUrl(r.image),
         order: r.order ?? 0,
-      }));
-    }
+      }))
+      : DEFAULT_TIMELINE;
 
-    if (contactRow?.email) {
-      contact = {
+    const contact: ContactInfo = contactRow?.email
+      ? {
         email: contactRow.email,
         emailNote: contactRow.emailNote,
         phone: contactRow.phone,
@@ -458,14 +429,20 @@ export async function loadSiteData(): Promise<SiteData> {
         addressNote: contactRow.addressNote,
         hours: contactRow.hours,
         hoursNote: contactRow.hoursNote,
-      };
+      }
+      : DEFAULT_CONTACT;
+
+    for (const [label, res] of [
+      ["events", eventsRes], ["categories", catsRes], ["blog-posts", postsRes],
+      ["councilors", councilorsRes], ["timeline", timelineRes], ["contact-info", contactRes],
+    ] as const) {
+      if (!(res as any).ok) console.error(`loadSiteData: failed to read ${label} —`, (res as any).error);
     }
 
-    saveLocalSiteData({ events, categories, blogPosts, councilors, timeline, contact });
     return { events, categories, blogPosts, councilors, timeline, contact };
   } catch (err) {
     console.error("loadSiteData: unexpected error —", err);
-    return { events, categories, blogPosts, councilors, timeline, contact };
+    return { ...DEFAULT_SITE_DATA };
   }
 }
 
@@ -488,12 +465,6 @@ export function newEvent(): EventItem {
 }
 
 export async function saveEvent(ev: EventItem): Promise<boolean> {
-  const current = getLocalSiteData();
-  const events = current.events ?? DEFAULT_EVENTS;
-  const idx = events.findIndex((e) => e.id === ev.id);
-  const updated = idx >= 0 ? events.map((e) => (e.id === ev.id ? ev : e)) : [...events, ev];
-  saveLocalSiteData({ events: updated });
-
   const isExisting = !ev.id.startsWith("evt_");
   const body = {
     data: {
@@ -502,19 +473,17 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
       category: ev.categoryId ?? null,
     },
   };
-  if (isExisting) api.put(`${ENDPOINTS.events}/${encodeURIComponent(ev.id)}`, body);
-  else api.post(ENDPOINTS.events, body);
-
-  return true;
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.events}/${encodeURIComponent(ev.id)}`, body)
+    : await api.post(ENDPOINTS.events, body);
+  if (!res.ok) console.error("saveEvent:", res.error);
+  return res.ok;
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
-  const current = getLocalSiteData();
-  const events = (current.events ?? DEFAULT_EVENTS).filter((e) => e.id !== id);
-  saveLocalSiteData({ events });
-
-  api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
-  return true;
+  const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteEvent:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -529,12 +498,6 @@ export function newBlogPost(section: "story" | "event" | "impact", categoryId: s
 }
 
 export async function saveBlogPost(p: BlogPost): Promise<boolean> {
-  const current = getLocalSiteData();
-  const blogPosts = current.blogPosts ?? DEFAULT_BLOG_POSTS;
-  const idx = blogPosts.findIndex((item) => item.id === p.id);
-  const updated = idx >= 0 ? blogPosts.map((item) => (item.id === p.id ? p : item)) : [...blogPosts, p];
-  saveLocalSiteData({ blogPosts: updated });
-
   const isExisting = !p.id.startsWith("post_") && !p.id.startsWith("story_");
   const body = {
     data: {
@@ -542,19 +505,17 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
       tags: p.tags, category: p.categoryId ?? null,
     },
   };
-  if (isExisting) api.put(`${ENDPOINTS.blogPosts}/${encodeURIComponent(p.id)}`, body);
-  else api.post(ENDPOINTS.blogPosts, body);
-
-  return true;
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.blogPosts}/${encodeURIComponent(p.id)}`, body)
+    : await api.post(ENDPOINTS.blogPosts, body);
+  if (!res.ok) console.error("saveBlogPost:", res.error);
+  return res.ok;
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
-  const current = getLocalSiteData();
-  const blogPosts = (current.blogPosts ?? DEFAULT_BLOG_POSTS).filter((p) => p.id !== id);
-  saveLocalSiteData({ blogPosts });
-
-  api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-  return true;
+  const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteBlogPost:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -566,27 +527,19 @@ export function newCategory(): Category {
 }
 
 export async function saveCategory(c: Category): Promise<boolean> {
-  const current = getLocalSiteData();
-  const categories = current.categories ?? DEFAULT_CATEGORIES;
-  const idx = categories.findIndex((item) => item.id === c.id);
-  const updated = idx >= 0 ? categories.map((item) => (item.id === c.id ? c : item)) : [...categories, c];
-  saveLocalSiteData({ categories: updated });
-
   const isExisting = !c.id.startsWith("cat_");
   const body = { data: { name: c.name } };
-  if (isExisting) api.put(`${ENDPOINTS.categories}/${encodeURIComponent(c.id)}`, body);
-  else api.post(ENDPOINTS.categories, body);
-
-  return true;
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.categories}/${encodeURIComponent(c.id)}`, body)
+    : await api.post(ENDPOINTS.categories, body);
+  if (!res.ok) console.error("saveCategory:", res.error);
+  return res.ok;
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {
-  const current = getLocalSiteData();
-  const categories = (current.categories ?? DEFAULT_CATEGORIES).filter((c) => c.id !== id);
-  saveLocalSiteData({ categories });
-
-  api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-  return true;
+  const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteCategory:", res.error);
+  return res.ok;
 }
 
 /** Reassign every post in `fromCategoryId` to `toCategoryId` (or null to leave uncategorized). */
@@ -616,27 +569,19 @@ export function newCouncilor(order: number): Councilor {
 }
 
 export async function saveCouncilor(c: Councilor): Promise<boolean> {
-  const current = getLocalSiteData();
-  const councilors = current.councilors ?? DEFAULT_COUNCILORS;
-  const idx = councilors.findIndex((item) => item.id === c.id);
-  const updated = idx >= 0 ? councilors.map((item) => (item.id === c.id ? c : item)) : [...councilors, c];
-  saveLocalSiteData({ councilors: updated });
-
   const isExisting = !c.id.startsWith("coun_");
   const body = { data: { name: c.name, role: c.role, bio: c.bio, order: c.order } };
-  if (isExisting) api.put(`${ENDPOINTS.councilors}/${encodeURIComponent(c.id)}`, body);
-  else api.post(ENDPOINTS.councilors, body);
-
-  return true;
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.councilors}/${encodeURIComponent(c.id)}`, body)
+    : await api.post(ENDPOINTS.councilors, body);
+  if (!res.ok) console.error("saveCouncilor:", res.error);
+  return res.ok;
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
-  const current = getLocalSiteData();
-  const councilors = (current.councilors ?? DEFAULT_COUNCILORS).filter((c) => c.id !== id);
-  saveLocalSiteData({ councilors });
-
-  api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-  return true;
+  const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteCouncilor:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -648,27 +593,19 @@ export function newTimelineEntry(order: number): TimelineEntry {
 }
 
 export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
-  const current = getLocalSiteData();
-  const timeline = current.timeline ?? DEFAULT_TIMELINE;
-  const idx = timeline.findIndex((item) => item.id === t.id);
-  const updated = idx >= 0 ? timeline.map((item) => (item.id === t.id ? t : item)) : [...timeline, t];
-  saveLocalSiteData({ timeline: updated });
-
   const isExisting = !t.id.startsWith("tl_");
   const body = { data: { year: t.year, title: t.title, description: t.description, order: t.order } };
-  if (isExisting) api.put(`${ENDPOINTS.timeline}/${encodeURIComponent(t.id)}`, body);
-  else api.post(ENDPOINTS.timeline, body);
-
-  return true;
+  const res = isExisting
+    ? await api.put(`${ENDPOINTS.timeline}/${encodeURIComponent(t.id)}`, body)
+    : await api.post(ENDPOINTS.timeline, body);
+  if (!res.ok) console.error("saveTimelineEntry:", res.error);
+  return res.ok;
 }
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {
-  const current = getLocalSiteData();
-  const timeline = (current.timeline ?? DEFAULT_TIMELINE).filter((t) => t.id !== id);
-  saveLocalSiteData({ timeline });
-
-  api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-  return true;
+  const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
+  if (!res.ok) console.error("deleteTimelineEntry:", res.error);
+  return res.ok;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -676,14 +613,14 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function saveContactInfo(c: ContactInfo): Promise<boolean> {
-  saveLocalSiteData({ contact: c });
-
   const body = {
     data: {
       email: c.email, emailNote: c.emailNote, phone: c.phone, phoneNote: c.phoneNote,
       address: c.address, addressNote: c.addressNote, hours: c.hours, hoursNote: c.hoursNote,
     },
   };
-  api.put(ENDPOINTS.contactInfo, body);
-  return true;
+  let res = await api.put(ENDPOINTS.contactInfo, body);
+  if (!res.ok) res = await api.post(ENDPOINTS.contactInfo, body);
+  if (!res.ok) console.error("saveContactInfo:", res.error);
+  return res.ok;
 }
