@@ -1,5 +1,5 @@
 import React from "react";
-import "@/styles/index.css";
+import "@/styles/globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

@@ -899,16 +899,6 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
       setProfile(result.profile);
       saveUserSession(result.profile);
 
-      // Automatically register volunteer submission as a Permanent Volunteer
-      await saveVolunteer({
-        name: result.profile.name,
-        email: result.profile.email,
-        phone: result.profile.phone,
-        skills: result.profile.skills || "General Community Support",
-        volunteer_commitment: "ongoing",
-        selected_events: ["Permanent Community Volunteer Membership"],
-      });
-
       handleClose();
       toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
       navigate("/account");
@@ -935,18 +925,8 @@ function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose
     setProfile(result.profile);
     saveUserSession(result.profile);
 
-    // Automatically record volunteer application as a Permanent Volunteer
-    await saveVolunteer({
-      name: result.profile.name,
-      email: result.profile.email,
-      phone: result.profile.phone,
-      skills: result.profile.skills || "General Community Support",
-      volunteer_commitment: "ongoing",
-      selected_events: ["Permanent Community Volunteer Membership"],
-    });
-
     handleClose();
-    toast.success(`Registered as a Permanent Volunteer! Welcome, ${result.profile.name}!`);
+    toast.success(`Registered successfully! Welcome, ${result.profile.name}!`);
     navigate("/account");
     window.scrollTo({ top: 0 });
   }
@@ -2240,23 +2220,8 @@ function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               <p>Communities.</p>
             </div>
             <button
-              onClick={async () => {
-                const session = getSavedUserSession();
-                if (session) {
-                  await saveVolunteer({
-                    name: session.name,
-                    email: session.email,
-                    phone: session.phone,
-                    skills: session.skills || "Community Support",
-                    volunteer_commitment: "ongoing",
-                    selected_events: ["Permanent Community Volunteer Membership"],
-                  });
-                  toast.success(`Registered as a Permanent Volunteer! Welcome, ${session.name}!`);
-                  setPage("account");
-                  window.scrollTo({ top: 0 });
-                } else {
-                  openModal("volunteer");
-                }
+              onClick={() => {
+                openModal("volunteer");
               }}
               className="bg-[#f4efe7] text-[#a65a4a] font-['Inter',sans-serif] font-semibold w-full text-center rounded-full hover:bg-white transition-colors cursor-pointer"
               style={{ fontSize: "clamp(10px,1vw,15px)", padding: "clamp(5px,1vw,10px) 0" }}
@@ -4231,19 +4196,20 @@ function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
     userSubmissions.forEach(sub => {
       if (sub.type === "volunteer") {
-        const eventsArr: string[] = Array.isArray(sub.data?.selected_events)
+        const eventsArr: string[] = (Array.isArray(sub.data?.selected_events)
           ? sub.data.selected_events
           : sub.data?.event_name
           ? [sub.data.event_name]
-          : ["Permanent Community Volunteer Membership"];
+          : []
+        ).filter((t: string) => t !== "Permanent Community Volunteer Membership");
         eventsArr.forEach((title, idx) => {
           list.push({
             id: `${sub.id}_${idx}`,
             title,
             date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            typeLabel: "Permanent Volunteer Membership",
-            details: sub.data?.skills ? `Skills: ${sub.data.skills} · Permanent Community Support` : "Permanent Active Community Volunteer",
-            status: "Permanent Member",
+            typeLabel: "Volunteer",
+            details: sub.data?.skills ? `Skills: ${sub.data.skills}` : "Community Volunteer",
+            status: "Active",
           });
         });
       } else if (sub.type === "reservation") {

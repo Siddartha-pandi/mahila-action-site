@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
+export function generateStaticParams() {
+  return [];
+}
+
 export async function PUT(req: NextRequest, { params }: { params: { key: string } }) {
   const admin = getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

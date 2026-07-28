@@ -286,6 +286,28 @@ export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): Eve
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SITE_DATA_KEY = "mahila_site_data";
+const DELETED_EVENT_IDS_KEY = "mahila_deleted_event_ids";
+
+function getDeletedEventIds(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_EVENT_IDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordDeletedEventId(id: string) {
+  try {
+    const ids = getDeletedEventIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      localStorage.setItem(DELETED_EVENT_IDS_KEY, JSON.stringify(ids));
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function getLocalSiteData(): Partial<SiteData> {
   try {
@@ -322,26 +344,28 @@ export async function loadSiteData(): Promise<SiteData> {
   let timeline = local.timeline ?? DEFAULT_TIMELINE;
   let contact = local.contact ?? DEFAULT_CONTACT;
 
-  if (BASE_URL) {
-    try {
-      const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
-        api.get<any>(ENDPOINTS.events),
-        api.get<any>(ENDPOINTS.categories),
-        api.get<any>(ENDPOINTS.blogPosts),
-        api.get<any>(ENDPOINTS.councilors),
-        api.get<any>(ENDPOINTS.timeline),
-        api.get<any>(ENDPOINTS.contactInfo),
-      ]);
+  try {
+    const [eventsRes, catsRes, postsRes, councilorsRes, timelineRes, contactRes] = await Promise.all([
+      api.get<any>(ENDPOINTS.events),
+      api.get<any>(ENDPOINTS.categories),
+      api.get<any>(ENDPOINTS.blogPosts),
+      api.get<any>(ENDPOINTS.councilors),
+      api.get<any>(ENDPOINTS.timeline),
+      api.get<any>(ENDPOINTS.contactInfo),
+    ]);
 
-      const eventRows: any[] = Array.isArray(eventsRes.data) ? eventsRes.data : eventsRes.data?.data ?? [];
-      const catRows: any[] = Array.isArray(catsRes.data) ? catsRes.data : catsRes.data?.data ?? [];
-      const postRows: any[] = Array.isArray(postsRes.data) ? postsRes.data : postsRes.data?.data ?? [];
-      const councilorRows: any[] = Array.isArray(councilorsRes.data) ? councilorsRes.data : councilorsRes.data?.data ?? [];
-      const timelineRows: any[] = Array.isArray(timelineRes.data) ? timelineRes.data : timelineRes.data?.data ?? [];
-      const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
+    const eventRows: any[] = Array.isArray(eventsRes.data) ? eventsRes.data : eventsRes.data?.data ?? [];
+    const catRows: any[] = Array.isArray(catsRes.data) ? catsRes.data : catsRes.data?.data ?? [];
+    const postRows: any[] = Array.isArray(postsRes.data) ? postsRes.data : postsRes.data?.data ?? [];
+    const councilorRows: any[] = Array.isArray(councilorsRes.data) ? councilorsRes.data : councilorsRes.data?.data ?? [];
+    const timelineRows: any[] = Array.isArray(timelineRes.data) ? timelineRes.data : timelineRes.data?.data ?? [];
+    const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
-      if (Array.isArray(eventRows)) {
-        events = eventRows.map((r: any) => ({
+    if (Array.isArray(eventRows) && eventRows.length > 0) {
+      const deletedIds = getDeletedEventIds();
+      events = eventRows
+        .filter((r: any) => !deletedIds.includes(String(r.id)))
+        .map((r: any) => ({
           id: r.id,
           title: r.title,
           description: r.description || "",
@@ -353,64 +377,63 @@ export async function loadSiteData(): Promise<SiteData> {
           categoryId: r.category_id || r.categoryId || null,
           createdAt: r.created_at || r.createdAt || new Date().toISOString(),
         }));
-      }
-
-      if (Array.isArray(catRows) && catRows.length) {
-        categories = catRows.map((r: any) => ({ id: r.id, name: r.name }));
-      }
-
-      if (Array.isArray(postRows) && postRows.length) {
-        blogPosts = postRows.map((r: any) => ({
-          id: r.id,
-          section: r.section,
-          categoryId: r.category_id || r.categoryId || null,
-          title: r.title,
-          excerpt: r.excerpt || "",
-          content: r.content || "",
-          coverImage: mediaUrl(r.cover_image || r.coverImage),
-          gallery: mediaUrls(r.gallery),
-          tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
-          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-        }));
-      }
-
-      if (Array.isArray(councilorRows) && councilorRows.length) {
-        councilors = councilorRows.map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          role: r.role || "",
-          bio: r.bio || "",
-          image: mediaUrl(r.image),
-          order: Number(r.order_index ?? r.order ?? 0),
-        }));
-      }
-
-      if (Array.isArray(timelineRows) && timelineRows.length) {
-        timeline = timelineRows.map((r: any) => ({
-          id: r.id,
-          year: r.year,
-          title: r.title,
-          description: r.description || "",
-          image: mediaUrl(r.image),
-          order: Number(r.order_index ?? r.order ?? 0),
-        }));
-      }
-
-      if (contactRow?.email) {
-        contact = {
-          email: contactRow.email,
-          emailNote: contactRow.email_note || contactRow.emailNote || "",
-          phone: contactRow.phone || "",
-          phoneNote: contactRow.phone_note || contactRow.phoneNote || "",
-          address: contactRow.address || "",
-          addressNote: contactRow.address_note || contactRow.addressNote || "",
-          hours: contactRow.hours || "",
-          hoursNote: contactRow.hours_note || contactRow.hoursNote || "",
-        };
-      }
-    } catch (err) {
-      console.warn("loadSiteData: using local storage data");
     }
+
+    if (Array.isArray(catRows) && catRows.length > 0) {
+      categories = catRows.map((r: any) => ({ id: r.id, name: r.name }));
+    }
+
+    if (Array.isArray(postRows) && postRows.length > 0) {
+      blogPosts = postRows.map((r: any) => ({
+        id: r.id,
+        section: r.section,
+        categoryId: r.category_id || r.categoryId || null,
+        title: r.title,
+        excerpt: r.excerpt || "",
+        content: r.content || "",
+        coverImage: mediaUrl(r.cover_image || r.coverImage),
+        gallery: mediaUrls(r.gallery),
+        tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+        createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+      }));
+    }
+
+    if (Array.isArray(councilorRows) && councilorRows.length > 0) {
+      councilors = councilorRows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        role: r.role || "",
+        bio: r.bio || "",
+        image: mediaUrl(r.image),
+        order: Number(r.order_index ?? r.order ?? 0),
+      }));
+    }
+
+    if (Array.isArray(timelineRows) && timelineRows.length > 0) {
+      timeline = timelineRows.map((r: any) => ({
+        id: r.id,
+        year: r.year,
+        title: r.title,
+        description: r.description || "",
+        image: mediaUrl(r.image),
+        order: Number(r.order_index ?? r.order ?? 0),
+      }));
+    }
+
+    if (contactRow?.email) {
+      contact = {
+        email: contactRow.email,
+        emailNote: contactRow.email_note || contactRow.emailNote || "",
+        phone: contactRow.phone || "",
+        phoneNote: contactRow.phone_note || contactRow.phoneNote || "",
+        address: contactRow.address || "",
+        addressNote: contactRow.address_note || contactRow.addressNote || "",
+        hours: contactRow.hours || "",
+        hoursNote: contactRow.hours_note || contactRow.hoursNote || "",
+      };
+    }
+  } catch (err) {
+    console.warn("loadSiteData: using local storage data", err);
   }
 
   if (!blogPosts.some((p) => p.section === "impact")) {
@@ -456,6 +479,9 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
+  // Record the deletion so it survives refresh even if the API doesn't persist it
+  recordDeletedEventId(id);
+
   const current = getLocalSiteData();
   const events = (current.events ?? DEFAULT_EVENTS).filter((e) => e.id !== id);
   saveLocalSiteData({ events });
