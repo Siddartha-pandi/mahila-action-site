@@ -82,6 +82,30 @@ export async function initDb() {
       }
     }
 
+    // Migration: submission tables predate the review-status column, and
+    // CREATE TABLE IF NOT EXISTS won't add it to a database that already
+    // exists. Each ALTER is attempted independently so one failure (or an
+    // engine without IF NOT EXISTS support) can't abort initialisation.
+    const statusTables = [
+      "donations",
+      "event_reservations",
+      "vendor_registrations",
+      "volunteer_accounts",
+      "volunteer_registrations",
+      "contact_submissions",
+    ];
+    for (const table of statusTables) {
+      try {
+        await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'New'`);
+      } catch {
+        try {
+          await pool.query(`ALTER TABLE ${table} ADD COLUMN status TEXT NOT NULL DEFAULT 'New'`);
+        } catch {
+          // Column already present — nothing to do.
+        }
+      }
+    }
+
     const defaultCategories = [
       { id: "cat_women", name: "Women & Leadership" },
       { id: "cat_education", name: "Education & Learning" },

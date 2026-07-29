@@ -21,9 +21,11 @@ export async function POST(req: NextRequest) {
     }
 
     const cookieHeader = createAdminCookieHeader({ sub: user.id, email: user.email });
-    
+
+    // The signed session travels in the httpOnly cookie only — deliberately no
+    // token in the body, so nothing can be replayed from client storage.
     return NextResponse.json(
-      { ok: true, email: user.email, jwt: "admin_authenticated" },
+      { ok: true, email: user.email },
       { headers: { "Set-Cookie": cookieHeader } }
     );
   } catch (err: any) {

@@ -1,39 +1,31 @@
-import { api, BASE_URL } from "./api";
+import { api } from "./api";
 
 // ── Admin authentication ────────────────
 
 export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
-  if (BASE_URL) {
-    const res = await api.post<{ jwt?: string; token?: string; user?: any }>("/api/auth/login", {
-      email,
-      password,
-    });
-    const token = res.data?.jwt || res.data?.token;
-    if (res.ok && token) {
-      localStorage.setItem("admin_jwt", token);
-      return { ok: true };
-    }
-    if (!res.ok) {
-      return { ok: false, error: res.error || "Invalid admin credentials" };
-    }
+  if (!email?.trim() || !password) {
+    return { ok: false, error: "Enter your admin email and password." };
   }
 
-  // Local admin dashboard authentication — only for known admin identifiers
-  const knownAdminIds = [
-    "superadmin",
-    "super admin",
-    "super",
-    "admin",
-    "mahilaaction.vsk@gmail.com",
-    "admin@organization.org",
-  ];
-  const lowerEmail = email.toLowerCase().trim();
-  if (knownAdminIds.includes(lowerEmail) && password && password.length >= 4) {
-    localStorage.setItem("admin_jwt", "admin_authenticated");
+  // The server is the only authority on credentials. There is deliberately no
+  // local fallback here — one used to let any known-looking identifier in with
+  // any 4-character password.
+  const res = await api.post<{ ok?: boolean; email?: string; jwt?: string; token?: string }>("/api/auth/login", {
+    email,
+    password,
+  });
+
+  if (res.ok && res.data?.ok) {
+    // Real authentication lives in the httpOnly cookie the server just set.
+    // This value is only a flag telling the UI to render the admin views.
+    localStorage.setItem("admin_jwt", res.data.jwt || res.data.token || "session");
     return { ok: true };
   }
 
-  return { ok: false, error: "Invalid login credentials" };
+  if (res.status === 0) {
+    return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
+  }
+  return { ok: false, error: res.error || "Invalid login credentials" };
 }
 
 export async function signOutAdmin() {
@@ -51,13 +43,103 @@ export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
 
 export interface SubmissionItem {
   id: string;
-  type: "contact" | "volunteer" | "reservation" | "vendor" | "donation";
+  /** "member" is an account signup — distinct from "volunteer", which is an
+   *  application to help at specific events. */
+  type: "contact" | "volunteer" | "reservation" | "vendor" | "donation" | "member";
   data: any;
   createdAt: string;
   status: "New" | "Contacted" | "Completed";
 }
 
 const SUBMISSION_KEY = "mahila_site_submissions";
+
+// ── Server-backed submissions (the admin panel's source of truth) ───────────
+//
+// Local storage only ever holds what the current browser submitted, so the
+// admin panel used to show a different, partial list on every machine. These
+// endpoints read the shared database instead.
+
+const SUBMISSION_SOURCES: { type: SubmissionItem["type"]; path: string }[] = [
+  { type: "member", path: "/api/members" },
+  { type: "volunteer", path: "/api/volunteers" },
+  { type: "reservation", path: "/api/reservations" },
+  { type: "vendor", path: "/api/vendors" },
+  { type: "donation", path: "/api/donations" },
+  { type: "contact", path: "/api/contact" },
+];
+
+function parseJsonColumn(value: any, fallback: any) {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function rowToSubmission(type: SubmissionItem["type"], row: any): SubmissionItem {
+  const { id, status, created_at, createdAt, ...rest } = row;
+  return {
+    id: String(id),
+    type,
+    data: {
+      ...rest,
+      companions: parseJsonColumn(rest.companions, []),
+      selected_events: parseJsonColumn(rest.selected_events, []),
+      anonymous: rest.anonymous === 1 || rest.anonymous === true,
+      needs_space: rest.needs_space === 1 || rest.needs_space === true,
+    },
+    createdAt: created_at || createdAt || new Date().toISOString(),
+    status: (status as SubmissionItem["status"]) || "New",
+  };
+}
+
+/**
+ * Every submission across all six tables, newest first. Throws if the server
+ * can't be reached so the caller can fall back to the local mirror rather than
+ * silently showing an empty panel.
+ */
+export async function loadSubmissions(): Promise<SubmissionItem[]> {
+  const responses = await Promise.all(SUBMISSION_SOURCES.map((s) => api.get<any[]>(s.path)));
+
+  const failed = responses.find((r) => !r.ok);
+  if (failed) {
+    throw new Error(failed.error || "Could not load submissions from the server.");
+  }
+
+  const items = responses.flatMap((res, i) => {
+    const rows = Array.isArray(res.data) ? res.data : [];
+    return rows.map((row) => rowToSubmission(SUBMISSION_SOURCES[i].type, row));
+  });
+
+  return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/** Which API path owns a given submission, for status updates and deletes. */
+function submissionPath(type: SubmissionItem["type"]) {
+  return SUBMISSION_SOURCES.find((s) => s.type === type)?.path;
+}
+
+export async function updateSubmissionStatusRemote(
+  item: SubmissionItem,
+  status: SubmissionItem["status"]
+): Promise<{ ok: boolean; error?: string }> {
+  const path = submissionPath(item.type);
+  if (!path) return { ok: false, error: "Unknown submission type." };
+  const res = await api.patch(`${path}/${encodeURIComponent(item.id)}`, { status });
+  return { ok: res.ok, error: res.error };
+}
+
+export async function deleteSubmissionRemote(item: SubmissionItem): Promise<{ ok: boolean; error?: string }> {
+  if (item.type === "member") {
+    return { ok: false, error: "Member accounts can't be deleted here — that would remove their sign-in." };
+  }
+  const path = submissionPath(item.type);
+  if (!path) return { ok: false, error: "Unknown submission type." };
+  const res = await api.del(`${path}/${encodeURIComponent(item.id)}`);
+  return { ok: res.ok, error: res.error };
+}
 
 export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] {
   try {
@@ -186,18 +268,25 @@ function getInitialMockSubmissions(): SubmissionItem[] {
 
 // ── Public form submissions ──────────────────────────────────────────────
 
+// Each submission is recorded locally (the admin Submissions panel reads from
+// there) and posted to the API, which persists it and sends the confirmation
+// email. These posts used to be wrapped in `if (BASE_URL)`, and BASE_URL is
+// always "" in the browser — Next only exposes NEXT_PUBLIC_* vars, while .env
+// sets VITE_API_URL. So nothing ever reached the server and no email was sent.
 export async function saveDonation(data: {
   amount: number;
   name: string;
   email: string;
   phone: string;
   anonymous: boolean;
+  donation_type?: "one-time" | "monthly";
   event_name?: string;
   campaign_name?: string;
 }): Promise<boolean> {
-  saveLocalSubmission("donation", data);
-  if (BASE_URL) await api.post("/api/donations", data);
-  return true;
+  const payload = { donation_type: "one-time" as const, ...data };
+  saveLocalSubmission("donation", payload);
+  const res = await api.post("/api/donations", payload);
+  return res.ok;
 }
 
 export async function saveReservation(data: {
@@ -210,8 +299,8 @@ export async function saveReservation(data: {
   companions?: { name: string; phone: string }[];
 }): Promise<boolean> {
   saveLocalSubmission("reservation", data);
-  if (BASE_URL) await api.post("/api/reservations", data);
-  return true;
+  const res = await api.post("/api/reservations", data);
+  return res.ok;
 }
 
 export async function saveVendor(data: {
@@ -224,8 +313,8 @@ export async function saveVendor(data: {
   event_name: string;
 }): Promise<boolean> {
   saveLocalSubmission("vendor", data);
-  if (BASE_URL) await api.post("/api/vendors", data);
-  return true;
+  const res = await api.post("/api/vendors", data);
+  return res.ok;
 }
 
 export async function saveVolunteer(data: {
@@ -237,8 +326,8 @@ export async function saveVolunteer(data: {
   selected_events: string[];
 }): Promise<boolean> {
   saveLocalSubmission("volunteer", data);
-  if (BASE_URL) await api.post("/api/volunteers", data);
-  return true;
+  const res = await api.post("/api/volunteers", data);
+  return res.ok;
 }
 
 export async function saveContact(data: {
@@ -249,16 +338,32 @@ export async function saveContact(data: {
   message: string;
 }): Promise<boolean> {
   saveLocalSubmission("contact", data);
-  if (BASE_URL) await api.post("/api/contact", data);
-  return true;
+  const res = await api.post("/api/contact", data);
+  return res.ok;
 }
 
 // ── Volunteer accounts (real, persisted — distinct from admin auth) ────────
 
 export type VolunteerAccountProfile = { name: string; email: string; phone: string; skills: string };
 
+// Older builds cached volunteer accounts — including plaintext passwords — in
+// local storage so sign-in could work offline. Nothing reads them any more, so
+// clear the leftovers from browsers that still have them.
+const LEGACY_VOLUNTEER_ACCOUNTS_KEY = "mahila_volunteer_accounts_v1";
+
+function purgeLegacyVolunteerAccounts() {
+  try {
+    if (localStorage.getItem(LEGACY_VOLUNTEER_ACCOUNTS_KEY)) {
+      localStorage.removeItem(LEGACY_VOLUNTEER_ACCOUNTS_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function getSavedUserSession(): VolunteerAccountProfile | null {
   if (typeof window === "undefined") return null;
+  purgeLegacyVolunteerAccounts();
   try {
     const raw = localStorage.getItem("mahila_user_session");
     return raw ? JSON.parse(raw) : null;
@@ -282,38 +387,6 @@ export function saveUserSession(session: VolunteerAccountProfile | null) {
   window.dispatchEvent(new Event("storage"));
 }
 
-const VOLUNTEER_ACCOUNTS_KEY = "mahila_volunteer_accounts_v1";
-
-interface LocalVolunteerAccount {
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-  skills: string;
-  createdAt: string;
-}
-
-function getLocalVolunteerAccounts(): LocalVolunteerAccount[] {
-  try {
-    const raw = localStorage.getItem(VOLUNTEER_ACCOUNTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalVolunteerAccount(acc: LocalVolunteerAccount) {
-  try {
-    const accounts = getLocalVolunteerAccounts();
-    accounts.unshift(acc);
-    localStorage.setItem(VOLUNTEER_ACCOUNTS_KEY, JSON.stringify(accounts));
-  } catch (err) {
-    console.error("Failed to save local volunteer account:", err);
-  }
-}
-
 export async function registerVolunteer(data: {
   name: string;
   email: string;
@@ -321,66 +394,23 @@ export async function registerVolunteer(data: {
   password: string;
   skills?: string;
 }): Promise<{ ok: boolean; profile?: VolunteerAccountProfile; error?: string }> {
-  // Always record form submission so admins see volunteer applications in SubmissionsAdmin
-  saveLocalSubmission("volunteer", data);
-
-  const normalizedEmail = data.email.trim().toLowerCase();
-  const normalizedPhone = data.phone.trim();
-
-  // Check local storage accounts to prevent duplicate registrations
-  const localAccounts = getLocalVolunteerAccounts();
-  const existingLocal = localAccounts.find(
-    a => a.email.toLowerCase() === normalizedEmail || a.phone === normalizedPhone
-  );
-  if (existingLocal) {
-    const field = existingLocal.email.toLowerCase() === normalizedEmail ? "email address" : "phone number";
-    return {
-      ok: false,
-      error: `An account with this ${field} is already registered. Please sign in instead.`,
-    };
-  }
-
-  // Try network registration with API server
   const res = await api.post<{ ok: boolean; profile: VolunteerAccountProfile }>("/api/volunteer-auth/register", data);
 
   if (res.ok && res.data?.profile) {
-    saveLocalVolunteerAccount({
-      name: res.data.profile.name,
-      email: res.data.profile.email,
-      phone: res.data.profile.phone,
-      password: data.password,
-      skills: res.data.profile.skills,
-      createdAt: new Date().toISOString(),
-    });
+    // Recorded as "member", not "volunteer" — creating an account is not the
+    // same as applying to help at an event, and filing it as the latter made
+    // people look like they had registered twice. Note the password is
+    // deliberately left out — it must never reach local storage.
+    const { password: _password, ...application } = data;
+    saveLocalSubmission("member", application);
     return { ok: true, profile: res.data.profile };
   }
 
-  // Specific HTTP conflict / client error from backend
-  if (res.status === 409) {
-    return { ok: false, error: res.error || "An account with this email address or phone number is already registered. Please sign in instead." };
+  if (res.status === 0) {
+    return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
   }
-  if (res.status === 400) {
-    return { ok: false, error: res.error || "Please check your registration details and try again." };
-  }
-
-  // Graceful fallback to local storage account if API server is offline or unreachable
-  const profile: VolunteerAccountProfile = {
-    name: data.name.trim(),
-    email: normalizedEmail,
-    phone: normalizedPhone,
-    skills: data.skills || "",
-  };
-
-  saveLocalVolunteerAccount({
-    name: profile.name,
-    email: profile.email,
-    phone: profile.phone,
-    password: data.password,
-    skills: profile.skills,
-    createdAt: new Date().toISOString(),
-  });
-
-  return { ok: true, profile };
+  // 409 (duplicate email/phone) and 400 (validation) already carry a usable message.
+  return { ok: false, error: res.error || "Something went wrong creating your account — please try again." };
 }
 
 export async function loginVolunteer(
@@ -388,8 +418,10 @@ export async function loginVolunteer(
   password: string
 ): Promise<{ ok: boolean; profile?: VolunteerAccountProfile; error?: string }> {
   const normalized = identifier.trim().toLowerCase();
+  if (!normalized || !password) {
+    return { ok: false, error: "Enter your email address and password." };
+  }
 
-  // 1. Try API server login first
   const res = await api.post<{ ok: boolean; profile: VolunteerAccountProfile }>("/api/volunteer-auth/login", {
     email: normalized,
     password,
@@ -399,75 +431,27 @@ export async function loginVolunteer(
     return { ok: true, profile: res.data.profile };
   }
 
-  // 2. Local accounts match by email or phone
-  const localAccounts = getLocalVolunteerAccounts();
-  const cleanPhone = normalized.replace(/\D/g, "");
-  const localMatch = localAccounts.find(
-    a => a.email.toLowerCase() === normalized || (cleanPhone && a.phone.replace(/\D/g, "") === cleanPhone)
-  );
-
-  if (localMatch) {
-    if (!localMatch.password || localMatch.password === password || password.length >= 3) {
-      return {
-        ok: true,
-        profile: {
-          name: localMatch.name,
-          email: localMatch.email,
-          phone: localMatch.phone,
-          skills: localMatch.skills,
-        },
-      };
-    }
+  // A rejected sign-in must stay rejected. Earlier versions fell through to a
+  // local-storage match, then to any past form submission, then finally let any
+  // identifier in with a 3-character password — so visitors who had never
+  // registered were signed in as full members.
+  if (res.status === 0) {
+    return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
   }
-
-  // 3. Match from existing form submissions (volunteer applications, seat reservations, donations)
-  const submissions = getSubmissions();
-  const subMatch = submissions.find(
-    s =>
-      (s.data?.email && s.data.email.toLowerCase() === normalized) ||
-      (cleanPhone && s.data?.phone && s.data.phone.replace(/\D/g, "") === cleanPhone)
-  );
-
-  if (subMatch && subMatch.data) {
-    const profile: VolunteerAccountProfile = {
-      name: subMatch.data.name || subMatch.data.contact_name || "Community Member",
-      email: subMatch.data.email || (normalized.includes("@") ? normalized : `${normalized}@user.mahilaaction.org`),
-      phone: subMatch.data.phone || "",
-      skills: subMatch.data.skills || "Community Supporter",
-    };
-    saveLocalVolunteerAccount({
-      ...profile,
-      password,
-      createdAt: new Date().toISOString(),
-    });
-    return { ok: true, profile };
-  }
-
-  // 4. Fail-safe login: Allow any valid identifier with password to instantly log in
-  if (normalized && password && password.length >= 3) {
-    let displayName = normalized.split("@")[0].replace(/[._-]/g, " ");
-    displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-
-    const profile: VolunteerAccountProfile = {
-      name: displayName || "Member",
-      email: normalized.includes("@") ? normalized : `${normalized}@user.mahilaaction.org`,
-      phone: "",
-      skills: "Community Member",
-    };
-    saveLocalVolunteerAccount({
-      ...profile,
-      password,
-      createdAt: new Date().toISOString(),
-    });
-    return { ok: true, profile };
-  }
-
-  return { ok: false, error: res.error || "Please check your login details and try again." };
+  return { ok: false, error: res.error || "Incorrect email or password." };
 }
 
 export async function requestVolunteerPasswordReset(email: string): Promise<{ ok: boolean; error?: string }> {
-  await api.post<{ ok: boolean; message: string }>("/api/volunteer-auth/forgot-password", { email });
-  return { ok: true };
+  const res = await api.post<{ ok: boolean; message: string }>("/api/volunteer-auth/forgot-password", { email });
+
+  // Previously the response was discarded and this always reported success, so a
+  // failed request still showed the "Check your email" screen.
+  if (res.ok) return { ok: true };
+
+  if (res.status === 0) {
+    return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
+  }
+  return { ok: false, error: res.error || "Something went wrong — please try again." };
 }
 
 export async function resetVolunteerPassword(

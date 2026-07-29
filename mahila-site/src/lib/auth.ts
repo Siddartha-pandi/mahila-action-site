@@ -11,32 +11,39 @@ export interface AdminPayload {
 }
 
 export function getAdminFromRequest(req?: NextRequest): AdminPayload | null {
-  try {
-    let token: string | undefined;
+  const candidates: string[] = [];
 
+  try {
     if (req) {
       const authHeader = req.headers.get("authorization") || req.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        token = authHeader.substring(7).trim();
+      if (authHeader?.startsWith("Bearer ")) {
+        const bearer = authHeader.substring(7).trim();
+        if (bearer) candidates.push(bearer);
       }
-      if (!token) {
-        token = req.cookies.get(COOKIE_NAME)?.value;
-      }
+      const cookieToken = req.cookies.get(COOKIE_NAME)?.value;
+      if (cookieToken) candidates.push(cookieToken);
     } else {
-      const cookieStore = cookies();
-      token = cookieStore.get(COOKIE_NAME)?.value;
+      const cookieToken = cookies().get(COOKIE_NAME)?.value;
+      if (cookieToken) candidates.push(cookieToken);
     }
-
-    if (!token) return null;
-
-    if (token === "admin_authenticated") {
-      return { sub: "admin_local", email: "admin@mahilaaction.org" };
-    }
-
-    return jwt.verify(token, JWT_SECRET) as AdminPayload;
   } catch {
     return null;
   }
+
+  // Every candidate must survive signature verification. There used to be a
+  // shortcut here accepting the literal string "admin_authenticated", which let
+  // anyone read submissions and edit content by sending that one header value.
+  // The client stores a non-secret flag under the same name, so an unverifiable
+  // bearer token falls through to the cookie rather than failing the request.
+  for (const token of candidates) {
+    try {
+      return jwt.verify(token, JWT_SECRET) as AdminPayload;
+    } catch {
+      // try the next candidate
+    }
+  }
+
+  return null;
 }
 
 export function createAdminCookieHeader(payload: AdminPayload): string {

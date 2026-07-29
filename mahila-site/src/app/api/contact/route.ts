@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { sendContactAcknowledgementEmail } from "@/lib/email";
 import { isValidPhoneNumber } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
@@ -29,6 +30,10 @@ export async function POST(req: NextRequest) {
         body.subject || null,
         body.message,
       ]
+    );
+
+    sendContactAcknowledgementEmail(body.email, body.name, body.subject || undefined).catch((err) =>
+      console.error("sendContactAcknowledgementEmail failed:", err)
     );
 
     return NextResponse.json({ ok: true, id }, { status: 201 });

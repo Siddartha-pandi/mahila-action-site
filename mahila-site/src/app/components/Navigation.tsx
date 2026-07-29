@@ -69,7 +69,7 @@ export function Navigation({
     { label: "Home", page: "home", icon: Home },
     { label: "Who Are We", page: "about", icon: Users },
     { label: "Our Stories", page: "stories", icon: BookOpen },
-    { label: "Events Blog", page: "eventsBlog", icon: Calendar },
+    { label: "Events", page: "eventsBlog", icon: Calendar },
     { label: "Contact Us", page: "contact", icon: Mail },
   ];
 

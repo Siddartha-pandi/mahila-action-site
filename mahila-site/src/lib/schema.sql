@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS donations (
   anonymous INTEGER DEFAULT 0,
   event_name TEXT,
   campaign_name TEXT,
+  status TEXT NOT NULL DEFAULT 'New',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
 );
 
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS event_reservations (
   seats INTEGER NOT NULL DEFAULT 1,
   volunteer_commitment TEXT CHECK (volunteer_commitment IN ('event_only', 'ongoing')),
   companions TEXT DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'New',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
 );
 
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS vendor_registrations (
   phone TEXT NOT NULL,
   offering TEXT NOT NULL,
   needs_space INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'New',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
 );
 
@@ -53,6 +56,7 @@ CREATE TABLE IF NOT EXISTS volunteer_accounts (
   skills TEXT,
   reset_token_hash TEXT,
   reset_token_expires TEXT,
+  status TEXT NOT NULL DEFAULT 'New',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
 );
 
@@ -63,6 +67,7 @@ CREATE TABLE IF NOT EXISTS volunteer_registrations (
   phone TEXT NOT NULL,
   skills TEXT,
   selected_events TEXT DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'New',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
 );
 
@@ -73,6 +78,7 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
   phone TEXT,
   subject TEXT,
   message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'New',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP::text
 );
 

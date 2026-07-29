@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
-  X, CheckCircle, LogIn, LogOut, Calendar, MapPin, Heart, Clock,
+  X, CheckCircle, AlertCircle, LogIn, LogOut, Calendar, MapPin, Heart, Clock,
   UserCheck, Plus, UserPlus,
 } from "lucide-react";
 import {
@@ -104,6 +104,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
   const [reg, setReg] = useState({ name: "", email: "", phone: "", password: "", skills: "" });
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
   const [resetPass, setResetPass] = useState("");
   const [resetConfirm, setResetConfirm] = useState("");
 
@@ -197,9 +198,14 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
     e.preventDefault();
     if (!forgotEmail.includes("@")) return toast.error("Enter a valid email");
     setAuthBusy(true);
+    setForgotError(null);
     const result = await requestVolunteerPasswordReset(forgotEmail);
     setAuthBusy(false);
-    if (!result.ok) return toast.error(result.error || "Something went wrong — please try again.");
+    if (!result.ok) {
+      const message = result.error || "Something went wrong — please try again.";
+      setForgotError(message);
+      return toast.error(message);
+    }
     setForgotSent(true);
   }
 
@@ -398,7 +404,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
                 <input value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="••••••••" type="password" className={inputCls} />
                 <button
                   type="button"
-                  onClick={() => { setForgotEmail(loginEmail); setForgotSent(false); setStep("forgot"); }}
+                  onClick={() => { setForgotEmail(loginEmail); setForgotSent(false); setForgotError(null); setStep("forgot"); }}
                   className="mt-1.5 font-['Inter',sans-serif] text-[12px] text-[#a65a4a] font-semibold cursor-pointer hover:underline"
                 >
                   Forgot password?
@@ -469,10 +475,12 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
                   <CheckCircle size={32} className="text-[#587735]" />
                 </div>
                 <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[19px]" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Check your email</h4>
+                {/* Reaching this screen now means the account was confirmed to
+                    exist — an unknown address is rejected on the form instead. */}
                 <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
-                  If an account exists for <span className="font-semibold">{forgotEmail}</span>, we've sent a link to reset your password.
+                  We've sent a link to reset your password to <span className="font-semibold">{forgotEmail}</span>. It can take a few minutes to arrive — remember to check your spam folder.
                 </p>
-                <button type="button" onClick={() => setStep("login")} className="mt-2 font-['Inter',sans-serif] text-[13px] text-[#a65a4a] font-semibold cursor-pointer hover:underline">
+                <button type="button" onClick={() => { setForgotSent(false); setStep("login"); }} className="mt-1 font-['Inter',sans-serif] text-[13px] text-[#a65a4a] font-semibold cursor-pointer hover:underline">
                   ← Back to sign in
                 </button>
               </div>
@@ -483,8 +491,20 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
                 </p>
                 <div>
                   <label className={labelCls}>Email Address</label>
-                  <input value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="you@email.com" type="email" className={inputCls} autoFocus />
+                  <input value={forgotEmail} onChange={e => { setForgotEmail(e.target.value); setForgotError(null); }} placeholder="you@email.com" type="email" className={inputCls} autoFocus />
                 </div>
+                {forgotError && (
+                  <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
+                    <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
+                    <p className="font-['Inter',sans-serif] text-[#993925] text-[13px] leading-relaxed">
+                      {forgotError}
+                      <br />
+                      <button type="button" onClick={() => { setForgotError(null); setStep("register"); }} className="font-semibold underline cursor-pointer mt-0.5">
+                        Create an account instead
+                      </button>
+                    </p>
+                  </div>
+                )}
                 <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
                   {authBusy ? "Sending…" : "Send Reset Link"}
                 </button>
@@ -493,6 +513,44 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
                 </p>
               </form>
             )
+          )}
+
+          {/* ── Choose new password (opened from the emailed reset link) ── */}
+          {step === "reset" && (
+            <form onSubmit={handleResetSubmit} className="p-8 flex flex-col gap-4">
+              {!resetToken ? (
+                <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
+                  <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
+                  <p className="font-['Inter',sans-serif] text-[#993925] text-[13px] leading-relaxed">
+                    This reset link is missing its token.{" "}
+                    <button type="button" onClick={() => { setForgotSent(false); setForgotError(null); setStep("forgot"); }} className="font-semibold underline cursor-pointer">
+                      Request a new one
+                    </button>
+                  </p>
+                </div>
+              ) : (
+                <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed -mt-1">
+                  Choose a new password for your account. It needs to be at least 6 characters.
+                </p>
+              )}
+              <div>
+                <label className={labelCls}>New Password</label>
+                <input value={resetPass} onChange={e => setResetPass(e.target.value)} placeholder="••••••••" type="password" className={inputCls} autoFocus />
+              </div>
+              <div>
+                <label className={labelCls}>Confirm New Password</label>
+                <input value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} placeholder="••••••••" type="password" className={inputCls} />
+              </div>
+              {resetConfirm.length > 0 && resetPass !== resetConfirm && (
+                <p className="font-['Inter',sans-serif] text-[#993925] text-[12px] -mt-1">Passwords don't match.</p>
+              )}
+              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                {authBusy ? "Saving…" : "Save New Password"}
+              </button>
+              <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
+                <button type="button" onClick={() => setStep("login")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">← Back to sign in</button>
+              </p>
+            </form>
           )}
 
           {/* ── Dashboard ── */}

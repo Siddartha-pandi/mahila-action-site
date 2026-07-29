@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { sendDonationReceiptEmail } from "@/lib/email";
 import { isValidPhoneNumber } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
@@ -33,6 +34,17 @@ export async function POST(req: NextRequest) {
         body.campaign_name || null,
       ]
     );
+
+    // Anonymous donors are still receipted if they gave an address to send it to.
+    if (body.email) {
+      sendDonationReceiptEmail(
+        body.email,
+        body.anonymous ? "" : body.name || "",
+        Number(body.amount),
+        body.campaign_name || body.event_name || undefined,
+        body.donation_type === "monthly"
+      ).catch((err) => console.error("sendDonationReceiptEmail failed:", err));
+    }
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {
