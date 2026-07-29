@@ -1,14 +1,20 @@
 "use client";
 
-import { ArrowRight, Calendar, MapPin, Users, BookOpen, Briefcase, Heart } from "lucide-react";
+import { useCallback, useState } from "react";
+import { ArrowRight, Users, BookOpen, Briefcase, Heart } from "lucide-react";
 import { upcomingOrOpenEvents, isEventOpen, type EventItem } from "@/lib/data";
 import { STORY_FALLBACK_IMAGES } from "../constants/fallbacks";
 import { imgImpact1, imgImpact2, imgImpact3, imgImpact4, imgEvent, imgHeroCard, imgHeroMain, imgHeroSide, heroSvg, statsSvg } from "../constants/images";
 import { useContent } from "../context/ContentContext";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
+import { Carousel } from "../components/Carousel";
+import { EventCard } from "../components/EventCard";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
+
+// Homepage rails stay short — the full sets live on /events and /stories.
+const MAX_RAIL_ITEMS = 5;
 
 function c(content: Record<string, string>, key: string) {
   return content[key] || "";
@@ -37,17 +43,31 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   const storyPosts = [...siteData.blogPosts]
     .filter(p => p.section === "story")
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 3);
+    .slice(0, MAX_RAIL_ITEMS);
   const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || STORY_FALLBACK_IMAGES[p.id]?.banner || imgEvent, title: p.title, excerpt: p.excerpt }));
 
   const upcoming = upcomingOrOpenEvents(siteData.events);
-  const featuredEvent: EventItem | null = upcoming[0] ?? siteData.events[0] ?? null;
+  const railEvents = (upcoming.length > 0 ? upcoming : siteData.events).slice(0, MAX_RAIL_ITEMS);
+  const [activeEventIndex, setActiveEventIndex] = useState(0);
+  // The CTA always acts on whichever event the carousel is currently showing.
+  const featuredEvent: EventItem | null = railEvents[activeEventIndex] ?? railEvents[0] ?? null;
   const eventOpen = featuredEvent ? isEventOpen(featuredEvent) : false;
+
+  const handleEventSelect = useCallback((i: number) => setActiveEventIndex(i), []);
 
   function handleReserveClick() {
     if (!featuredEvent) return;
     if (eventOpen) openModal("reserve", { id: featuredEvent.id });
     else openModal("closed");
+  }
+
+  function goToPage(p: Page) {
+    setPage(p);
+    window.scrollTo({ top: 0 });
+  }
+
+  function categoryName(categoryId: string | null) {
+    return siteData.categories.find((c) => c.id === categoryId)?.name;
   }
 
   return (
@@ -256,39 +276,31 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
             <p className={`${inter()} text-[#1e1e1e]/75 text-[18px] leading-relaxed mt-4 max-w-[440px]`}>
               Real change starts with participation. Volunteer your time, share your skills, or join a community event near you.
             </p>
-            <button
-              onClick={handleReserveClick}
-              disabled={!featuredEvent}
-              className={`${inter()} bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold px-10 py-4 rounded-full mt-8 hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {eventOpen ? "Reserve Your Seat" : "See Upcoming Events"}
-            </button>
+            <div className="flex flex-wrap gap-4 mt-8">
+              <button
+                onClick={handleReserveClick}
+                disabled={!featuredEvent}
+                className={`${inter()} bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold px-10 py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {eventOpen ? "Reserve Your Seat" : "See Upcoming Events"}
+              </button>
+              <button
+                onClick={() => goToPage("eventsBlog")}
+                className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] text-[17px] font-semibold px-10 py-4 rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer flex items-center gap-2`}
+              >
+                More Events <ArrowRight size={18} />
+              </button>
+            </div>
           </div>
-          {featuredEvent ? (
-            <div className="relative w-full lg:flex-1 h-[380px] rounded-2xl overflow-hidden">
-              <img loading="lazy" decoding="async" src={featuredEvent.image || imgEvent} alt={featuredEvent.title} className="absolute inset-0 size-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-transparent to-transparent" />
-              <div className="absolute top-6 left-6 flex items-center justify-between w-[calc(100%-48px)]">
-                <span className={`${inter()} border border-[#f4efe7] text-[#f4efe7] text-[12px] font-semibold px-4 py-1.5 rounded-full`}>
-                  {siteData.categories.find((c) => c.id === featuredEvent.categoryId)?.name || "Community Event"}
-                </span>
-                {eventOpen ? (
-                  <span className="bg-[#ebc2c2] border-2 border-[#8f6969] text-[#dc0f0f] text-[10px] font-medium px-4 py-1 rounded-full flex items-center gap-1.5">
-                    <span className="size-1.5 bg-red-500 rounded-full animate-ping absolute" />
-                    <span className="size-1.5 bg-red-500 rounded-full relative" />
-                    {featuredEvent.totalSeats} Seats — Open
-                  </span>
-                ) : (
-                  <span className="bg-[#1e1e1e]/50 border-2 border-[#f4efe7]/30 text-[#f4efe7] text-[10px] font-semibold px-4 py-1 rounded-full">Closed</span>
-                )}
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <p className={`${inter()} text-[#f4efe7] text-[20px] font-semibold`}>{featuredEvent.title}</p>
-                <div className="flex items-center gap-6 mt-3">
-                  <span className={`${inter()} text-[#f4efe7] text-[14px] flex items-center gap-2`}><Calendar size={16} /> {new Date(featuredEvent.eventDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
-                  <span className={`${inter()} text-[#f4efe7] text-[14px] flex items-center gap-2`}><MapPin size={16} /> {featuredEvent.location}</span>
-                </div>
-              </div>
+          {railEvents.length > 0 ? (
+            <div className="w-full lg:flex-1 min-w-0">
+              <Carousel
+                ariaLabel="Upcoming events"
+                onSelect={handleEventSelect}
+                slides={railEvents.map((ev) => (
+                  <EventCard key={ev.id} event={ev} categoryName={categoryName(ev.categoryId)} />
+                ))}
+              />
             </div>
           ) : (
             <div className="w-full lg:flex-1 h-[380px] rounded-2xl bg-[#a65a4a]/10 flex items-center justify-center">
@@ -308,22 +320,38 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               Every initiative creates a ripple effect that reaches individuals, families, and entire communities.
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
-            {stories.map((s) => (
-              <div key={s.id} className="rounded-2xl overflow-hidden group cursor-pointer flex flex-col h-full">
-                <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl">
-                  <img loading="lazy" decoding="async" src={s.img} alt={s.title} className="size-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                </div>
-                <div className="bg-[#a65a4a] p-6 rounded-b-2xl flex-1 flex flex-col">
-                  <p className={`${inter()} text-[#f4efe7] text-[20px] font-semibold capitalize line-clamp-2`}>{s.title}</p>
-                  <p className={`${inter()} text-[#f4efe7]/85 text-[16px] leading-relaxed mt-3 line-clamp-3`}>{s.excerpt}</p>
-                  <button onClick={() => openStoryBlog(s.id)} className={`${inter()} text-[#f4efe7] text-[14px] font-semibold mt-auto pt-6 opacity-85 hover:opacity-100 transition-opacity cursor-pointer flex items-center gap-1 w-fit`}>
-                    Read Story <ArrowRight size={14} />
-                  </button>
-                </div>
+          {stories.length > 0 && (
+            <>
+              <Carousel
+                ariaLabel="Community stories"
+                controls="below"
+                gap={24}
+                slideClassName="basis-full sm:basis-1/2 lg:basis-1/3"
+                slides={stories.map((s) => (
+                  <div key={s.id} className="rounded-2xl overflow-hidden group cursor-pointer flex flex-col h-full">
+                    <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl">
+                      <img loading="lazy" decoding="async" src={s.img} alt={s.title} className="size-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    </div>
+                    <div className="bg-[#a65a4a] p-6 rounded-b-2xl flex-1 flex flex-col">
+                      <p className={`${inter()} text-[#f4efe7] text-[20px] font-semibold capitalize line-clamp-2`}>{s.title}</p>
+                      <p className={`${inter()} text-[#f4efe7]/85 text-[16px] leading-relaxed mt-3 line-clamp-3`}>{s.excerpt}</p>
+                      <button onClick={() => openStoryBlog(s.id)} className={`${inter()} text-[#f4efe7] text-[14px] font-semibold mt-auto pt-6 opacity-85 hover:opacity-100 transition-opacity cursor-pointer flex items-center gap-1 w-fit`}>
+                        Read Story <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              />
+              <div className="flex justify-center mt-10">
+                <button
+                  onClick={() => goToPage("stories")}
+                  className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] text-[17px] font-semibold px-10 py-4 rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer flex items-center gap-2`}
+                >
+                  More Stories <ArrowRight size={18} />
+                </button>
               </div>
-            ))}
-          </div>
+            </>
+          )}
           {stories.length === 0 && (
             <p className={`${inter()} text-center text-[#1e1e1e]/50 text-[16px] py-10`}>Something big is cooking! Check back soon.</p>
           )}

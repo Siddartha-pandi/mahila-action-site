@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { queryDb } from "@/lib/db";
+import { sendPasswordChangedEmail } from "@/lib/email";
 
 function toProfile(row: any) {
   return { name: row.name, email: row.email, phone: row.phone, skills: row.skills || "" };
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest) {
     await queryDb(
       "UPDATE volunteer_accounts SET password_hash = $1, reset_token_hash = NULL, reset_token_expires = NULL WHERE id = $2",
       [password_hash, user.id]
+    );
+
+    sendPasswordChangedEmail(user.email).catch((err) =>
+      console.error("sendPasswordChangedEmail failed:", err)
     );
 
     return NextResponse.json({ ok: true, profile: toProfile({ ...user, password_hash: undefined }) });

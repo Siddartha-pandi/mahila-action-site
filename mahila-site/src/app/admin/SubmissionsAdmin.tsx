@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Search,
   Download,
@@ -12,19 +12,49 @@ import {
   DollarSign,
   Briefcase,
   Users,
+  UserPlus,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import {
   getSubmissions,
-  updateSubmissionStatus,
-  deleteSubmission,
+  loadSubmissions,
+  updateSubmissionStatusRemote,
+  deleteSubmissionRemote,
   SubmissionItem,
 } from "../../lib/backend";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { toast } from "sonner";
 
+type SubmissionCategory = SubmissionItem["type"];
+
+/**
+ * Which bucket a submission belongs in, which is not always its stored `type`.
+ *
+ * The Volunteer tab of the Reserve Seat modal saves a *reservation* carrying a
+ * `volunteer_commitment` — so without this, everyone who signed up to help was
+ * counted as a plain seat booking and never appeared under Volunteers.
+ *
+ * Each submission still resolves to exactly one bucket, so the tab counts add
+ * up to the total.
+ */
+export function categoryOf(item: SubmissionItem): SubmissionCategory {
+  if (item.type === "reservation" && item.data?.volunteer_commitment) return "volunteer";
+
+  // Legacy rows: account signups were filed as "volunteer" before members had
+  // their own category. A genuine volunteer application always names events.
+  if (item.type === "volunteer") {
+    const events = item.data?.selected_events;
+    if (!Array.isArray(events) || events.length === 0) return "member";
+  }
+
+  return item.type;
+}
+
 export function SubmissionsAdmin() {
-  const [submissions, setSubmissions] = useState<SubmissionItem[]>(() => getSubmissions());
+  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -34,48 +64,72 @@ export function SubmissionsAdmin() {
   const canEdit = hasPermission(session, "submissions", "edit");
   const canDelete = hasPermission(session, "submissions", "delete");
 
-  function reload() {
-    setSubmissions(getSubmissions());
-  }
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      setSubmissions(await loadSubmissions());
+      setOffline(false);
+    } catch (err) {
+      // Fall back to this browser's own records rather than an empty panel,
+      // but say so — the local mirror is not the full picture.
+      setSubmissions(getSubmissions());
+      setOffline(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  function handleStatusChange(id: string, status: SubmissionItem["status"]) {
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  async function handleStatusChange(item: SubmissionItem, status: SubmissionItem["status"]) {
     if (!canEdit) {
       return toast.error("Permission denied: You lack EDIT rights for submissions.");
     }
-    updateSubmissionStatus(id, status);
-    toast.success(`Status updated to ${status}`);
-    reload();
-    if (selectedItem?.id === id) {
-      setSelectedItem(prev => prev ? { ...prev, status } : null);
+    const res = await updateSubmissionStatusRemote(item, status);
+    if (!res.ok) return toast.error(res.error || "Could not update the status — please try again.");
+
+    setSubmissions(prev => prev.map(s => (s.id === item.id ? { ...s, status } : s)));
+    if (selectedItem?.id === item.id) {
+      setSelectedItem(prev => (prev ? { ...prev, status } : null));
     }
+    toast.success(`Status updated to ${status}`);
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(item: SubmissionItem) {
     if (!canDelete) {
       return toast.error("Permission denied: You lack DELETE rights for submissions.");
     }
-    if (!confirm("Are you sure you want to delete this submission?")) return;
-    deleteSubmission(id);
+    if (item.type === "member") {
+      return toast.error("Member accounts can't be deleted here — that would remove their sign-in.");
+    }
+    if (!confirm("Are you sure you want to delete this submission? This removes it for everyone.")) return;
+
+    const res = await deleteSubmissionRemote(item);
+    if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
+
+    setSubmissions(prev => prev.filter(s => s.id !== item.id));
+    if (selectedItem?.id === item.id) setSelectedItem(null);
     toast.success("Submission deleted");
-    reload();
-    if (selectedItem?.id === id) setSelectedItem(null);
   }
 
   const list = Array.isArray(submissions) ? submissions : [];
 
-  // Filter calculations
-  const volunteerList = list.filter(i => i.type === "volunteer");
-  const vendorList = list.filter(i => i.type === "vendor");
-  const reservationList = list.filter(i => i.type === "reservation");
-  const donationList = list.filter(i => i.type === "donation");
-  const contactList = list.filter(i => i.type === "contact");
+  // Filter calculations — bucketed by intent, not by raw stored type.
+  const volunteerList = list.filter(i => categoryOf(i) === "volunteer");
+  const memberList = list.filter(i => categoryOf(i) === "member");
+  const vendorList = list.filter(i => categoryOf(i) === "vendor");
+  const reservationList = list.filter(i => categoryOf(i) === "reservation");
+  const donationList = list.filter(i => categoryOf(i) === "donation");
+  const contactList = list.filter(i => categoryOf(i) === "contact");
 
   const totalDonated = donationList.reduce((acc, curr) => acc + (Number(curr.data?.amount) || 0), 0);
   const totalSeats = reservationList.reduce((acc, curr) => acc + (Number(curr.data?.seats) || 1), 0);
 
   const filtered = list.filter(item => {
     if (!item || !item.id) return false;
-    if (filterType !== "all" && item.type !== filterType) return false;
+    if (filterType !== "all" && categoryOf(item) !== filterType) return false;
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -98,7 +152,7 @@ export function SubmissionsAdmin() {
     const headers = ["ID", "Type", "Status", "Date", "Name/Contact", "Email", "Phone", "Details"];
     const rows = filtered.map(item => [
       item.id,
-      item.type,
+      categoryOf(item),
       item.status,
       new Date(item.createdAt).toLocaleString(),
       `"${(item.data.name || item.data.contact_name || "").replace(/"/g, '""')}"`,
@@ -117,14 +171,24 @@ export function SubmissionsAdmin() {
     toast.success("CSV export downloaded");
   }
 
-  const getTypeIcon = (type: SubmissionItem["type"]) => {
+  const getTypeIcon = (type: SubmissionCategory) => {
     switch (type) {
       case "contact": return <MessageSquare className="size-4 text-blue-600" />;
       case "volunteer": return <Users className="size-4 text-emerald-600" />;
+      case "member": return <UserPlus className="size-4 text-teal-600" />;
       case "reservation": return <Calendar className="size-4 text-amber-600" />;
       case "vendor": return <Briefcase className="size-4 text-purple-600" />;
       case "donation": return <DollarSign className="size-4 text-rose-600" />;
     }
+  };
+
+  const CATEGORY_LABEL: Record<SubmissionCategory, string> = {
+    volunteer: "Volunteer",
+    member: "Member",
+    reservation: "Reservation",
+    vendor: "Vendor",
+    donation: "Donation",
+    contact: "Contact",
   };
 
   const getStatusBadge = (status: SubmissionItem["status"]) => {
@@ -145,6 +209,7 @@ export function SubmissionsAdmin() {
         <div>
           <h3 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">
             {filterType === "volunteer" && "🙋‍♀️ Volunteer Registrations & Applications"}
+            {filterType === "member" && "🧡 Member Accounts"}
             {filterType === "vendor" && "🛍️ Vendor & Stall Applications"}
             {filterType === "reservation" && "🎟️ Event Attendees & Seat Bookings"}
             {filterType === "donation" && "💖 Donors & Campaign Contributions"}
@@ -152,19 +217,36 @@ export function SubmissionsAdmin() {
             {filterType === "all" && "Form Submissions & Applications"}
           </h3>
           <p className="text-[13px] text-[#1e1e1e]/60 mt-0.5">
-            Total {filtered.length} record{filtered.length === 1 ? "" : "s"} ({filtered.filter(s => s.status === "New").length} pending review)
+            {loading
+              ? "Loading submissions…"
+              : `Total ${filtered.length} record${filtered.length === 1 ? "" : "s"} (${filtered.filter(s => s.status === "New").length} pending review)`}
           </p>
+          {offline && !loading && (
+            <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mt-2">
+              Couldn't reach the server — showing only what this browser recorded. These figures are incomplete.
+            </p>
+          )}
         </div>
-        <button
-          onClick={exportCSV}
-          className="shrink-0 inline-flex items-center gap-2 bg-[#a65a4a] text-[#f4efe7] font-medium text-[13px] px-4 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
-        >
-          <Download size={15} /> Export {filterType.toUpperCase()} CSV
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          {/* Submissions are shared now, so another admin's changes appear on refresh. */}
+          <button
+            onClick={reload}
+            disabled={loading}
+            className="inline-flex items-center gap-2 border border-[#a65a4a]/30 text-[#a65a4a] font-medium text-[13px] px-4 py-2.5 rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+          <button
+            onClick={exportCSV}
+            className="inline-flex items-center gap-2 bg-[#a65a4a] text-[#f4efe7] font-medium text-[13px] px-4 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+          >
+            <Download size={15} /> Export {filterType.toUpperCase()} CSV
+          </button>
+        </div>
       </div>
 
       {/* Metric Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <div
           onClick={() => setFilterType("volunteer")}
           className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30" : "bg-white border-gray-200 hover:border-emerald-300"}`}
@@ -175,6 +257,18 @@ export function SubmissionsAdmin() {
           </div>
           <p className="text-[22px] font-bold text-gray-900 mt-1">{volunteerList.length}</p>
           <p className="text-[11px] text-gray-500">{volunteerList.filter(v => v.status === "New").length} new signups</p>
+        </div>
+
+        <div
+          onClick={() => setFilterType("member")}
+          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "member" ? "bg-teal-50 border-teal-300 ring-2 ring-teal-400/30" : "bg-white border-gray-200 hover:border-teal-300"}`}
+        >
+          <div className="flex items-center justify-between text-teal-700">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">Members</span>
+            <UserPlus className="size-4" />
+          </div>
+          <p className="text-[22px] font-bold text-gray-900 mt-1">{memberList.length}</p>
+          <p className="text-[11px] text-gray-500">Account signups</p>
         </div>
 
         <div
@@ -228,6 +322,12 @@ export function SubmissionsAdmin() {
             className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"}`}
           >
             🙋‍♀️ Volunteers ({volunteerList.length})
+          </button>
+          <button
+            onClick={() => setFilterType("member")}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white" : "bg-teal-50 text-teal-800 hover:bg-teal-100"}`}
+          >
+            🧡 Members ({memberList.length})
           </button>
           <button
             onClick={() => setFilterType("vendor")}
@@ -314,8 +414,8 @@ export function SubmissionsAdmin() {
                       >
                         <td className="py-3.5 px-4 font-medium">
                           <div className="flex items-center gap-2">
-                            {getTypeIcon(item.type)}
-                            <span className="capitalize font-semibold text-[#1e1e1e]">{item.type}</span>
+                            {getTypeIcon(categoryOf(item))}
+                            <span className="font-semibold text-[#1e1e1e]">{CATEGORY_LABEL[categoryOf(item)]}</span>
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
@@ -328,9 +428,10 @@ export function SubmissionsAdmin() {
                         <td className="py-3.5 px-4">{getStatusBadge(item.status)}</td>
                         <td className="py-3.5 px-4 text-right" onClick={e => e.stopPropagation()}>
                           <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-1.5 text-[#1e1e1e]/40 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
-                            title="Delete submission"
+                            onClick={() => handleDelete(item)}
+                            disabled={categoryOf(item) === "member"}
+                            className="p-1.5 text-[#1e1e1e]/40 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#1e1e1e]/40 disabled:cursor-not-allowed"
+                            title={categoryOf(item) === "member" ? "Member accounts can't be deleted here" : "Delete submission"}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -349,9 +450,9 @@ export function SubmissionsAdmin() {
           <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm p-6 flex flex-col gap-4 font-['Inter',sans-serif]">
             <div className="flex items-center justify-between pb-3 border-b border-[#a65a4a]/15">
               <div className="flex items-center gap-2">
-                {getTypeIcon(selectedItem.type)}
-                <h4 className="font-['Fraunces',serif] text-[17px] font-semibold text-[#1e1e1e] capitalize">
-                  {selectedItem.type} Details
+                {getTypeIcon(categoryOf(selectedItem))}
+                <h4 className="font-['Fraunces',serif] text-[17px] font-semibold text-[#1e1e1e]">
+                  {CATEGORY_LABEL[categoryOf(selectedItem)]} Details
                 </h4>
               </div>
               <button
@@ -369,7 +470,7 @@ export function SubmissionsAdmin() {
                 {(["New", "Contacted", "Completed"] as const).map(st => (
                   <button
                     key={st}
-                    onClick={() => handleStatusChange(selectedItem.id, st)}
+                    onClick={() => handleStatusChange(selectedItem, st)}
                     className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer border ${
                       selectedItem.status === st
                         ? "bg-[#a65a4a] text-white border-[#a65a4a]"
@@ -453,12 +554,14 @@ export function SubmissionsAdmin() {
               )}
             </div>
 
-            <button
-              onClick={() => handleDelete(selectedItem.id)}
-              className="mt-4 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-medium text-[13px] hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              <Trash2 size={14} /> Delete Submission
-            </button>
+            {categoryOf(selectedItem) !== "member" && (
+              <button
+                onClick={() => handleDelete(selectedItem)}
+                className="mt-4 w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-rose-200 text-rose-600 font-medium text-[13px] hover:bg-rose-50 transition-colors cursor-pointer"
+              >
+                <Trash2 size={14} /> Delete Submission
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
+import { sendWelcomeEmail } from "@/lib/email";
 import { isValidPhoneNumber } from "@/lib/validation";
 
 function toProfile(row: any) {
@@ -44,6 +45,11 @@ export async function POST(req: NextRequest) {
     await queryDb(
       `INSERT INTO volunteer_accounts (id, name, email, phone, password_hash, skills) VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, name.trim(), normalizedEmail, normalizedPhone, password_hash, skills || null]
+    );
+
+    // Fire-and-forget: a mail failure must not fail an account that was created.
+    sendWelcomeEmail(normalizedEmail, name.trim()).catch((err) =>
+      console.error("sendWelcomeEmail failed:", err)
     );
 
     return NextResponse.json({
