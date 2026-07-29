@@ -11,6 +11,7 @@ import {
   reassignCategoryPosts,
   deleteCategoryPosts,
 } from "../../lib/data";
+import { moveToRecycleBin } from "../../lib/recycleBin";
 
 export function CategoriesAdmin({
   categories,
@@ -61,24 +62,26 @@ export function CategoriesAdmin({
   async function confirmRemoveMoveAll() {
     if (!removing) return;
     if (!reassignTo) return toast.error("Choose a category to move the blogs to");
+    moveToRecycleBin("category", removing.name, removing);
     const next = await reassignCategoryPosts(posts, removing.id, reassignTo);
     onPostsChange(next);
     const ok = await deleteCategory(removing.id);
     if (!ok) { toast.error("Failed to remove category — check the console for details."); return; }
     onCategoriesChange(categories.filter((c) => c.id !== removing.id));
     setRemoving(null);
-    toast.success("Blogs moved and category removed");
+    toast.success("Blogs moved and category sent to Recycle Bin");
   }
 
   async function confirmRemoveDeleteAll() {
     if (!removing) return;
+    moveToRecycleBin("category", removing.name, removing);
     const next = await deleteCategoryPosts(posts, removing.id);
     onPostsChange(next);
     const ok = await deleteCategory(removing.id);
     if (!ok) { toast.error("Failed to remove category — check the console for details."); return; }
     onCategoriesChange(categories.filter((c) => c.id !== removing.id));
     setRemoving(null);
-    toast.success("Category and its blogs removed");
+    toast.success("Category sent to Recycle Bin and blogs removed");
   }
 
   return (

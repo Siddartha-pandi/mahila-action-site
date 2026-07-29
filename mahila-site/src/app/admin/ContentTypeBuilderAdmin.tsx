@@ -12,6 +12,7 @@ import {
   reorderFieldsInContentType,
   setFieldColSpan,
   saveAllFieldsForContentType,
+  isSystemDefaultField,
   ContentTypeModel,
   FieldDefinition,
   FieldType,
@@ -35,7 +36,7 @@ const FIELD_TYPES: { type: FieldType; label: string; icon: string; desc: string 
 export function ContentTypeBuilderAdmin() {
   const [models, setModels] = useState<ContentTypeModel[]>(() => getStoredContentTypes());
   const [selectedUid, setSelectedUid] = useState<string>("api::blog-post.blog-post");
-  const [activeTab, setActiveTab] = useState<"canvas" | "fields" | "preview" | "api">("canvas");
+  const [activeTab, setActiveTab] = useState<"canvas" | "preview">("canvas");
 
   // Drag & Drop State
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -70,10 +71,14 @@ export function ContentTypeBuilderAdmin() {
     return models.find(m => m.uid === selectedUid) || models[0];
   }, [models, selectedUid]);
 
+  const userEditableFields = useMemo(() => {
+    return currentModel.fields.filter(f => !isSystemDefaultField(f.name));
+  }, [currentModel.fields]);
+
   // Normalize row IDs for fields
   const fieldsWithRowId = useMemo(() => {
     let currentMaxRow = 0;
-    return currentModel.fields.map((f, idx) => {
+    return userEditableFields.map((f, idx) => {
       if (f.rowId === undefined || f.rowId === null) {
         currentMaxRow += 1;
         return { ...f, rowId: currentMaxRow };
@@ -81,7 +86,7 @@ export function ContentTypeBuilderAdmin() {
       currentMaxRow = Math.max(currentMaxRow, f.rowId);
       return f;
     });
-  }, [currentModel.fields]);
+  }, [userEditableFields]);
 
   // Group fields by rowId into ordered rows
   const rowGroups = useMemo(() => {
@@ -406,9 +411,7 @@ export function ContentTypeBuilderAdmin() {
           </div>
         </div>
 
-        <div className="pt-3 border-t border-[#a65a4a]/15 text-[10px] font-['Inter',sans-serif] text-[#1e1e1e]/50">
-          📍 API Prefix: <code className="bg-[#1e1e1e]/5 px-1 py-0.5 rounded">api::*.*</code>
-        </div>
+
       </div>
 
       {/* Main Content Area */}
@@ -421,9 +424,9 @@ export function ContentTypeBuilderAdmin() {
                 <h2 className="font-['Fraunces',serif] text-[18px] font-bold text-[#1e1e1e]">
                   {currentModel.displayName}
                 </h2>
-                <code className="text-[10.5px] bg-[#a65a4a]/10 text-[#a65a4a] px-2 py-0.5 rounded font-mono font-semibold">
-                  {currentModel.uid}
-                </code>
+                <span className="text-[10.5px] bg-[#a65a4a]/10 text-[#a65a4a] px-2.5 py-0.5 rounded-full font-semibold capitalize">
+                  {currentModel.kind === "collectionType" ? "Collection Model" : "Single Model"}
+                </span>
               </div>
               <p className="font-['Inter',sans-serif] text-[11.5px] text-[#1e1e1e]/65 mt-0.5">
                 {currentModel.description}
@@ -464,17 +467,9 @@ export function ContentTypeBuilderAdmin() {
                 activeTab === "canvas" ? "border-[#a65a4a] text-[#a65a4a]" : "border-transparent text-[#1e1e1e]/50 hover:text-[#1e1e1e]"
               }`}
             >
-              <span>🎨 Drag & Drop Builder</span>
+              <span>🎨 Form Builder</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("fields")}
-              className={`pb-2 font-['Inter',sans-serif] text-[12.5px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === "fields" ? "border-[#a65a4a] text-[#a65a4a]" : "border-transparent text-[#1e1e1e]/50 hover:text-[#1e1e1e]"
-              }`}
-            >
-              <span>📋 Schema & Table ({currentModel.fields.length})</span>
-            </button>
 
             <button
               onClick={() => setActiveTab("preview")}
@@ -485,14 +480,7 @@ export function ContentTypeBuilderAdmin() {
               <span>👁️ Live Form Preview</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("api")}
-              className={`pb-2 font-['Inter',sans-serif] text-[12.5px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === "api" ? "border-[#a65a4a] text-[#a65a4a]" : "border-transparent text-[#1e1e1e]/50 hover:text-[#1e1e1e]"
-              }`}
-            >
-              <span>⚡ REST API & JSON</span>
-            </button>
+
           </div>
 
           {/* TAB 0: Drag & Drop Canvas */}
@@ -541,12 +529,17 @@ export function ContentTypeBuilderAdmin() {
                   <h4 className="font-['Fraunces',serif] text-[15px] font-semibold text-[#1e1e1e]">
                     Form Layout Canvas
                   </h4>
-                  <button
-                    onClick={handleOpenAddField}
-                    className="bg-[#a65a4a] text-[#f4efe7] text-[11.5px] font-semibold px-3 py-1.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer shadow-sm flex items-center gap-1"
-                  >
-                    <span>+ Add Field</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-[#1e1e1e]/50 font-medium bg-[#1e1e1e]/5 px-2 py-0.5 rounded">
+                      🔒 System fields (id, created_at) hidden
+                    </span>
+                    <button
+                      onClick={handleOpenAddField}
+                      className="bg-[#a65a4a] text-[#f4efe7] text-[11.5px] font-semibold px-3 py-1.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer shadow-sm flex items-center gap-1"
+                    >
+                      <span>+ Add Field</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Row Drop Zone Containers */}
@@ -657,168 +650,7 @@ export function ContentTypeBuilderAdmin() {
             </div>
           )}
 
-          {/* TAB 1: Fields Table */}
-          {activeTab === "fields" && (
-            <>
-              <div className="overflow-x-auto border border-[#a65a4a]/15 rounded-2xl shadow-xs">
-              <table className="w-full text-left font-['Inter',sans-serif]">
-                <thead className="bg-[#faf8f5] text-[11px] uppercase tracking-wider text-[#1e1e1e]/55 font-bold border-b border-[#a65a4a]/15">
-                  <tr>
-                    <th className="px-4 py-3.5 w-16 text-center">Row</th>
-                    <th className="px-5 py-3.5">Field Name</th>
-                    <th className="px-5 py-3.5">Data Type</th>
-                    <th className="px-5 py-3.5">Validation & Constraints</th>
-                    <th className="px-5 py-3.5">Layout Width</th>
-                    <th className="px-5 py-3.5">Description</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#a65a4a]/10 text-[13px] text-[#1e1e1e]">
-                  {currentModel.fields.map((f, idx) => {
-                    const icon = FIELD_TYPES.find(t => t.type === f.type)?.icon || "📌";
-                    return (
-                      <tr key={f.name} className="hover:bg-[#f4efe7]/40 transition-colors">
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => handleReorderField(idx, "up")}
-                              disabled={idx === 0}
-                              className="p-1 hover:bg-[#a65a4a]/10 rounded disabled:opacity-20 text-[12px] cursor-pointer"
-                              title="Move row up"
-                            >
-                              ▲
-                            </button>
-                            <button
-                              onClick={() => handleReorderField(idx, "down")}
-                              disabled={idx === currentModel.fields.length - 1}
-                              className="p-1 hover:bg-[#a65a4a]/10 rounded disabled:opacity-20 text-[12px] cursor-pointer"
-                              title="Move row down"
-                            >
-                              ▼
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 font-mono font-semibold text-[#a65a4a]">
-                          {f.name}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] text-[11px] font-medium capitalize">
-                            <span>{icon}</span>
-                            <span>{f.type}</span>
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex flex-wrap gap-1.5">
-                            {f.required && (
-                              <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-red-100 text-red-700">
-                                Required
-                              </span>
-                            )}
-                            {f.unique && (
-                              <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-purple-100 text-purple-700">
-                                Unique
-                              </span>
-                            )}
-                            {f.defaultValue !== undefined && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-100 text-blue-800">
-                                default: {String(f.defaultValue)}
-                              </span>
-                            )}
-                            {f.enumOptions && f.enumOptions.length > 0 && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-100 text-emerald-800">
-                                [{f.enumOptions.join(", ")}]
-                              </span>
-                            )}
-                            {f.targetModel && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-100 text-amber-900">
-                                → {f.targetModel}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <button
-                            onClick={() => handleToggleGridWidth(f.name)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors cursor-pointer border ${
-                              f.gridWidth === "half"
-                                ? "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100"
-                                : "bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100"
-                            }`}
-                            title="Click to toggle layout column span"
-                          >
-                            <span>{f.gridWidth === "half" ? "🟧 2 Columns (Auto Fit)" : "🟦 1 Row (Full Width)"}</span>
-                          </button>
-                        </td>
-                        <td className="px-5 py-4 text-[#1e1e1e]/65 text-[12px]">
-                          {f.description || "—"}
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <button
-                              onClick={() => handleOpenEditField(f)}
-                              className="text-[#a65a4a] hover:text-[#993925] text-[12px] font-semibold cursor-pointer hover:underline"
-                            >
-                              Edit
-                            </button>
-                            {["id"].includes(f.name.toLowerCase()) ? (
-                              <span className="text-[11px] text-[#1e1e1e]/35 italic">Primary Key</span>
-                            ) : (
-                              <button
-                                onClick={() => handleDeleteField(f.name)}
-                                className="text-red-600 hover:text-red-800 text-[12px] font-semibold cursor-pointer hover:underline"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
 
-              {/* Form Layout & Column Span Preview */}
-              <div className="mt-8 p-5 bg-[#faf8f5] rounded-2xl border border-[#a65a4a]/15">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="font-['Fraunces',serif] text-[16px] font-semibold text-[#1e1e1e]">
-                      📱 Entry Form Grid & Column Layout Preview
-                    </h4>
-                    <p className="font-['Inter',sans-serif] text-[11px] text-[#1e1e1e]/55 mt-0.5">
-                      Visual layout sequence for CMS editor entry forms based on row order & column span settings
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-[#a65a4a]/10 text-[#a65a4a] font-bold">
-                    {currentModel.fields.length} Fields
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-white rounded-xl border border-[#a65a4a]/10">
-                  {currentModel.fields.map((f) => (
-                    <div
-                      key={f.name}
-                      className={`p-3 rounded-xl border transition-all ${
-                        f.gridWidth === "half"
-                          ? "col-span-1 border-amber-300 bg-amber-50/40"
-                          : "col-span-1 md:col-span-2 border-blue-300 bg-blue-50/40"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-semibold text-[13px] text-[#1e1e1e]">{f.name}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white text-[#1e1e1e]/70 border shadow-2xs">
-                          {f.gridWidth === "half" ? "🟧 2 Columns (Auto)" : "🟦 1 Row (Full)"}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-8 bg-white rounded-lg border border-gray-200 px-3 flex items-center text-[12px] text-gray-400">
-                        {f.description || `Input component for '${f.name}' (${f.type})`}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
 
           {/* TAB 2: Live Form Preview */}
           {activeTab === "preview" && (
@@ -922,70 +754,10 @@ export function ContentTypeBuilderAdmin() {
             </div>
           )}
 
-          {/* TAB 2: Live API Reference */}
-          {activeTab === "api" && (
-            <div className="flex flex-col gap-6 font-['Inter',sans-serif]">
-              <div className="bg-[#faf8f5] p-5 rounded-2xl border border-[#a65a4a]/15">
-                <h4 className="font-['Fraunces',serif] text-[16px] font-semibold text-[#1e1e1e] mb-2">
-                  REST API Endpoints for <code className="text-[#a65a4a]">{currentModel.uid}</code>
-                </h4>
-                <div className="flex flex-col gap-2 mt-4 text-[13px] font-mono">
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-green-600 text-white font-bold text-[11px]">GET</span>
-                    <span>{currentModel.apiEndpoint}</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Fetch collection entries</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-blue-600 text-white font-bold text-[11px]">POST</span>
-                    <span>{currentModel.apiEndpoint}</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Create new entry</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-amber-600 text-white font-bold text-[11px]">PUT</span>
-                    <span>{currentModel.apiEndpoint}/[id]</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Update entry by ID</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-red-600 text-white font-bold text-[11px]">DELETE</span>
-                    <span>{currentModel.apiEndpoint}/[id]</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Delete entry by ID</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Sample JSON Payload */}
-              <div className="bg-[#1e1e1e] text-[#f4efe7] p-5 rounded-2xl font-mono text-[12px]">
-                <p className="text-[#a65a4a] font-bold text-[11px] uppercase tracking-wider mb-2">// Sample JSON Response Object</p>
-                <pre className="overflow-x-auto leading-relaxed">
-{JSON.stringify(
-  {
-    data: {
-      id: "sample_101",
-      ...Object.fromEntries(
-        currentModel.fields
-          .filter(f => f.name !== "id")
-          .map(f => [
-            f.name,
-            f.type === "number" ? 42 : f.type === "boolean" ? true : f.type === "datetime" ? new Date().toISOString() : f.type === "json" ? ["sample"] : f.enumOptions ? f.enumOptions[0] : `Sample ${f.name}`
-          ])
-      ),
-    },
-    meta: { contentType: currentModel.uid, tableName: currentModel.tableName }
-  },
-  null,
-  2
-)}
-                </pre>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Database info banner */}
-        <div className="mt-8 pt-4 border-t border-[#a65a4a]/15 flex items-center justify-between text-[12px] font-['Inter',sans-serif] text-[#1e1e1e]/55">
-          <span>Table Name: <code className="bg-[#1e1e1e]/5 px-1.5 py-0.5 rounded font-mono font-semibold text-[#1e1e1e]">{currentModel.tableName}</code></span>
-          <span>Database Engine: PostgreSQL / SQLite (Auto-sync)</span>
-        </div>
+
       </div>
 
       {/* MODAL 1: Add Field Modal */}
@@ -1001,7 +773,7 @@ export function ContentTypeBuilderAdmin() {
 
             <form onSubmit={handleAddFieldSubmit} className="flex flex-col gap-4 font-['Inter',sans-serif]">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#1e1e1e]/60 mb-1">Field Name (API Key)</label>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#1e1e1e]/60 mb-1">Field Name</label>
                 <input
                   type="text"
                   value={fieldName}
@@ -1106,7 +878,7 @@ export function ContentTypeBuilderAdmin() {
               Create New Content Type
             </h3>
             <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 mb-5">
-              Define a new Collection Type or Single Type API model.
+              Define a new Collection Type or Single Type model.
             </p>
 
             <form onSubmit={handleCreateNewModel} className="flex flex-col gap-4 font-['Inter',sans-serif]">

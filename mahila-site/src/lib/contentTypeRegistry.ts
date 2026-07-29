@@ -26,6 +26,16 @@ export interface FieldDefinition {
   rowId?: number; // Automatic row grouping ID for multi-column auto-fit layout
 }
 
+export function isSystemDefaultField(name: string): boolean {
+  const lower = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (
+    lower === "id" ||
+    lower === "createdat" ||
+    lower === "updatedat" ||
+    lower === "publishedat"
+  );
+}
+
 export interface ContentTypeModel {
   uid: string; // e.g. "api::blog-post.blog-post"
   displayName: string;
@@ -194,6 +204,24 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
       { name: "skills", type: "text", description: "Skills / Expertise" },
       { name: "selected_events", type: "json", description: "Selected event titles" },
       { name: "created_at", type: "datetime", description: "Registration timestamp" },
+    ],
+  },
+  {
+    uid: "plugin::users-permissions.user",
+    displayName: "User & Admin Account",
+    kind: "collectionType",
+    description: "System users, admin credentials, roles, and account statuses",
+    tableName: "users",
+    apiEndpoint: "/api/users",
+    fields: [
+      { name: "id", type: "string", required: true, unique: true, description: "User Account ID" },
+      { name: "name", type: "string", required: true, description: "Full Name" },
+      { name: "email", type: "string", required: true, unique: true, description: "Email Address" },
+      { name: "kind", type: "enum", enumOptions: ["admin", "volunteer", "vendor", "donor", "user"], defaultValue: "user", description: "User Classification Kind (admin, volunteer, vendor, donor, user)" },
+      { name: "role_id", type: "relation", targetModel: "api::role.role", description: "Assigned User Role" },
+      { name: "status", type: "enum", enumOptions: ["Active", "Inactive"], defaultValue: "Active", description: "Account Status" },
+      { name: "created_at", type: "datetime", description: "Account creation date" },
+      { name: "last_active_at", type: "datetime", description: "Last login timestamp" },
     ],
   },
 ];
