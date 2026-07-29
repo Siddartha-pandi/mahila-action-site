@@ -8,8 +8,8 @@ export function LogoMark({ invert = false }: { invert?: boolean }) {
     ? "text-[#f4efe7]"
     : "text-[#1e1e1e]";
   return (
-    <div className="flex gap-3 items-center">
-      <div className="relative size-12 rounded-md overflow-hidden shrink-0">
+    <div className="flex gap-2 sm:gap-3 items-center shrink-0">
+      <div className="relative size-9 sm:size-11 md:size-12 rounded-md overflow-hidden shrink-0">
         <img loading="eager" decoding="async"
           src={imgLogo}
           alt="Mahila Action logo"
@@ -18,7 +18,7 @@ export function LogoMark({ invert = false }: { invert?: boolean }) {
         />
       </div>
       <div
-        className={`${fraunces()} ${textColor} text-[22px] leading-tight`}
+        className={`${fraunces()} ${textColor} text-[16px] sm:text-[20px] md:text-[22px] leading-tight font-semibold`}
         style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
       >
         <div>Mahila</div>

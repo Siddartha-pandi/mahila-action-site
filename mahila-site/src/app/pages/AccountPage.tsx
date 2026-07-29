@@ -8,7 +8,6 @@ import {
   getUserSubmissions, type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { isEventOpen } from "@/lib/data";
-import { imgHeroCard } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { PageBanner } from "../components/PageBanner";
@@ -133,7 +132,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
   return (
     <main className="bg-[#f4efe7] min-h-screen">
-      <PageBanner img={imgHeroCard} title="My Account" />
+      <PageBanner title="My Account" />
 
       <section className="py-10 sm:py-16 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
