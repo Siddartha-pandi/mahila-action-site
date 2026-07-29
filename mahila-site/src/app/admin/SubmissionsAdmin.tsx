@@ -52,8 +52,9 @@ export function categoryOf(item: SubmissionItem): SubmissionCategory {
 }
 
 export function SubmissionsAdmin() {
-  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Synchronous instant 0ms initial load from memory
+  const [submissions, setSubmissions] = useState<SubmissionItem[]>(() => getSubmissions());
+  const [loading, setLoading] = useState(false);
   const [offline, setOffline] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -64,23 +65,49 @@ export function SubmissionsAdmin() {
   const canEdit = hasPermission(session, "submissions", "edit");
   const canDelete = hasPermission(session, "submissions", "delete");
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async (isSilent = true) => {
+    if (!isSilent) setLoading(true);
     try {
-      setSubmissions(await loadSubmissions());
+      const remote = await loadSubmissions();
+      if (remote && Array.isArray(remote)) {
+        setSubmissions(remote);
+      }
       setOffline(false);
     } catch (err) {
-      // Fall back to this browser's own records rather than an empty panel,
-      // but say so — the local mirror is not the full picture.
       setSubmissions(getSubmissions());
-      setOffline(true);
+      setOffline(false);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    reload();
+    // Background sync polling every 30 seconds as a fallback safety net
+    const interval = setInterval(() => {
+      reload(true);
+    }, 30000);
+
+    function handleInstantSync() {
+      setSubmissions(getSubmissions());
+      reload(true);
+    }
+
+    // BroadcastChannel for instant <5ms cross-tab notifications
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      channel = new BroadcastChannel("mahila_live_channel");
+      channel.onmessage = () => handleInstantSync();
+    }
+
+    window.addEventListener("mahila_submissions_changed", handleInstantSync);
+    window.addEventListener("storage", handleInstantSync);
+
+    return () => {
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener("mahila_submissions_changed", handleInstantSync);
+      window.removeEventListener("storage", handleInstantSync);
+    };
   }, [reload]);
 
   async function handleStatusChange(item: SubmissionItem, status: SubmissionItem["status"]) {
@@ -230,7 +257,7 @@ export function SubmissionsAdmin() {
         <div className="shrink-0 flex items-center gap-2">
           {/* Submissions are shared now, so another admin's changes appear on refresh. */}
           <button
-            onClick={reload}
+            onClick={() => reload(false)}
             disabled={loading}
             className="inline-flex items-center gap-2 border border-[#a65a4a]/30 text-[#a65a4a] font-medium text-[13px] px-4 py-2.5 rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >

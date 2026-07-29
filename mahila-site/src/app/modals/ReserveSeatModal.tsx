@@ -523,7 +523,7 @@ export function ReserveSeatModal({
           {kinds.length > 1 && (
             <div className="mb-5">
               <label className={reserveLabelClass}>Register As</label>
-              <div className="flex gap-2 mt-1.5">
+              <div className="flex flex-wrap gap-2 mt-1.5">
                 {kinds.map(k => (
                   <button
                     key={k}

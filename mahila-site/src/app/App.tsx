@@ -8,7 +8,7 @@ import { DEFAULT_SITE_DATA, loadSiteData, type SiteData } from "@/lib/data";
 import { Seo } from "./components/seo/Seo";
 import { getRouteMeta } from "@/config/routes";
 import { getPageJsonLd } from "@/lib/jsonld";
-import { ComingSoonModal } from "./ComingSoonModal";
+import { ComingSoonModal } from "./modals/ComingSoonModal";
 
 // Context
 import { ContentContext } from "./context/ContentContext";

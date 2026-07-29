@@ -192,6 +192,18 @@ export function getUserSubmissions(email?: string, phone?: string): SubmissionIt
   });
 }
 
+function notifySubmissionsChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("mahila_submissions_changed"));
+  try {
+    if ("BroadcastChannel" in window) {
+      const bc = new BroadcastChannel("mahila_live_channel");
+      bc.postMessage("submissions_updated");
+      bc.close();
+    }
+  } catch {}
+}
+
 export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
   try {
     const items = getSubmissions();
@@ -204,6 +216,7 @@ export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
     };
     items.unshift(newItem);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(items));
+    notifySubmissionsChanged();
   } catch (err) {
     console.error("Failed to save local submission:", err);
   }
@@ -214,6 +227,7 @@ export function updateSubmissionStatus(id: string, status: SubmissionItem["statu
     const items = getSubmissions();
     const updated = items.map(item => item.id === id ? { ...item, status } : item);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
+    notifySubmissionsChanged();
   } catch (err) {
     console.error("Failed to update submission status:", err);
   }
@@ -224,6 +238,7 @@ export function deleteSubmission(id: string) {
     const items = getSubmissions();
     const updated = items.filter(item => item.id !== id);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
+    notifySubmissionsChanged();
   } catch (err) {
     console.error("Failed to delete submission:", err);
   }
