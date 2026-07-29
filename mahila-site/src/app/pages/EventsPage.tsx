@@ -37,8 +37,16 @@ export function EventsPage() {
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
+  const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
+  const targetCategoryKeys = new Set(
+    [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]
+  );
+
   const allEvents = sortForDisplay(siteData.events);
-  const events = activeCategory === ALL ? allEvents : allEvents.filter((e) => e.categoryId === activeCategory);
+  const events =
+    activeCategory === ALL
+      ? allEvents
+      : allEvents.filter((e) => e.categoryId && targetCategoryKeys.has(e.categoryId));
 
   const eventPosts = [...siteData.blogPosts]
     .filter((p) => p.section === "event")
@@ -59,7 +67,8 @@ export function EventsPage() {
   }
 
   function categoryName(categoryId: string | null) {
-    return siteData.categories.find((c) => c.id === categoryId)?.name;
+    if (!categoryId) return undefined;
+    return siteData.categories.find((c) => c.id === categoryId || c.name === categoryId)?.name ?? categoryId;
   }
 
   return (

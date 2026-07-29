@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { queryDb } from "@/lib/db";
 import { createAdminCookieHeader } from "@/lib/auth";
 
@@ -20,12 +21,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
 
-    const cookieHeader = createAdminCookieHeader({ sub: user.id, email: user.email });
+    const adminPayload = { sub: user.id, email: user.email };
+    const cookieHeader = createAdminCookieHeader(adminPayload);
+    const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
 
-    // The signed session travels in the httpOnly cookie only — deliberately no
-    // token in the body, so nothing can be replayed from client storage.
     return NextResponse.json(
-      { ok: true, email: user.email },
+      { ok: true, email: user.email, jwt: token },
       { headers: { "Set-Cookie": cookieHeader } }
     );
   } catch (err: any) {

@@ -44,8 +44,17 @@ export default function App() {
   const [siteData, setSiteData] = useState<SiteData>(DEFAULT_SITE_DATA);
 
   useEffect(() => {
-    loadContent().then(setContent);
-    loadSiteData().then(setSiteData);
+    function refreshData() {
+      loadContent().then(setContent);
+      loadSiteData().then(setSiteData);
+    }
+    refreshData();
+    window.addEventListener("mahila_sitedata_changed", refreshData);
+    window.addEventListener("storage", refreshData);
+    return () => {
+      window.removeEventListener("mahila_sitedata_changed", refreshData);
+      window.removeEventListener("storage", refreshData);
+    };
   }, []);
 
   useEffect(() => {

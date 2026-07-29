@@ -330,6 +330,9 @@ export function saveLocalSiteData(patch: Partial<SiteData>) {
       contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
     };
     localStorage.setItem(SITE_DATA_KEY, JSON.stringify(updated));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("mahila_sitedata_changed"));
+    }
   } catch (err) {
     console.error("Failed to save local site data:", err);
   }

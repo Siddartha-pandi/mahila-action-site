@@ -17,10 +17,15 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
   const { openModal } = useModal();
 
   const storyPosts = siteData.blogPosts.filter((p) => p.section === "story");
+  const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
+  const targetCategoryKeys = new Set(
+    [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]
+  );
+
   const filtered =
     activeCategory === "All"
       ? storyPosts
-      : storyPosts.filter((s) => s.categoryId === activeCategory);
+      : storyPosts.filter((s) => s.categoryId && targetCategoryKeys.has(s.categoryId));
 
   const activeCategoryHasNoPosts = activeCategory !== "All" && filtered.length === 0;
 
