@@ -18,39 +18,21 @@ import { CouncilorsAdmin } from "@/app/admin/CouncilorsAdmin";
 import { TimelineAdmin } from "@/app/admin/TimelineAdmin";
 import { ContactAdmin } from "@/app/admin/ContactAdmin";
 import { RolesAdmin } from "@/app/admin/RolesAdmin";
-import { RecycleBinAdmin } from "@/app/admin/RecycleBinAdmin";
-import { saveEvent, saveBlogPost, saveCategory, saveCouncilor, saveTimelineEntry } from "@/lib/data";
-import { TrashItem } from "@/lib/recycleBin";
-import {
-  Inbox,
-  Wrench,
-  Calendar,
-  BookOpen,
-  Sparkles,
-  Tag,
-  Newspaper,
-  Users,
-  Clock,
-  Mail,
-  ShieldCheck,
-  Trash2,
-} from "lucide-react";
 import { useContent } from "../context/ContentContext";
 import { LogoMark } from "../components/LogoMark";
 
 const CUSTOM_TABS = [
-  { id: "submissions", label: "Form Submissions & Applications", icon: Inbox },
-  { id: "contentTypeBuilder", label: "Content-Type Builder", icon: Wrench },
-  { id: "events", label: "Upcoming Events", icon: Calendar },
-  { id: "stories", label: "Community Stories", icon: BookOpen },
-  { id: "impactStories", label: "Our Impact — Read More Pages", icon: Sparkles },
-  { id: "categories", label: "Story Categories", icon: Tag },
-  { id: "eventsBlog", label: "Events Blog", icon: Newspaper },
-  { id: "councilors", label: "Councilors", icon: Users },
-  { id: "timeline", label: "Timeline", icon: Clock },
-  { id: "contact", label: "Contact Info", icon: Mail },
-  { id: "roles", label: "User & Role Management", icon: ShieldCheck },
-  { id: "recycleBin", label: "Recycle Bin", icon: Trash2 },
+  { id: "submissions", label: "Form Submissions & Applications" },
+  { id: "contentTypeBuilder", label: "🛠️ Content-Type Builder" },
+  { id: "events", label: "Upcoming Events" },
+  { id: "stories", label: "Community Stories" },
+  { id: "impactStories", label: "Our Impact — Read More Pages" },
+  { id: "categories", label: "Story Categories" },
+  { id: "eventsBlog", label: "Events Blog" },
+  { id: "councilors", label: "Councilors" },
+  { id: "timeline", label: "Timeline" },
+  { id: "contact", label: "Contact Info" },
+  { id: "roles", label: "User & Role Management" },
 ] as const;
 
 export function AdminPage({
@@ -201,36 +183,6 @@ export function AdminPage({
     onSiteDataChange({ ...siteData, ...patch });
   }
 
-  async function handleRestoreItem(item: TrashItem) {
-    if (!item.data) return;
-    if (item.originalType === "event") {
-      const exists = siteData.events.some((e) => e.id === item.data.id);
-      const updatedEvents = exists ? siteData.events : [...siteData.events, item.data];
-      updateSiteData({ events: updatedEvents });
-      await saveEvent(item.data);
-    } else if (item.originalType === "story") {
-      const exists = siteData.blogPosts.some((p) => p.id === item.data.id);
-      const updatedPosts = exists ? siteData.blogPosts : [...siteData.blogPosts, item.data];
-      updateSiteData({ blogPosts: updatedPosts });
-      await saveBlogPost(item.data);
-    } else if (item.originalType === "category") {
-      const exists = siteData.categories.some((c) => c.id === item.data.id);
-      const updatedCats = exists ? siteData.categories : [...siteData.categories, item.data];
-      updateSiteData({ categories: updatedCats });
-      await saveCategory(item.data);
-    } else if (item.originalType === "councilor") {
-      const exists = siteData.councilors.some((c) => c.id === item.data.id);
-      const updatedCoun = exists ? siteData.councilors : [...siteData.councilors, item.data];
-      updateSiteData({ councilors: updatedCoun });
-      await saveCouncilor(item.data);
-    } else if (item.originalType === "timeline") {
-      const exists = siteData.timeline.some((t) => t.id === item.data.id);
-      const updatedTl = exists ? siteData.timeline : [...siteData.timeline, item.data];
-      updateSiteData({ timeline: updatedTl });
-      await saveTimelineEntry(item.data);
-    }
-  }
-
   return (
     <main className="min-h-screen bg-[#f0ebe3] flex flex-col">
       <div className="bg-[#a65a4a] px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
@@ -272,24 +224,15 @@ export function AdminPage({
       <div className="flex flex-1 overflow-hidden">
         <nav className="w-[250px] shrink-0 bg-white border-r border-[#a65a4a]/15 py-4 hidden md:block overflow-y-auto">
           <p className="px-5 pb-2 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/35 uppercase tracking-wider">Manage Content &amp; Access</p>
-          {visibleTabs.map((t) => {
-            const Icon = t.icon;
-            const isActive = activeSection === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveSection(t.id)}
-                className={`w-full text-left px-5 py-3 font-['Inter',sans-serif] text-[13px] font-medium transition-colors cursor-pointer flex items-center gap-3 ${
-                  isActive
-                    ? "bg-[#a65a4a]/10 text-[#a65a4a] border-r-3 border-[#a65a4a] font-semibold"
-                    : "text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/5"
-                }`}
-              >
-                <Icon size={17} className={isActive ? "text-[#a65a4a] shrink-0" : "text-[#1e1e1e]/45 shrink-0"} />
-                <span className="truncate">{t.label}</span>
-              </button>
-            );
-          })}
+          {visibleTabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveSection(t.id)}
+              className={`w-full text-left px-5 py-3 font-['Inter',sans-serif] text-[13px] font-medium transition-colors cursor-pointer ${activeSection === t.id ? "bg-[#a65a4a]/10 text-[#a65a4a] border-r-2 border-[#a65a4a]" : "text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/5"}`}
+            >
+              {t.label}
+            </button>
+          ))}
         </nav>
 
         <div className="md:hidden w-full px-4 pt-4">
@@ -299,12 +242,9 @@ export function AdminPage({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
-          <div className="flex items-center gap-3 mb-6">
-            {customTab?.icon && <customTab.icon size={26} className="text-[#a65a4a] shrink-0" />}
-            <h2 className="font-['Fraunces',serif] text-[#1e1e1e] text-[22px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-              {customTab?.label}
-            </h2>
-          </div>
+          <h2 className="font-['Fraunces',serif] text-[#1e1e1e] text-[22px] font-semibold mb-6" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            {customTab?.label}
+          </h2>
 
           {!hasViewAccess ? (
             <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center max-w-lg mx-auto my-12">
@@ -378,9 +318,6 @@ export function AdminPage({
               )}
               {activeSection === "contact" && (
                 <ContactAdmin contact={siteData.contact} onChange={(contact) => updateSiteData({ contact })} />
-              )}
-              {activeSection === "recycleBin" && (
-                <RecycleBinAdmin onRestoreItem={handleRestoreItem} />
               )}
             </>
           )}

@@ -9,8 +9,7 @@ export type AdminModule =
   | "councilors"
   | "timeline"
   | "contact"
-  | "roles"
-  | "recycleBin";
+  | "roles";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -39,7 +38,6 @@ export interface AdminUser {
   createdAt: string;
   lastActiveAt?: string;
   avatarUrl?: string;
-  customPermissions?: PermissionMatrix;
 }
 
 export const MODULE_LABELS: Record<AdminModule, string> = {
@@ -54,7 +52,6 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
   timeline: "Timeline Entries",
   contact: "Contact Information",
   roles: "User & Role Management",
-  recycleBin: "Recycle Bin",
 };
 
 // ── Built-in Role Definitions ──────────────────────────────────────────────
@@ -71,7 +68,6 @@ const FULL_PERMISSIONS: PermissionMatrix = {
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
-  recycleBin: { view: true, edit: true, delete: true },
 };
 
 const ADMIN_PERMISSIONS: PermissionMatrix = {
@@ -86,7 +82,6 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
-  recycleBin: { view: true, edit: true, delete: true },
 };
 
 const USER_PERMISSIONS: PermissionMatrix = {
@@ -101,7 +96,6 @@ const USER_PERMISSIONS: PermissionMatrix = {
   timeline: { view: true, edit: false, delete: false },
   contact: { view: true, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
-  recycleBin: { view: true, edit: false, delete: false },
 };
 
 export const DEFAULT_ROLES: AdminRole[] = [
@@ -342,13 +336,6 @@ export function hasPermission(
   action: PermissionAction
 ): boolean {
   if (!roleIdOrUser) return false;
-
-  if (typeof roleIdOrUser === "object") {
-    if (roleIdOrUser.roleId === "superadmin") return true;
-    if (roleIdOrUser.customPermissions && roleIdOrUser.customPermissions[module]) {
-      return Boolean(roleIdOrUser.customPermissions[module]?.[action]);
-    }
-  }
 
   let roleId = typeof roleIdOrUser === "string" ? roleIdOrUser : roleIdOrUser.roleId;
   const role = getRoleById(roleId);
