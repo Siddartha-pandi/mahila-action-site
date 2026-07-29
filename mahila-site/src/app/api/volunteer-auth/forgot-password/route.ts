@@ -15,12 +15,18 @@ export async function POST(req: NextRequest) {
     const result = await queryDb("SELECT * FROM volunteer_accounts WHERE email = $1", [normalizedEmail]);
     const user = result.rows[0];
 
-    const genericResponse = {
-      ok: true,
-      message: "If an account exists for that email, we've sent password reset instructions.",
-    };
-
-    if (!user) return NextResponse.json(genericResponse);
+    // Deliberate product decision: an unknown address is reported back to the
+    // caller instead of the usual identical-response-either-way, so visitors are
+    // told plainly that they have no account rather than waiting for an email
+    // that will never arrive. The tradeoff is that this endpoint can be used to
+    // test whether a given email is registered — do not add bulk lookups here,
+    // and keep any rate limiting in front of it.
+    if (!user) {
+      return NextResponse.json(
+        { error: "No account found for that email address." },
+        { status: 404 }
+      );
+    }
 
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -38,9 +44,16 @@ export async function POST(req: NextRequest) {
       await sendPasswordResetEmail(user.email, resetLink);
     } catch (err) {
       console.error("Failed to send password reset email:", err);
+      return NextResponse.json(
+        { error: "We couldn't send the reset email just now. Please try again in a few minutes." },
+        { status: 502 }
+      );
     }
 
-    return NextResponse.json(genericResponse);
+    return NextResponse.json({
+      ok: true,
+      message: "We've sent a link to reset your password.",
+    });
   } catch (err: any) {
     console.error("Forgot password error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

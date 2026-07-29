@@ -8,7 +8,6 @@ import { DEFAULT_SITE_DATA, loadSiteData, type SiteData } from "@/lib/data";
 import { Seo } from "./components/seo/Seo";
 import { getRouteMeta } from "@/config/routes";
 import { getPageJsonLd } from "@/lib/jsonld";
-import { EventsBlogPage } from "./EventsBlogPage";
 import { ComingSoonModal } from "./ComingSoonModal";
 
 // Context
@@ -17,7 +16,6 @@ import { SiteDataContext } from "./context/SiteDataContext";
 
 // Shared helpers
 import { PAGE_TO_PATH, pathToPage, type Page } from "./components/shared/styleHelpers";
-import { imgAboutBanner } from "./constants/images";
 
 // Components
 import { Navigation } from "./components/Navigation";
@@ -30,6 +28,7 @@ import { GlobalModals } from "./modals/GlobalModals";
 import { HomePage } from "./pages/HomePage";
 import { AboutPage } from "./pages/AboutPage";
 import { StoriesPage } from "./pages/StoriesPage";
+import { EventsPage } from "./pages/EventsPage";
 import { DonatePage } from "./pages/DonatePage";
 import { ContactPage } from "./pages/ContactPage";
 import { AccountPage } from "./pages/AccountPage";
@@ -51,9 +50,12 @@ export default function App() {
 
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "") {
-      navigate("/home", { replace: true });
+      // Keep the query string — emailed links land on "/" carrying the modal
+      // they need to open (e.g. ?modal=volunteer&kind=reset&id=<token>), and
+      // dropping it here sent people to a bare home page instead.
+      navigate({ pathname: "/home", search: location.search }, { replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (page !== "admin") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -91,7 +93,7 @@ export default function App() {
           {page === "home" && <HomePage setPage={setPage} />}
           {page === "about" && <AboutPage setPage={setPage} />}
           {page === "stories" && <StoriesPage setPage={setPage} />}
-          {page === "eventsBlog" && <EventsBlogPage posts={siteData.blogPosts.filter(p => p.section === "event")} bannerImg={imgAboutBanner} />}
+          {page === "eventsBlog" && <EventsPage />}
           {page === "donate" && <DonatePage />}
           {page === "contact" && <ContactPage />}
           {page === "account" && <AccountPage setPage={setPage} />}
