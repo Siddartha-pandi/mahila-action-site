@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const normalizedPhone = String(phone).trim();
 
     const existingRes = await queryDb(
-      "SELECT email, phone FROM volunteer_accounts WHERE email = $1 OR phone = $2",
+      "SELECT email, phone FROM users WHERE email = $1 OR phone = $2",
       [normalizedEmail, normalizedPhone]
     );
 
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const id = nanoid();
     const password_hash = bcrypt.hashSync(String(password), 10);
     await queryDb(
-      `INSERT INTO volunteer_accounts (id, name, email, phone, password_hash, skills) VALUES ($1, $2, $3, $4, $5, $6)`,
+      `INSERT INTO users (id, name, email, phone, role, password_hash, skills) VALUES ($1, $2, $3, $4, 'volunteer', $5, $6)`,
       [id, name.trim(), normalizedEmail, normalizedPhone, password_hash, skills || null]
     );
 

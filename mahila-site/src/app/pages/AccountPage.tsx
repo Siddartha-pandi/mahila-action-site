@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin } from "lucide-react";
+import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   saveVolunteer, getSavedUserSession, saveUserSession,
-  getUserSubmissions, type VolunteerAccountProfile, type SubmissionItem,
+  getUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequest,
+  savePermVolunteerDeactivateRequest, getUserPermVolunteerDeactivateRequest,
+  type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { isEventOpen } from "@/lib/data";
 import { useSiteData } from "../context/SiteDataContext";
@@ -17,11 +19,15 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const { openModal } = useModal();
   const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => getSavedUserSession());
-  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
+  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse" | "perm">("registered");
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
+  const [requestMsg, setRequestMsg] = useState("");
+  const [requestSent, setRequestSent] = useState(false);
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [reApplying, setReApplying] = useState(false);
 
   useEffect(() => {
     function syncSession() {
@@ -32,9 +38,14 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       }
     }
     syncSession();
+
+    // Auto-refresh every 1 minute so perm volunteer badge updates without a manual reload
+    const interval = setInterval(syncSession, 60000);
+
     window.addEventListener("mahila_user_session_changed", syncSession);
     window.addEventListener("storage", syncSession);
     return () => {
+      clearInterval(interval);
       window.removeEventListener("mahila_user_session_changed", syncSession);
       window.removeEventListener("storage", syncSession);
     };
@@ -101,6 +112,26 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
     return list;
   }, [userSubmissions, profile]);
 
+  const permRequest = useMemo(() => {
+    if (!profile) return null;
+    return getUserPermVolunteerRequest(profile.email, profile.phone) ?? null;
+  }, [userSubmissions, profile]);
+
+  const deactivateRequest = useMemo(() => {
+    if (!profile) return null;
+    return getUserPermVolunteerDeactivateRequest(profile.email, profile.phone) ?? null;
+  }, [userSubmissions, profile]);
+
+  const isDeactivated = useMemo(() => {
+    if (!permRequest || !deactivateRequest) return false;
+    if (deactivateRequest.status !== "Completed") return false;
+    return new Date(deactivateRequest.createdAt).getTime() > new Date(permRequest.createdAt).getTime();
+  }, [permRequest, deactivateRequest]);
+
+  const isPermanentVolunteer = useMemo(() => {
+    return permRequest?.status === "Completed" && !isDeactivated;
+  }, [permRequest, isDeactivated]);
+
   const userDonationList = useMemo(() => {
     if (!profile) return [];
     return userSubmissions
@@ -162,9 +193,21 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                   <div>
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[24px] font-semibold">{profile.name}</h3>
-                      <span className="bg-[#a65a4a] text-[#f4efe7] text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                        ⭐ Permanent Volunteer
-                      </span>
+                      {isPermanentVolunteer && (
+                        <span className="bg-[#a65a4a] text-[#f4efe7] text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                          <Star size={12} className="fill-[#f4efe7]" /> Permanent Volunteer
+                        </span>
+                      )}
+                      {permRequest?.status === "New" && (
+                        <span className="bg-amber-100 text-amber-800 text-[12px] font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                          <Clock size={12} /> Request Pending
+                        </span>
+                      )}
+                      {deactivateRequest?.status === "New" && !isDeactivated && (
+                        <span className="bg-rose-100 text-rose-800 text-[12px] font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                          <Clock size={12} /> Deactivation Pending
+                        </span>
+                      )}
                       <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
                         <CheckCircle size={13} /> Active Member
                       </span>
@@ -222,6 +265,20 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                   }`}
                 >
                   <Plus size={18} /> Browse Upcoming Events
+                </button>
+
+                <button
+                  onClick={() => setDashTab("perm")}
+                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                    dashTab === "perm"
+                      ? "border-[#a65a4a] text-[#a65a4a]"
+                      : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
+                  }`}
+                >
+                  <Star size={18} /> Permanent Volunteer
+                  {(permRequest?.status === "New" || (deactivateRequest?.status === "New" && !isDeactivated)) && (
+                    <span className="size-2 rounded-full bg-amber-400 inline-block ml-0.5" />
+                  )}
                 </button>
               </div>
 
@@ -420,6 +477,200 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                         {selectedEvents.length === 0 ? "Select events to register" : `Confirm Registration for ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
                       </button>
                     </>
+                  )}
+                </div>
+              )}
+
+              {dashTab === "perm" && (
+                <div>
+                  {/* ── 1. Deactivated State (Only if not re-applying) ── */}
+                  {isDeactivated && !reApplying && (
+                    <div className="bg-white rounded-3xl border border-gray-250 p-8 sm:p-10 text-center shadow-sm">
+                      <div className="size-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-5 text-gray-500">
+                        <UserCheck size={40} className="text-gray-400" />
+                      </div>
+                      <h4 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Status Deactivated</h4>
+                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-3 leading-relaxed">
+                        Your Permanent Volunteer status was deactivated on your request. Thank you for all your past contributions!
+                      </p>
+                      <button
+                        onClick={() => {
+                          setRequestMsg("");
+                          setReApplying(true);
+                        }}
+                        className="mt-6 px-7 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
+                      >
+                        <Plus size={16} /> Re-apply for Permanent Status
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── 2. Approved & Active Permanent Volunteer (Deactivation is NOT pending) ── */}
+                  {isPermanentVolunteer && (!deactivateRequest || deactivateRequest.status !== "New") && (
+                    <div className="flex flex-col gap-6">
+                      <div className="bg-white rounded-3xl border border-[#a65a4a]/20 p-8 sm:p-10 text-center shadow-sm">
+                        <div className="size-20 rounded-full bg-[#a65a4a] flex items-center justify-center mx-auto mb-5 shadow-lg">
+                          <Star size={40} className="text-[#f4efe7] fill-[#f4efe7]" />
+                        </div>
+                        <h4 className="font-['Fraunces',serif] text-[26px] font-semibold text-[#1e1e1e]">You're a Permanent Volunteer!</h4>
+                        <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-3 leading-relaxed">
+                          Your request has been approved by our team. Thank you for your lasting commitment to Mahila Action. The ⭐ badge is now visible on your profile.
+                        </p>
+                        <div className="mt-6 inline-flex items-center gap-2 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-bold text-[14px] px-6 py-3 rounded-full shadow">
+                          <Star size={15} className="fill-[#f4efe7]" /> Permanent Volunteer — Active
+                        </div>
+                      </div>
+
+                      {/* Deactivation Form */}
+                      <div className="bg-white rounded-3xl border border-rose-100 p-6 sm:p-8 shadow-sm">
+                        <h5 className="font-['Fraunces',serif] text-[18px] font-semibold text-[#1e1e1e] mb-2 text-rose-800">Request Deactivation</h5>
+                        <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 mb-4 max-w-xl">
+                          If you can no longer commit as a Permanent Volunteer, you can request to deactivate your status. Admin staff will review and approve your request.
+                        </p>
+                        {deactivateRequest?.status === "Contacted" && (
+                          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[13px] font-medium max-w-xl">
+                            ⚠️ Your previous deactivation request was not approved by admin.
+                          </div>
+                        )}
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (!confirm("Are you sure you want to request deactivation of your Permanent Volunteer status?")) return;
+                            savePermVolunteerDeactivateRequest({
+                              name: profile.name,
+                              email: profile.email,
+                              phone: profile.phone,
+                              message: "Deactivation requested by user from account portal.",
+                            });
+                            setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+                            toast.success("Deactivation request submitted");
+                          }}
+                        >
+                          <button
+                            type="submit"
+                            className="bg-rose-50 text-rose-600 hover:bg-rose-100 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full transition-colors cursor-pointer"
+                          >
+                            Request Deactivation
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 3. Deactivation Request Pending ── */}
+                  {permRequest?.status === "Completed" && deactivateRequest?.status === "New" && (
+                    <div className="bg-white rounded-3xl border border-rose-200 p-8 sm:p-10 text-center shadow-sm">
+                      <div className="size-20 rounded-full bg-rose-50 flex items-center justify-center mx-auto mb-5">
+                        <Clock size={40} className="text-rose-500" />
+                      </div>
+                      <h4 className="font-['Fraunces',serif] text-[24px] font-semibold text-rose-950">Deactivation Pending</h4>
+                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-3 leading-relaxed">
+                        You have submitted a request to deactivate your Permanent Volunteer status. Our admin team will process this shortly.
+                      </p>
+                      <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/40 mt-4">
+                        Submitted on {new Date(deactivateRequest.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── 4. Permanent Volunteer Application Pending ── */}
+                  {permRequest?.status === "New" && (
+                    <div className="bg-white rounded-3xl border border-amber-200 p-8 sm:p-10 text-center shadow-sm">
+                      <div className="size-20 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-5">
+                        <Clock size={40} className="text-amber-600" />
+                      </div>
+                      <h4 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Request Under Review</h4>
+                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-3 leading-relaxed">
+                        Our team has received your request for Permanent Volunteer status and will review it shortly. You'll see the badge here once it's approved.
+                      </p>
+                      <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/40 mt-4">
+                        Submitted on {new Date(permRequest.createdAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── 5. Permanent Volunteer Application Rejected ── */}
+                  {permRequest?.status === "Contacted" && !requestSent && !reApplying && (
+                    <div className="bg-white rounded-3xl border border-[#a65a4a]/20 p-8 sm:p-10 text-center shadow-sm">
+                      <div className="size-20 rounded-full bg-[#a65a4a]/10 flex items-center justify-center mx-auto mb-5">
+                        <Star size={40} className="text-[#a65a4a]" />
+                      </div>
+                      <h4 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Request Not Approved</h4>
+                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-3 leading-relaxed">
+                        Your previous request wasn't approved at this time. You're welcome to submit a new request — please add a brief note about your contributions.
+                      </p>
+                      <button
+                        onClick={() => setRequestSent(true)}
+                        className="mt-6 px-7 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
+                      >
+                        <Send size={16} /> Re-apply
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── 6. Request Form: No request OR re-applying ── */}
+                  {(!permRequest || (permRequest.status === "Contacted" && requestSent) || reApplying) && (
+                    <div className="bg-white rounded-3xl border border-[#a65a4a]/20 p-8 sm:p-10 shadow-sm">
+                      <div className="flex flex-col items-center text-center mb-8">
+                        <div className="size-20 rounded-full bg-[#a65a4a]/10 flex items-center justify-center mb-5">
+                          <Star size={40} className="text-[#a65a4a]" />
+                        </div>
+                        <h4 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Become a Permanent Volunteer</h4>
+                        <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-lg mt-3 leading-relaxed">
+                          Permanent Volunteers are long-term community champions who commit to Mahila Action's ongoing mission. Request this special status and our team will review your application.
+                        </p>
+                      </div>
+
+                      {requestSent && !reApplying ? (
+                        <div className="flex flex-col items-center text-center gap-4 py-4">
+                          <div className="size-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                            <CheckCircle size={36} className="text-emerald-600" />
+                          </div>
+                          <h5 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">Request Submitted!</h5>
+                          <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 max-w-sm leading-relaxed">
+                            Our team has been notified and will review your request. Check back here for updates.
+                          </p>
+                        </div>
+                      ) : (
+                        <form
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            setRequestLoading(true);
+                            savePermVolunteerRequest({
+                              name: profile.name,
+                              email: profile.email,
+                              phone: profile.phone,
+                              message: requestMsg.trim() || undefined,
+                            });
+                            setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+                            setRequestSent(true);
+                            setReApplying(false);
+                            setRequestLoading(false);
+                          }}
+                          className="flex flex-col gap-4 max-w-xl mx-auto"
+                        >
+                          <div>
+                            <label className="block font-['Inter',sans-serif] text-[13px] font-semibold text-[#1e1e1e]/70 mb-1.5">
+                              Why do you want to be a Permanent Volunteer? <span className="font-normal text-[#1e1e1e]/40">(optional)</span>
+                            </label>
+                            <textarea
+                              value={requestMsg}
+                              onChange={(e) => setRequestMsg(e.target.value)}
+                              rows={4}
+                              placeholder="Share a bit about your involvement with Mahila Action, your skills, and why you'd like to commit long-term…"
+                              className="w-full border border-[#a65a4a]/25 rounded-xl px-4 py-3 font-['Inter',sans-serif] text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/30 focus:outline-none focus:border-[#a65a4a] resize-none bg-[#faf7f3]"
+                            />
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={requestLoading}
+                            className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                          >
+                            <Send size={17} /> {requestLoading ? "Submitting…" : "Submit Request"}
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

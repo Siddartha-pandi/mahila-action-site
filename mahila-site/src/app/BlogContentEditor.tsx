@@ -14,7 +14,7 @@ import {
   Plus,
   Eraser,
 } from "lucide-react";
-import { ImageCropModal } from "./ImageCropModal";
+import { ImageCropModal } from "./modals/ImageCropModal";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers

@@ -1,36 +1,21 @@
+"use client";
+
 import { useState } from "react";
 import { X, ChevronRight, ChevronLeft } from "lucide-react";
-import { BlogPost } from "../lib/data";
 import { marked } from "marked";
-
-// ...
-
-function toRichHtml(raw: string) {
-  if (!raw) return "";
-  if (isLikelyHtml(raw)) return raw; // already-HTML posts (like your Impact pages) pass through untouched
-  return marked.parse(raw) as string; // everything else is treated as Markdown and converted
-}
-const fraunces = () => `font-['Fraunces',serif]`;
-const inter = () => `font-['Inter',sans-serif]`;
+import { type BlogPost } from "@/lib/data";
+import { fraunces, inter } from "../components/shared/styleHelpers";
+import { Badge } from "../components/ui/Badge";
 
 function isLikelyHtml(s: string) {
   return /<\/?[a-z][\s\S]*>/i.test(s);
 }
 
-function escapeHtml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function toRichHtml(raw: string) {
+  if (!raw) return "";
+  if (isLikelyHtml(raw)) return raw;
+  return marked.parse(raw) as string;
 }
-
-// /** Older posts were saved as plain text (paragraphs separated by a blank line). Wrap them as HTML so they render identically to new rich-text posts. */
-// function toRichHtml(raw: string) {
-//   if (!raw) return "";
-//   if (isLikelyHtml(raw)) return raw;
-//   return raw
-//     .split(/\n\s*\n/)
-//     .filter((p) => p.trim().length > 0)
-//     .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`)
-//     .join("");
-// }
 
 export function BlogDetailModal({
   post,
@@ -60,7 +45,11 @@ export function BlogDetailModal({
           <div className="flex items-center gap-2 font-['Inter',sans-serif] text-[15px]">
             <span className="text-[#a65a4a] font-medium">{categoryLabel}</span>
           </div>
-          <button onClick={onClose} className="size-9 flex items-center justify-center rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer text-[#1e1e1e]">
+          <button
+            onClick={onClose}
+            className="size-9 flex items-center justify-center rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer text-[#1e1e1e]"
+            aria-label="Close modal"
+          >
             <X size={20} />
           </button>
         </div>
@@ -83,12 +72,9 @@ export function BlogDetailModal({
         {post.tags?.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-4">
             {post.tags.map((tag, i) => (
-              <span
-                key={i}
-                className={`${inter()} text-[12px] font-medium text-[#a65a4a] bg-[#a65a4a]/10 px-3 py-1 rounded-full`}
-              >
+              <Badge key={i} variant="secondary">
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
         )}
@@ -111,29 +97,55 @@ export function BlogDetailModal({
               <button
                 onClick={() => setGalleryTop((i) => (i - 1 + n) % n)}
                 className="size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
+                aria-label="Previous gallery image"
               >
                 <ChevronRight size={18} className="rotate-180" />
               </button>
 
-              <div className="relative flex items-center justify-center" style={{ width: "min(610px,88vw)", height: "min(452px,65vw)" }}>
+              <div
+                className="relative flex items-center justify-center"
+                style={{ width: "min(610px,88vw)", height: "min(452px,65vw)" }}
+              >
                 {n > 2 && (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ transform: "rotate(-6.09deg)" }}>
-                    <img src={gallery[idxBot]} alt="" className="shadow-xl object-cover rounded-sm" style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }} />
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{ transform: "rotate(-6.09deg)" }}
+                  >
+                    <img
+                      src={gallery[idxBot]}
+                      alt=""
+                      className="shadow-xl object-cover rounded-sm"
+                      style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
+                    />
                   </div>
                 )}
                 {n > 1 && (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ transform: "rotate(-3.13deg)" }}>
-                    <img src={gallery[idxMid]} alt="" className="shadow-xl object-cover rounded-sm" style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }} />
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{ transform: "rotate(-3.13deg)" }}
+                  >
+                    <img
+                      src={gallery[idxMid]}
+                      alt=""
+                      className="shadow-xl object-cover rounded-sm"
+                      style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
+                    />
                   </div>
                 )}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <img src={gallery[idxTop]} alt="" className="shadow-2xl object-cover rounded-sm" style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }} />
+                  <img
+                    src={gallery[idxTop]}
+                    alt=""
+                    className="shadow-2xl object-cover rounded-sm"
+                    style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
+                  />
                 </div>
               </div>
 
               <button
                 onClick={() => setGalleryTop((i) => (i + 1) % n)}
                 className="size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
+                aria-label="Next gallery image"
               >
                 <ChevronRight size={18} />
               </button>
@@ -144,7 +156,10 @@ export function BlogDetailModal({
                 <button
                   key={i}
                   onClick={() => setGalleryTop(i)}
-                  className={`size-2 rounded-full transition-all cursor-pointer ${i === idxTop ? "bg-[#a65a4a] w-5" : "bg-[#a65a4a]/30"}`}
+                  className={`size-2 rounded-full transition-all cursor-pointer ${
+                    i === idxTop ? "bg-[#a65a4a] w-5" : "bg-[#a65a4a]/30"
+                  }`}
+                  aria-label={`Go to image ${i + 1}`}
                 />
               ))}
             </div>

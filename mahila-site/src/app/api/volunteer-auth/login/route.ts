@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
     }
 
-    const result = await queryDb("SELECT * FROM volunteer_accounts WHERE email = $1", [
+    const result = await queryDb("SELECT * FROM users WHERE email = $1 AND role = 'volunteer'", [
       String(email).toLowerCase().trim(),
     ]);
     const user = result.rows[0];

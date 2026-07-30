@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Plus, Trash2, Pencil, X, ImagePlus, Crop } from "lucide-react";
-import { ImageCropModal } from "./ImageCropModal";
+import { ImageCropModal } from "./modals/ImageCropModal";
 
 export const inputBase =
   "w-full border border-[#a65a4a]/30 rounded-lg px-3 py-2 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif] bg-white";

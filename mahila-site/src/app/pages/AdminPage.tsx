@@ -185,21 +185,21 @@ export function AdminPage({
 
   return (
     <main className="min-h-screen bg-[#f0ebe3] flex flex-col">
-      <div className="bg-[#a65a4a] px-6 py-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
-        <div className="flex items-center gap-3">
+      <div className="bg-[#a65a4a] px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <LogoMark invert />
-          <div>
-            <p className="font-['Fraunces',serif] text-[#f4efe7] text-[18px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Admin Panel</p>
-            <p className="font-['Inter',sans-serif] text-[#f4efe7]/65 text-[11px]">Changes go live immediately after saving</p>
+          <div className="hidden xs:block">
+            <p className="font-['Fraunces',serif] text-[#f4efe7] text-[16px] sm:text-[18px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Admin Panel</p>
+            <p className="font-['Inter',sans-serif] text-[#f4efe7]/65 text-[10px] sm:text-[11px] hidden sm:block">Changes go live immediately after saving</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-[#f4efe7]/15 border border-[#f4efe7]/30 text-[#f4efe7] text-[12px]">
-            <div className="w-6 h-6 rounded-full bg-[#f4efe7] text-[#a65a4a] font-bold text-[11px] flex items-center justify-center shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3">
+          <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-[#f4efe7]/15 border border-[#f4efe7]/30 text-[#f4efe7] text-[12px]">
+            <div className="w-5 sm:w-6 h-5 sm:h-6 rounded-full bg-[#f4efe7] text-[#a65a4a] font-bold text-[10px] sm:text-[11px] flex items-center justify-center shrink-0">
               {currentAdminUser.name.charAt(0).toUpperCase()}
             </div>
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2">
               <span className="font-medium">{currentAdminUser.name}</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-[#f4efe7] text-[#a65a4a]">
                 {currentRole.name}
@@ -208,15 +208,15 @@ export function AdminPage({
           </div>
 
           {isDirty && (
-            <span className="bg-amber-300 text-amber-950 font-['Inter',sans-serif] text-[11px] font-bold px-3 py-1 rounded-full animate-pulse">
-              Unsaved Changes
+            <span className="bg-amber-300 text-amber-950 font-['Inter',sans-serif] text-[10px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full animate-pulse">
+              Unsaved
             </span>
           )}
-          <button onClick={handleLogout} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[13px] px-4 py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer">
+          <button onClick={handleLogout} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap">
             Sign Out
           </button>
-          <button onClick={onExit} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[13px] px-4 py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer">
-            ← View Site
+          <button onClick={onExit} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap">
+            ← Site
           </button>
         </div>
       </div>
