@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!ALLOWED_STATUSES.includes(status)) {
       return NextResponse.json({ error: "Unknown status." }, { status: 400 });
     }
-    await queryDb("UPDATE volunteer_accounts SET status = $1 WHERE id = $2", [status, params.id]);
+    await queryDb("UPDATE users SET status = $1 WHERE id = $2 AND role = 'volunteer'", [status, params.id]);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("PATCH /api/members/[id] error:", err);

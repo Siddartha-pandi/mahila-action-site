@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
-    const result = await queryDb("SELECT * FROM volunteer_accounts WHERE reset_token_hash = $1", [tokenHash]);
+    const result = await queryDb("SELECT * FROM users WHERE reset_token_hash = $1 AND role = 'volunteer'", [tokenHash]);
     const user = result.rows[0];
 
     if (!user || !user.reset_token_expires || new Date(user.reset_token_expires) < new Date()) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const password_hash = bcrypt.hashSync(String(password), 10);
     await queryDb(
-      "UPDATE volunteer_accounts SET password_hash = $1, reset_token_hash = NULL, reset_token_expires = NULL WHERE id = $2",
+      "UPDATE users SET password_hash = $1, reset_token_hash = NULL, reset_token_expires = NULL WHERE id = $2",
       [password_hash, user.id]
     );
 

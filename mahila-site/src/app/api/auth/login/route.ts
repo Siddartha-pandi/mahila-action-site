@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const result = await queryDb("SELECT * FROM app_admin_users WHERE email = $1", [normalizedEmail]);
+    const result = await queryDb("SELECT * FROM users WHERE email = $1 AND role IN ('admin', 'superadmin')", [normalizedEmail]);
     const user = result.rows[0];
 
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {

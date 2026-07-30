@@ -318,7 +318,7 @@ export function getLocalSiteData(): Partial<SiteData> {
   }
 }
 
-export function saveLocalSiteData(patch: Partial<SiteData>) {
+export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
   try {
     const current = getLocalSiteData();
     const updated = {
@@ -330,7 +330,10 @@ export function saveLocalSiteData(patch: Partial<SiteData>) {
       contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
     };
     localStorage.setItem(SITE_DATA_KEY, JSON.stringify(updated));
-    if (typeof window !== "undefined") {
+    // Only notify listeners when an admin explicitly saves a change.
+    // Internal cache writes (e.g. from loadSiteData) pass silent=true to
+    // avoid re-triggering App.tsx's refresh and creating an infinite loop.
+    if (!silent && typeof window !== "undefined") {
       window.dispatchEvent(new Event("mahila_sitedata_changed"));
     }
   } catch (err) {
@@ -444,7 +447,10 @@ export async function loadSiteData(): Promise<SiteData> {
     blogPosts = [...blogPosts, ...seedImpactPosts];
   }
 
-  saveLocalSiteData({ events, categories, blogPosts, councilors, timeline, contact });
+  // Cache the fetched data locally for offline use, but silently so we
+  // don't re-trigger App.tsx's mahila_sitedata_changed listener (which
+  // would call loadSiteData() again and create an infinite request loop).
+  saveLocalSiteData({ events, categories, blogPosts, councilors, timeline, contact }, true);
   return { events, categories, blogPosts, councilors, timeline, contact };
 }
 

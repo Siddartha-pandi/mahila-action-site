@@ -49,11 +49,12 @@ export default function App() {
       loadSiteData().then(setSiteData);
     }
     refreshData();
+    // Only re-fetch CMS data when an admin explicitly saves a change.
+    // The broad "storage" listener was firing on every localStorage write
+    // (submissions polling, session saves, etc.) causing 7 DB requests per cycle.
     window.addEventListener("mahila_sitedata_changed", refreshData);
-    window.addEventListener("storage", refreshData);
     return () => {
       window.removeEventListener("mahila_sitedata_changed", refreshData);
-      window.removeEventListener("storage", refreshData);
     };
   }, []);
 

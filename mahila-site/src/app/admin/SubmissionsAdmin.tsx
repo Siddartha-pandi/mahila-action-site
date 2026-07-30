@@ -15,10 +15,12 @@ import {
   UserPlus,
   MessageSquare,
   RefreshCw,
+  UserMinus,
 } from "lucide-react";
 import {
   getSubmissions,
   loadSubmissions,
+  updateSubmissionStatus,
   updateSubmissionStatusRemote,
   deleteSubmissionRemote,
   SubmissionItem,
@@ -39,6 +41,8 @@ type SubmissionCategory = SubmissionItem["type"];
  * up to the total.
  */
 export function categoryOf(item: SubmissionItem): SubmissionCategory {
+  if (item.type === "perm_volunteer_request") return "perm_volunteer_request";
+  if (item.type === "perm_volunteer_deactivate") return "perm_volunteer_deactivate";
   if (item.type === "reservation" && item.data?.volunteer_commitment) return "volunteer";
 
   // Legacy rows: account signups were filed as "volunteer" before members had
@@ -82,10 +86,10 @@ export function SubmissionsAdmin() {
   }, []);
 
   useEffect(() => {
-    // Background sync polling every 30 seconds as a fallback safety net
+    // Auto-refresh submissions from the server every 1 minute
     const interval = setInterval(() => {
       reload(true);
-    }, 30000);
+    }, 60000);
 
     function handleInstantSync() {
       setSubmissions(getSubmissions());
@@ -114,6 +118,22 @@ export function SubmissionsAdmin() {
     if (!canEdit) {
       return toast.error("Permission denied: You lack EDIT rights for submissions.");
     }
+
+    // perm_volunteer_request and perm_volunteer_deactivate live only in localStorage — no server endpoint exists.
+    // Update it locally and reflect the change in UI state directly.
+    if (item.type === "perm_volunteer_request" || item.type === "perm_volunteer_deactivate") {
+      updateSubmissionStatus(item.id, status);
+      setSubmissions(prev => prev.map(s => (s.id === item.id ? { ...s, status } : s)));
+      if (selectedItem?.id === item.id) {
+        setSelectedItem(prev => (prev ? { ...prev, status } : null));
+      }
+      const isDeactivate = item.type === "perm_volunteer_deactivate";
+      const actionLabel = isDeactivate ? "Deactivation request" : "Request";
+      const decisionLabel = status === "Completed" ? "Approved ✅" : status === "Contacted" ? "Rejected ✕" : status;
+      toast.success(`${actionLabel} ${decisionLabel}`);
+      return;
+    }
+
     const res = await updateSubmissionStatusRemote(item, status);
     if (!res.ok) return toast.error(res.error || "Could not update the status — please try again.");
 
@@ -150,6 +170,8 @@ export function SubmissionsAdmin() {
   const reservationList = list.filter(i => categoryOf(i) === "reservation");
   const donationList = list.filter(i => categoryOf(i) === "donation");
   const contactList = list.filter(i => categoryOf(i) === "contact");
+  const permVolList = list.filter(i => categoryOf(i) === "perm_volunteer_request");
+  const permDeactivateList = list.filter(i => categoryOf(i) === "perm_volunteer_deactivate");
 
   const totalDonated = donationList.reduce((acc, curr) => acc + (Number(curr.data?.amount) || 0), 0);
   const totalSeats = reservationList.reduce((acc, curr) => acc + (Number(curr.data?.seats) || 1), 0);
@@ -206,6 +228,8 @@ export function SubmissionsAdmin() {
       case "reservation": return <Calendar className="size-4 text-amber-600" />;
       case "vendor": return <Briefcase className="size-4 text-purple-600" />;
       case "donation": return <DollarSign className="size-4 text-rose-600" />;
+      case "perm_volunteer_request": return <UserCheck className="size-4 text-[#a65a4a]" />;
+      case "perm_volunteer_deactivate": return <UserMinus className="size-4 text-rose-600" />;
     }
   };
 
@@ -216,6 +240,8 @@ export function SubmissionsAdmin() {
     vendor: "Vendor",
     donation: "Donation",
     contact: "Contact",
+    perm_volunteer_request: "Perm. Volunteer",
+    perm_volunteer_deactivate: "Deactivate Request",
   };
 
   const getStatusBadge = (status: SubmissionItem["status"]) => {
@@ -241,6 +267,8 @@ export function SubmissionsAdmin() {
             {filterType === "reservation" && "🎟️ Event Attendees & Seat Bookings"}
             {filterType === "donation" && "💖 Donors & Campaign Contributions"}
             {filterType === "contact" && "✉️ Contact & General Inquiries"}
+            {filterType === "perm_volunteer_request" && "⭐ Permanent Volunteer Requests"}
+            {filterType === "perm_volunteer_deactivate" && "❌ Permanent Volunteer Deactivation Requests"}
             {filterType === "all" && "Form Submissions & Applications"}
           </h3>
           <p className="text-[13px] text-[#1e1e1e]/60 mt-0.5">
@@ -273,7 +301,7 @@ export function SubmissionsAdmin() {
       </div>
 
       {/* Metric Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         <div
           onClick={() => setFilterType("volunteer")}
           className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30" : "bg-white border-gray-200 hover:border-emerald-300"}`}
@@ -333,6 +361,30 @@ export function SubmissionsAdmin() {
           <p className="text-[22px] font-bold text-[#a65a4a] mt-1">₹{totalDonated.toLocaleString()}</p>
           <p className="text-[11px] text-gray-500">{donationList.length} contributions</p>
         </div>
+
+        <div
+          onClick={() => setFilterType("perm_volunteer_request")}
+          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a]/10 border-[#a65a4a]/40 ring-2 ring-[#a65a4a]/20" : "bg-white border-gray-200 hover:border-[#a65a4a]/40"}`}
+        >
+          <div className="flex items-center justify-between text-[#a65a4a]">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">Perm Volunteers</span>
+            <UserCheck className="size-4" />
+          </div>
+          <p className="text-[22px] font-bold text-gray-900 mt-1">{permVolList.length}</p>
+          <p className="text-[11px] text-gray-500">{permVolList.filter(v => v.status === "New").length} pending review</p>
+        </div>
+
+        <div
+          onClick={() => setFilterType("perm_volunteer_deactivate")}
+          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-50 border-rose-200 ring-2 ring-rose-400/20" : "bg-white border-gray-200 hover:border-rose-400/40"}`}
+        >
+          <div className="flex items-center justify-between text-rose-700">
+            <span className="text-[12px] font-semibold uppercase tracking-wider">Deactivations</span>
+            <UserMinus className="size-4" />
+          </div>
+          <p className="text-[22px] font-bold text-gray-900 mt-1">{permDeactivateList.length}</p>
+          <p className="text-[11px] text-gray-500">{permDeactivateList.filter(v => v.status === "New").length} pending review</p>
+        </div>
       </div>
 
       {/* Page Tab Selector Bar */}
@@ -379,6 +431,28 @@ export function SubmissionsAdmin() {
             className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-800 hover:bg-blue-100"}`}
           >
             ✉️ Contact ({contactList.length})
+          </button>
+          <button
+            onClick={() => setFilterType("perm_volunteer_request")}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white" : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/20"}`}
+          >
+            ⭐ Perm Volunteers ({permVolList.length})
+            {permVolList.filter(v => v.status === "New").length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-amber-400 text-white text-[10px] font-bold">
+                {permVolList.filter(v => v.status === "New").length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setFilterType("perm_volunteer_deactivate")}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-800 hover:bg-rose-100"}`}
+          >
+            ❌ Deactivations ({permDeactivateList.length})
+            {permDeactivateList.filter(v => v.status === "New").length > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold">
+                {permDeactivateList.filter(v => v.status === "New").length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -490,25 +564,66 @@ export function SubmissionsAdmin() {
               </button>
             </div>
 
-            {/* Status Switcher */}
-            <div>
-              <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Change Status</label>
-              <div className="flex gap-2">
-                {(["New", "Contacted", "Completed"] as const).map(st => (
+            {/* Status Switcher — replaced with Accept/Reject for perm volunteer requests & deactivations */}
+            {categoryOf(selectedItem) === "perm_volunteer_request" || categoryOf(selectedItem) === "perm_volunteer_deactivate" ? (
+              <div>
+                <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Decision</label>
+                <div className="flex gap-2">
                   <button
-                    key={st}
-                    onClick={() => handleStatusChange(selectedItem, st)}
-                    className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer border ${
-                      selectedItem.status === st
-                        ? "bg-[#a65a4a] text-white border-[#a65a4a]"
-                        : "bg-white text-[#1e1e1e]/70 border-[#a65a4a]/25 hover:border-[#a65a4a]"
+                    onClick={() => handleStatusChange(selectedItem, "Completed")}
+                    className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer border ${
+                      selectedItem.status === "Completed"
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
                     }`}
                   >
-                    {st}
+                    {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "✅ Approve Deactivation" : "✅ Accept"}
                   </button>
-                ))}
+                  <button
+                    onClick={() => handleStatusChange(selectedItem, "Contacted")}
+                    className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer border ${
+                      selectedItem.status === "Contacted"
+                        ? "bg-rose-600 text-white border-rose-600"
+                        : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                    }`}
+                  >
+                    {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "✕ Reject Deactivation" : "✕ Reject"}
+                  </button>
+                </div>
+                {selectedItem.status === "New" && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mt-2">
+                    ⏳ Pending — no decision made yet.
+                  </p>
+                )}
+                {selectedItem.data?.message && (
+                  <div className="mt-3">
+                    <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Applicant's Note</span>
+                    <div className="p-3 bg-gray-50 rounded-lg text-[13px] text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">
+                      {selectedItem.data.message}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Change Status</label>
+                <div className="flex gap-2">
+                  {(["New", "Contacted", "Completed"] as const).map(st => (
+                    <button
+                      key={st}
+                      onClick={() => handleStatusChange(selectedItem, st)}
+                      className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer border ${
+                        selectedItem.status === st
+                          ? "bg-[#a65a4a] text-white border-[#a65a4a]"
+                          : "bg-white text-[#1e1e1e]/70 border-[#a65a4a]/25 hover:border-[#a65a4a]"
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Metadata */}
             <div className="bg-[#faf7f3] p-4 rounded-xl flex flex-col gap-2 text-[13px]">
