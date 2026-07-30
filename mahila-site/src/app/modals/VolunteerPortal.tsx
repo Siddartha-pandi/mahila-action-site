@@ -231,14 +231,14 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
   async function handleConfirm() {
     if (selectedEvents.length === 0) return toast.error("Please select at least one event");
     const eventTitles = realEvents.filter(e => selectedEvents.includes(e.id)).map(e => e.title);
-    const ok = await saveVolunteer({
+    const res = await saveVolunteer({
       name: profile?.name ?? "",
       email: profile?.email ?? "",
       phone: profile?.phone ?? "",
       skills: profile?.skills ?? "",
       selected_events: eventTitles,
     });
-    if (!ok) return toast.error("Something went wrong submitting your registration — please try again.");
+    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
     setConfirmed(true);
     if (profile?.email || profile?.phone) {
       setUserSubmissions(getUserSubmissions(profile.email, profile.phone));

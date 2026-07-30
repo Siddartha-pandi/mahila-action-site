@@ -4,16 +4,25 @@ import { useState, useEffect, useMemo } from "react";
 import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
-  saveVolunteer, getSavedUserSession, saveUserSession,
+  getSavedUserSession, saveUserSession,
   getUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequest,
   savePermVolunteerDeactivateRequest, getUserPermVolunteerDeactivateRequest,
-  type VolunteerAccountProfile, type SubmissionItem,
+  getRegisteredRoleKeys, registrationKey, normalizeEventTitle,
+  type VolunteerAccountProfile, type SubmissionItem, type RegistrationRole,
 } from "@/lib/backend";
 import { isEventOpen } from "@/lib/data";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
+import { EventRegistrationModal } from "../modals/EventRegistrationModal";
 import { PageBanner } from "../components/PageBanner";
 import { type Page } from "../components/shared/styleHelpers";
+
+const ROLE_LABEL: Record<RegistrationRole, string> = {
+  volunteer: "Volunteer",
+  vendor: "Vendor",
+  donor: "Donor",
+  attendee: "Attendee",
+};
 
 export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
@@ -21,8 +30,10 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => getSavedUserSession());
   const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse" | "perm">("registered");
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
-  const [confirmed, setConfirmed] = useState(false);
+  /** Event the registration form is open for — registering is one event at a
+   *  time now, because each role asks for different details. */
+  const [registeringEventId, setRegisteringEventId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
   const [requestMsg, setRequestMsg] = useState("");
   const [requestSent, setRequestSent] = useState(false);
@@ -49,12 +60,12 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       window.removeEventListener("mahila_user_session_changed", syncSession);
       window.removeEventListener("storage", syncSession);
     };
-  }, [confirmed]);
+  }, [refreshKey]);
 
   function handleSignOut() {
     saveUserSession(null);
     setProfile(null);
-    setSelectedEvents([]);
+    setRegisteringEventId(null);
     toast.success("Signed out successfully");
     setPage("home");
   }
@@ -64,7 +75,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
     const list: {
       id: string;
       title: string;
-      date: string;
+      createdAt: string;
       typeLabel: string;
       details?: string;
       status: string;
@@ -82,7 +93,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
           list.push({
             id: `${sub.id}_${idx}`,
             title,
-            date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+            createdAt: sub.createdAt,
             typeLabel: "Volunteer",
             details: sub.data?.skills ? `Skills: ${sub.data.skills}` : "Community Volunteer",
             status: "Active",
@@ -92,8 +103,8 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         list.push({
           id: sub.id,
           title: sub.data?.event_name || "Community Event",
-          date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          typeLabel: "Seat Reservation",
+          createdAt: sub.createdAt,
+          typeLabel: sub.data?.volunteer_commitment ? "Volunteer" : "Attendee",
           details: `${sub.data?.seats || 1} Seat(s) Reserved ${sub.data?.volunteer_commitment === "ongoing" ? "· Ongoing Volunteer" : ""}`,
           status: sub.status || "Confirmed",
         });
@@ -101,7 +112,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         list.push({
           id: sub.id,
           title: sub.data?.event_name || "Event Support",
-          date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          createdAt: sub.createdAt,
           typeLabel: "Vendor / Partner Application",
           details: `Business: ${sub.data?.business_name || ""} (${sub.data?.offering || ""})`,
           status: sub.status || "Under Review",
@@ -109,8 +120,29 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       }
     });
 
-    return list;
+    // One card per event per role. Repeat submissions — from a double-click, or
+    // from registering the same event again on another visit — used to each get
+    // their own card, so the same workshop appeared three times over.
+    const byEventAndRole = new Map<string, typeof list[number]>();
+    for (const item of list) {
+      const key = `${item.typeLabel}::${normalizeEventTitle(item.title)}`;
+      const seen = byEventAndRole.get(key);
+      // Keep the original sign-up, not the accidental repeat.
+      if (!seen || new Date(item.createdAt).getTime() < new Date(seen.createdAt).getTime()) {
+        byEventAndRole.set(key, item);
+      }
+    }
+
+    return [...byEventAndRole.values()]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map(item => ({
+        ...item,
+        date: new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      }));
   }, [userSubmissions, profile]);
+
+  /** (role, event) pairs already signed up for — drives the "already registered" state. */
+  const registeredKeys = useMemo(() => getRegisteredRoleKeys(userSubmissions), [userSubmissions]);
 
   const permRequest = useMemo(() => {
     if (!profile) return null;
@@ -154,12 +186,19 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
     })
     .map((ev) => ({
       id: ev.id,
+      raw: ev,
       status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
       title: ev.title,
       date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
       location: ev.location || "Online / TBD",
       desc: ev.description || "",
+      // Roles this person has already taken on for this event.
+      roles: (["volunteer", "vendor", "attendee"] as RegistrationRole[]).filter(r =>
+        registeredKeys.has(registrationKey(r, ev.title))
+      ),
     }));
+
+  const registeringEvent = realEvents.find(e => e.id === registeringEventId) ?? null;
 
   return (
     <main className="bg-[#f4efe7] min-h-screen">
@@ -383,100 +422,75 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
               {dashTab === "browse" && (
                 <div>
-                  {confirmed ? (
-                    <div className="flex flex-col items-center text-center gap-5 py-10 bg-white rounded-3xl p-8 border border-[#a65a4a]/15 shadow-sm">
-                      <div className="size-20 bg-[#587735]/10 rounded-full flex items-center justify-center">
-                        <CheckCircle size={44} className="text-[#587735]" />
-                      </div>
-                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[28px]">Registration Successful!</h3>
-                      <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[16px] max-w-[420px] leading-relaxed">
-                        Thank you, <strong className="text-[#a65a4a]">{profile.name}</strong>! You've successfully registered for <strong className="text-[#a65a4a]">{selectedEvents.length} event(s)</strong>.
-                      </p>
+                  <div className="flex gap-2 mb-6">
+                    {(["all", "ongoing", "upcoming"] as const).map(f => (
                       <button
-                        onClick={() => {
-                          setConfirmed(false);
-                          setSelectedEvents([]);
-                          setDashTab("registered");
-                        }}
-                        className="px-8 py-3.5 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+                        key={f}
+                        onClick={() => setFilter(f)}
+                        className={`font-['Inter',sans-serif] text-[13px] font-semibold px-5 py-2.5 rounded-full cursor-pointer transition-colors capitalize ${
+                          filter === f ? "bg-[#a65a4a] text-[#f4efe7]" : "border border-[#a65a4a]/40 text-[#a65a4a] hover:bg-[#a65a4a]/8"
+                        }`}
                       >
-                        View My Registered Events →
+                        {f === "all" ? "All Events" : f === "ongoing" ? "🟢 Ongoing" : "📅 Upcoming"}
                       </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex gap-2 mb-6">
-                        {(["all", "ongoing", "upcoming"] as const).map(f => (
-                          <button
-                            key={f}
-                            onClick={() => setFilter(f)}
-                            className={`font-['Inter',sans-serif] text-[13px] font-semibold px-5 py-2.5 rounded-full cursor-pointer transition-colors capitalize ${
-                              filter === f ? "bg-[#a65a4a] text-[#f4efe7]" : "border border-[#a65a4a]/40 text-[#a65a4a] hover:bg-[#a65a4a]/8"
-                            }`}
-                          >
-                            {f === "all" ? "All Events" : f === "ongoing" ? "🟢 Ongoing" : "📅 Upcoming"}
-                          </button>
-                        ))}
-                        {selectedEvents.length > 0 && (
-                          <span className="ml-auto font-['Inter',sans-serif] text-[13px] font-semibold bg-[#a65a4a]/10 text-[#a65a4a] px-4 py-1.5 rounded-full self-center">
-                            {selectedEvents.length} selected
+                    ))}
+                  </div>
+
+                  <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 mb-5 leading-relaxed">
+                    Pick an event and choose how you'd like to take part — as a volunteer, vendor, donor, or attendee.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {realEvents.filter(e => filter === "all" || e.status === filter).map(ev => (
+                      <div
+                        key={ev.id}
+                        className="rounded-2xl border-2 border-[#1e1e1e]/10 bg-white p-5 transition-all hover:border-[#a65a4a]/40 flex flex-col"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <span className="font-['Inter',sans-serif] text-[11px] font-semibold px-3 py-1 rounded-full bg-[#a65a4a]/10 text-[#a65a4a]">
+                            Community Event
                           </span>
+                          <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-3 py-1 rounded-full ${ev.status === "ongoing" ? "bg-emerald-100 text-emerald-800" : "bg-[#1e1e1e]/8 text-[#1e1e1e]/60"}`}>
+                            {ev.status === "ongoing" ? "Open now" : "Upcoming"}
+                          </span>
+                        </div>
+                        <p className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] leading-snug">{ev.title}</p>
+                        <div className="flex gap-4 mt-2.5 mb-3">
+                          <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 flex items-center gap-1"><Calendar size={12} /> {ev.date}</span>
+                          <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 flex items-center gap-1"><MapPin size={12} /> {ev.location}</span>
+                        </div>
+                        <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/65 leading-relaxed">{ev.desc}</p>
+
+                        {ev.roles.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-3">
+                            {ev.roles.map(r => (
+                              <span key={r} className="font-['Inter',sans-serif] text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                <CheckCircle size={11} /> Registered as {ROLE_LABEL[r]}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                      </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                        {realEvents.filter(e => filter === "all" || e.status === filter).map(ev => {
-                          const selected = selectedEvents.includes(ev.id);
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={() => {
-                                setSelectedEvents(prev =>
-                                  prev.includes(ev.id) ? prev.filter(e => e !== ev.id) : [...prev, ev.id]
-                                );
-                              }}
-                              className={`text-left rounded-2xl border-2 p-5 transition-all cursor-pointer ${selected ? "border-[#a65a4a] bg-[#a65a4a]/5 shadow-md" : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40"
-                                }`}
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-3">
-                                <span className="font-['Inter',sans-serif] text-[11px] font-semibold px-3 py-1 rounded-full bg-[#a65a4a]/10 text-[#a65a4a]">
-                                  Community Event
-                                </span>
-                                <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${selected ? "border-[#a65a4a] bg-[#a65a4a]" : "border-[#1e1e1e]/25"}`}>
-                                  {selected && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
-                                </div>
-                              </div>
-                              <p className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] leading-snug">{ev.title}</p>
-                              <div className="flex gap-4 mt-2.5 mb-3">
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 flex items-center gap-1"><Calendar size={12} /> {ev.date}</span>
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 flex items-center gap-1"><MapPin size={12} /> {ev.location}</span>
-                              </div>
-                              <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/65 leading-relaxed">{ev.desc}</p>
-                            </button>
-                          );
-                        })}
+                        <button
+                          onClick={() => setRegisteringEventId(ev.id)}
+                          className="mt-4 w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[14px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+                        >
+                          {ev.roles.length > 0 ? "Register in Another Role →" : "Register for This Event →"}
+                        </button>
                       </div>
+                    ))}
+                  </div>
 
-                      <button
-                        onClick={async () => {
-                          if (selectedEvents.length === 0) return toast.error("Please select at least one event");
-                          const eventTitles = realEvents.filter(e => selectedEvents.includes(e.id)).map(e => e.title);
-                          await saveVolunteer({
-                            name: profile.name,
-                            email: profile.email,
-                            phone: profile.phone,
-                            skills: profile.skills,
-                            selected_events: eventTitles,
-                          });
-                          setConfirmed(true);
-                          setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
-                        }}
-                        disabled={selectedEvents.length === 0}
-                        className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {selectedEvents.length === 0 ? "Select events to register" : `Confirm Registration for ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
-                      </button>
-                    </>
+                  {realEvents.length === 0 && (
+                    <div className="bg-white rounded-3xl p-10 border border-[#a65a4a]/15 text-center my-4 shadow-sm">
+                      <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
+                        <Calendar size={32} />
+                      </div>
+                      <h4 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">No Upcoming Events</h4>
+                      <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/60 max-w-md mx-auto mt-2 leading-relaxed">
+                        There's nothing open for registration right now — please check back soon.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
@@ -678,6 +692,20 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
           )}
         </div>
       </section>
+
+      {registeringEvent && profile && (
+        <EventRegistrationModal
+          event={registeringEvent.raw}
+          profile={profile}
+          registeredKeys={registeredKeys}
+          onClose={() => setRegisteringEventId(null)}
+          onRegistered={(role) => {
+            setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+            setRefreshKey(k => k + 1);
+            toast.success(`You're registered as ${role === "attendee" ? "an attendee" : `a ${role}`} for ${registeringEvent.title}.`);
+          }}
+        />
+      )}
     </main>
   );
 }

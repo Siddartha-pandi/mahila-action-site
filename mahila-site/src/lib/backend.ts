@@ -183,13 +183,33 @@ export async function deleteSubmissionRemote(item: SubmissionItem): Promise<{ ok
   return { ok: res.ok, error: res.error };
 }
 
+/** Submission types with no server table — they exist only in local storage. */
+export const LOCAL_ONLY_SUBMISSION_TYPES: SubmissionItem["type"][] = [
+  "perm_volunteer_request",
+  "perm_volunteer_deactivate",
+];
+
+// Demo rows ("Ananya Rao", "Kavita Reddy", "Suresh Kumar", "Pooja Verma") used
+// to be written into local storage whenever it was empty. The admin panel paints
+// from local storage first, so an empty database still showed four invented
+// submissions — which then vanished the moment anyone pressed Refresh and the
+// real (empty) server response arrived.
+const SEEDED_MOCK_IDS = ["contact_101", "volunteer_102", "reservation_103", "donation_104"];
+
 export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] {
   try {
     const raw = localStorage.getItem(SUBMISSION_KEY);
-    if (!raw) return getInitialMockSubmissions();
+    if (!raw) return [];
     const items = JSON.parse(raw);
-    if (!Array.isArray(items)) return getInitialMockSubmissions();
+    if (!Array.isArray(items)) return [];
     let valid: SubmissionItem[] = items.filter((item: any) => item && typeof item === "object" && item.id && item.type);
+
+    // Clear the seeded demo rows out of browsers that already stored them.
+    const withoutMocks = valid.filter(item => !SEEDED_MOCK_IDS.includes(item.id));
+    if (withoutMocks.length !== valid.length) {
+      valid = withoutMocks;
+      localStorage.setItem(SUBMISSION_KEY, JSON.stringify(valid));
+    }
 
     // ── Migration: remove legacy "Permanent Community Volunteer Membership" entries ──
     const LEGACY_TITLE = "Permanent Community Volunteer Membership";
@@ -215,7 +235,7 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
 
     return type ? valid.filter(item => item.type === type) : valid;
   } catch {
-    return getInitialMockSubmissions();
+    return [];
   }
 }
 
@@ -286,50 +306,37 @@ export function deleteSubmission(id: string) {
   }
 }
 
-function getInitialMockSubmissions(): SubmissionItem[] {
-  const initial: SubmissionItem[] = [
-    {
-      id: "contact_101",
-      type: "contact",
-      data: { name: "Ananya Rao", email: "ananya.rao@example.com", phone: "+91 98765 43210", subject: "Volunteering Inquiry", message: "Hello! I am an educator interested in running weekend workshops for Mahila Action." },
-      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-      status: "New"
-    },
-    {
-      id: "volunteer_102",
-      type: "volunteer",
-      data: { name: "Kavita Reddy", email: "kavita.reddy@example.com", phone: "+91 91234 56789", skills: "Teaching, Legal Awareness, Event Operations", selected_events: ["Community Leadership Workshop"] },
-      createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-      status: "Contacted"
-    },
-    {
-      id: "reservation_103",
-      type: "reservation",
-      data: { name: "Suresh Kumar", email: "suresh.k@example.com", phone: "+91 99887 76655", seats: 2, event_name: "Community Leadership Workshop", volunteer_commitment: "event_only" },
-      createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-      status: "New"
-    },
-    {
-      id: "donation_104",
-      type: "donation",
-      data: { name: "Pooja Verma", email: "pooja.v@example.com", phone: "+91 94433 22110", amount: 5000, anonymous: false, campaign_name: "Livelihood & Micro-finance Fund" },
-      createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-      status: "Completed"
-    }
-  ];
-  try {
-    localStorage.setItem(SUBMISSION_KEY, JSON.stringify(initial));
-  } catch {}
-  return initial;
-}
-
 // ── Public form submissions ──────────────────────────────────────────────
 
-// Each submission is recorded locally (the admin Submissions panel reads from
-// there) and posted to the API, which persists it and sends the confirmation
-// email. These posts used to be wrapped in `if (BASE_URL)`, and BASE_URL is
-// always "" in the browser — Next only exposes NEXT_PUBLIC_* vars, while .env
-// sets VITE_API_URL. So nothing ever reached the server and no email was sent.
+// Each submission is posted to the API, which persists it and sends the
+// confirmation email, and is then mirrored locally (that mirror is what "My
+// Account" reads). These posts used to be wrapped in `if (BASE_URL)`, and
+// BASE_URL is always "" in the browser — Next only exposes NEXT_PUBLIC_* vars,
+// while .env sets VITE_API_URL. So nothing ever reached the server and no email
+// was sent.
+
+/** What a public form submission reports back — `error` carries the server's own
+ *  wording, so a rejected duplicate can say why rather than "try again". */
+export type SaveResult = { ok: boolean; error?: string };
+
+/**
+ * Post, then mirror locally only if the server accepted it. The mirror used to
+ * be written first, unconditionally: a submission the server rejected — an
+ * already-registered duplicate, say — still showed up under "My Registered
+ * Events" as though it had gone through.
+ */
+async function submitForm(type: SubmissionItem["type"], path: string, payload: any): Promise<SaveResult> {
+  const res = await api.post(path, payload);
+  if (res.ok) {
+    saveLocalSubmission(type, payload);
+    return { ok: true };
+  }
+  if (res.status === 0) {
+    return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
+  }
+  return { ok: false, error: res.error || "Something went wrong submitting the form — please try again." };
+}
+
 export async function saveDonation(data: {
   amount: number;
   name: string;
@@ -339,11 +346,8 @@ export async function saveDonation(data: {
   donation_type?: "one-time" | "monthly";
   event_name?: string;
   campaign_name?: string;
-}): Promise<boolean> {
-  const payload = { donation_type: "one-time" as const, ...data };
-  saveLocalSubmission("donation", payload);
-  const res = await api.post("/api/donations", payload);
-  return res.ok;
+}): Promise<SaveResult> {
+  return submitForm("donation", "/api/donations", { donation_type: "one-time" as const, ...data });
 }
 
 export async function saveReservation(data: {
@@ -354,10 +358,8 @@ export async function saveReservation(data: {
   event_name: string;
   volunteer_commitment?: "event_only" | "ongoing";
   companions?: { name: string; phone: string }[];
-}): Promise<boolean> {
-  saveLocalSubmission("reservation", data);
-  const res = await api.post("/api/reservations", data);
-  return res.ok;
+}): Promise<SaveResult> {
+  return submitForm("reservation", "/api/reservations", data);
 }
 
 export async function saveVendor(data: {
@@ -368,10 +370,8 @@ export async function saveVendor(data: {
   offering: string;
   needs_space: boolean;
   event_name: string;
-}): Promise<boolean> {
-  saveLocalSubmission("vendor", data);
-  const res = await api.post("/api/vendors", data);
-  return res.ok;
+}): Promise<SaveResult> {
+  return submitForm("vendor", "/api/vendors", data);
 }
 
 export async function saveVolunteer(data: {
@@ -381,10 +381,8 @@ export async function saveVolunteer(data: {
   skills: string;
   volunteer_commitment?: string;
   selected_events: string[];
-}): Promise<boolean> {
-  saveLocalSubmission("volunteer", data);
-  const res = await api.post("/api/volunteers", data);
-  return res.ok;
+}): Promise<SaveResult> {
+  return submitForm("volunteer", "/api/volunteers", data);
 }
 
 export async function saveContact(data: {
@@ -393,10 +391,8 @@ export async function saveContact(data: {
   phone?: string;
   subject?: string;
   message: string;
-}): Promise<boolean> {
-  saveLocalSubmission("contact", data);
-  const res = await api.post("/api/contact", data);
-  return res.ok;
+}): Promise<SaveResult> {
+  return submitForm("contact", "/api/contact", data);
 }
 
 // ── Volunteer accounts (real, persisted — distinct from admin auth) ────────

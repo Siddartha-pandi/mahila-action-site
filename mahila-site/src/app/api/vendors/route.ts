@@ -18,6 +18,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
     }
 
+    // One stall application per business per event — repeat submissions used to
+    // pile up as separate applications for the admin team to sift through.
+    const duplicate = await queryDb(
+      "SELECT id FROM vendor_registrations WHERE LOWER(email) = LOWER($1) AND LOWER(event_name) = LOWER($2) LIMIT 1",
+      [String(body.email).trim(), String(body.event_name).trim()]
+    );
+    if (duplicate.rows.length > 0) {
+      return NextResponse.json(
+        { error: `You've already applied to be a vendor at ${body.event_name}. We'll be in touch about that application.` },
+        { status: 409 }
+      );
+    }
+
     const id = nanoid();
     await queryDb(
       `INSERT INTO vendor_registrations (id, event_name, business_name, contact_name, email, phone, offering, needs_space)

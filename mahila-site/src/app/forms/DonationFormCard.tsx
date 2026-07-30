@@ -9,11 +9,27 @@ import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
 import { inter, fraunces } from "../components/shared/styleHelpers";
 import { PaymentModal } from "../modals/PaymentModal";
 
-export function DonationFormCard({ eventName, initialCampaignId }: { eventName?: string; initialCampaignId?: string }) {
+export function DonationFormCard({
+  eventName,
+  initialCampaignId,
+  initialName,
+  initialEmail,
+  initialPhone,
+  onSaved,
+}: {
+  eventName?: string;
+  initialCampaignId?: string;
+  /** Prefilled when the donor is signed in, so they don't retype their details. */
+  initialName?: string;
+  initialEmail?: string;
+  initialPhone?: string;
+  /** Fires once the donation is recorded — lets a host page refresh its history. */
+  onSaved?: () => void;
+}) {
   const [customAmount, setCustomAmount] = useState("");
-  const [donorName, setDonorName] = useState("");
-  const [donorEmail, setDonorEmail] = useState("");
-  const [donorPhone, setDonorPhone] = useState("");
+  const [donorName, setDonorName] = useState(initialName ?? "");
+  const [donorEmail, setDonorEmail] = useState(initialEmail ?? "");
+  const [donorPhone, setDonorPhone] = useState(initialPhone ?? "");
   const [campaignId, setCampaignId] = useState(initialCampaignId ?? CAMPAIGNS[0].id);
   const [anonymous, setAnonymous] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
@@ -43,7 +59,7 @@ export function DonationFormCard({ eventName, initialCampaignId }: { eventName?:
 
   async function handlePaymentSuccess() {
     setShowPayment(false);
-    const ok = await saveDonation({
+    const res = await saveDonation({
       amount: finalAmount,
       name: anonymous ? "" : donorName,
       email: anonymous ? "" : donorEmail,
@@ -52,17 +68,19 @@ export function DonationFormCard({ eventName, initialCampaignId }: { eventName?:
       event_name: eventName,
       campaign_name: selectedCampaign.name,
     });
-    if (!ok) {
-      toast.error("Payment succeeded, but we couldn't record it — please contact us with your payment confirmation.");
+    if (!res.ok) {
+      toast.error(res.error || "Payment succeeded, but we couldn't record it — please contact us with your payment confirmation.");
+    } else {
+      onSaved?.();
     }
     setPaymentSuccess(true);
   }
 
   function handleSuccessClose() {
     setPaymentSuccess(false);
-    setDonorName("");
-    setDonorEmail("");
-    setDonorPhone("");
+    setDonorName(initialName ?? "");
+    setDonorEmail(initialEmail ?? "");
+    setDonorPhone(initialPhone ?? "");
     setCustomAmount("");
   }
 
