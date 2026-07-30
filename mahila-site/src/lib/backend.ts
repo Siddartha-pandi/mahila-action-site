@@ -51,6 +51,46 @@ export interface SubmissionItem {
   status: "New" | "Contacted" | "Completed";
 }
 
+/** How someone can take part in a single event. */
+export type RegistrationRole = "volunteer" | "vendor" | "donor" | "attendee";
+
+export function normalizeEventTitle(title?: string): string {
+  return String(title ?? "").trim().toLowerCase();
+}
+
+/** Stable identity for "this person, this event, this role". */
+export function registrationKey(role: RegistrationRole, eventTitle?: string): string {
+  return `${role}::${normalizeEventTitle(eventTitle)}`;
+}
+
+/**
+ * The (role, event) pairs a person has already signed up for. Used to stop the
+ * same event being registered twice — the account dashboard was happy to file
+ * the same volunteer application over and over.
+ *
+ * Donations are deliberately excluded: giving twice is not a duplicate.
+ */
+export function getRegisteredRoleKeys(submissions: SubmissionItem[]): Set<string> {
+  const keys = new Set<string>();
+  for (const sub of submissions) {
+    if (sub.type === "volunteer") {
+      const events: string[] = Array.isArray(sub.data?.selected_events)
+        ? sub.data.selected_events
+        : sub.data?.event_name
+        ? [sub.data.event_name]
+        : [];
+      events.forEach((title) => keys.add(registrationKey("volunteer", title)));
+    } else if (sub.type === "vendor") {
+      keys.add(registrationKey("vendor", sub.data?.event_name));
+    } else if (sub.type === "reservation") {
+      // The event modal files its volunteer tab as a reservation with a
+      // commitment set; everything else is a plain attendee booking.
+      keys.add(registrationKey(sub.data?.volunteer_commitment ? "volunteer" : "attendee", sub.data?.event_name));
+    }
+  }
+  return keys;
+}
+
 const SUBMISSION_KEY = "mahila_site_submissions";
 
 // ── Server-backed submissions (the admin panel's source of truth) ───────────
