@@ -6,7 +6,10 @@ import { imgHeroCard, imgStory1 } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { PageBanner } from "../components/PageBanner";
-import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
+import { FilterTabs } from "../components/FilterTabs";
+import { StoryCard } from "../components/StoryCard";
+import { EmptyState } from "../components/ui/EmptyState";
+import { type Page } from "../components/shared/styleHelpers";
 
 export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
@@ -14,10 +17,15 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
   const { openModal } = useModal();
 
   const storyPosts = siteData.blogPosts.filter((p) => p.section === "story");
+  const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
+  const targetCategoryKeys = new Set(
+    [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]
+  );
+
   const filtered =
     activeCategory === "All"
       ? storyPosts
-      : storyPosts.filter((s) => s.categoryId === activeCategory);
+      : storyPosts.filter((s) => s.categoryId && targetCategoryKeys.has(s.categoryId));
 
   const activeCategoryHasNoPosts = activeCategory !== "All" && filtered.length === 0;
 
@@ -28,29 +36,11 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
       {/* Filter tabs */}
       <section className="py-10 px-6">
         <div className="max-w-[1200px] mx-auto">
-          <div className="flex flex-wrap gap-3 justify-center">
-            <button
-              onClick={() => setActiveCategory("All")}
-              className={`${inter()} text-[16px] font-semibold px-6 py-2.5 rounded-full transition-colors cursor-pointer ${activeCategory === "All"
-                ? "bg-[#a35848] text-[#f4efe7]"
-                : "bg-[#f4efe7] border border-[#a35848] text-[#a35848] hover:bg-[#a35848]/10"
-                }`}
-            >
-              All
-            </button>
-            {siteData.categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`${inter()} text-[16px] font-semibold px-6 py-2.5 rounded-full transition-colors cursor-pointer ${activeCategory === cat.id
-                  ? "bg-[#a35848] text-[#f4efe7]"
-                  : "bg-[#f4efe7] border border-[#a35848] text-[#a35848] hover:bg-[#a35848]/10"
-                  }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
+          <FilterTabs
+            options={siteData.categories}
+            activeId={activeCategory}
+            onChange={setActiveCategory}
+          />
         </div>
       </section>
 
@@ -59,44 +49,31 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
         {filtered.length > 0 && (
           <div className="max-w-[1200px] mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 items-stretch">
             {filtered.map((s) => (
-              <div key={s.id} className="rounded-2xl overflow-hidden group cursor-pointer h-full flex flex-col">
-                <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl bg-[#a35848]/20">
-                  <img loading="lazy" decoding="async"
-                    src={s.coverImage || STORY_FALLBACK_IMAGES[s.id]?.banner || imgStory1}
-                    alt={s.title}
-                    className="size-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <div className="bg-[#a35848] p-6 rounded-b-2xl flex flex-col flex-1">
-                  <p className={`${inter()} text-[#f4efe7] text-[22px] font-semibold capitalize line-clamp-2`}>{s.title}</p>
-                  <p className={`${inter()} text-[#f4efe7]/85 text-[17px] leading-relaxed mt-3 line-clamp-3`}>{s.excerpt}</p>
-                  <button
-                    onClick={() => openModal("story", { id: s.id })}
-                    className={`${inter()} text-[#f4efe7] text-[14px] font-semibold mt-auto pt-4 opacity-85 hover:opacity-100 transition-opacity cursor-pointer text-left`}
-                  >
-                    Read Story →
-                  </button>
-                </div>
-              </div>
+              <StoryCard
+                key={s.id}
+                title={s.title}
+                excerpt={s.excerpt}
+                coverImage={s.coverImage}
+                fallbackImage={STORY_FALLBACK_IMAGES[s.id]?.banner || imgStory1}
+                onClick={() => openModal("story", { id: s.id })}
+                ctaText="Read Story →"
+              />
             ))}
           </div>
         )}
 
         {activeCategoryHasNoPosts && (
-          <div className="text-center py-20">
-            <p className={`${fraunces()} text-[#a65a4a] text-[26px] font-semibold mb-2`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-              Something Big Is Cooking!
-            </p>
-            <p className={`${inter()} text-[#1e1e1e]/50 text-[16px]`}>
-              We're preparing stories for this category — check back soon.
-            </p>
-          </div>
+          <EmptyState
+            title="Something Big Is Cooking!"
+            description="We're preparing stories for this category — check back soon."
+          />
         )}
 
         {activeCategory === "All" && filtered.length === 0 && (
-          <div className="text-center py-20">
-            <p className={`${inter()} text-[#1e1e1e]/50 text-[18px]`}>No stories yet.</p>
-          </div>
+          <EmptyState
+            title="No Stories Yet"
+            description="Stories will appear here once published."
+          />
         )}
       </section>
     </main>

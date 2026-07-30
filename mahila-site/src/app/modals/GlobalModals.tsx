@@ -1,7 +1,7 @@
 "use client";
 
 import { upcomingOrOpenEvents, type RegKind } from "@/lib/data";
-import { BlogDetailModal } from "../BlogDetailModal";
+import { BlogDetailModal } from "./BlogDetailModal";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { IMPACT_FALLBACK_IMAGES, STORY_FALLBACK_IMAGES, IMPACT_CARD_CATEGORY } from "../constants/fallbacks";
