@@ -47,11 +47,11 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
     for (const c of companions) {
       if (!c.name.trim() || !isValidPhoneNumber(c.phone)) return toast.error("Please enter a valid name and phone number for each additional volunteer");
     }
-    const ok = await saveReservation({
+    const res = await saveReservation({
       name, email, phone, seats: Number(seats), event_name: event.title,
       volunteer_commitment: commitment, companions,
     });
-    if (!ok) return toast.error("Something went wrong submitting your registration — please try again.");
+    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
     setSubmitted(true);
   }
 
@@ -164,11 +164,11 @@ export function VendorReserveForm({ event, onClose }: { event: EventItem; onClos
     if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
     if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid contact phone number (e.g. +91 98765 43210)");
     if (!offering.trim()) return toast.error("Please describe what you'd like to offer");
-    const ok = await saveVendor({
+    const res = await saveVendor({
       business_name: businessName, contact_name: contactName, email, phone,
       offering, needs_space: needsSpace, event_name: event.title,
     });
-    if (!ok) return toast.error("Something went wrong submitting your application — please try again.");
+    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your application — please try again.");
     setSubmitted(true);
   }
 
@@ -275,11 +275,11 @@ export function AttendEventForm({
     for (const c of companions) {
       if (!c.name.trim() || !isValidPhoneNumber(c.phone)) return toast.error("Please enter a valid name and phone number for each additional attendee");
     }
-    const ok = await saveReservation({
+    const res = await saveReservation({
       name, email, phone, seats: Number(members),
       event_name: selectedEvent.title, companions,
     });
-    if (!ok) return toast.error("Something went wrong submitting your registration — please try again.");
+    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
     setSubmitted(true);
   }
 

@@ -23,6 +23,7 @@ import {
   updateSubmissionStatus,
   updateSubmissionStatusRemote,
   deleteSubmissionRemote,
+  LOCAL_ONLY_SUBMISSION_TYPES,
   SubmissionItem,
 } from "../../lib/backend";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
@@ -74,25 +75,41 @@ export function SubmissionsAdmin() {
     try {
       const remote = await loadSubmissions();
       if (remote && Array.isArray(remote)) {
-        setSubmissions(remote);
+        // Permanent-volunteer requests have no server table yet, so the remote
+        // list doesn't contain them. Merging them back in stops every Refresh
+        // from wiping those requests off the panel.
+        const localOnly = getSubmissions().filter(s => LOCAL_ONLY_SUBMISSION_TYPES.includes(s.type));
+        setSubmissions(
+          [...remote, ...localOnly].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+        );
       }
       setOffline(false);
     } catch (err) {
+      // Falling back to this browser's own record — say so, rather than
+      // presenting a partial local list as the full picture.
       setSubmissions(getSubmissions());
-      setOffline(false);
+      setOffline(true);
     } finally {
       if (!isSilent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Load the real submissions straight away. Without this the panel sat on
+    // whatever local storage held until the first interval tick a minute later,
+    // or until someone pressed Refresh.
+    reload(false);
+
     // Auto-refresh submissions from the server every 1 minute
     const interval = setInterval(() => {
       reload(true);
     }, 60000);
 
+    // Re-read from the server rather than swapping in the local mirror first —
+    // that swap briefly replaced the full list with just this browser's rows.
     function handleInstantSync() {
-      setSubmissions(getSubmissions());
       reload(true);
     }
 

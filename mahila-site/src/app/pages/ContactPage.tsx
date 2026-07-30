@@ -29,14 +29,14 @@ export function ContactPage() {
     if (form.phone.trim() && !isValidPhoneNumber(form.phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
     if (!form.message.trim()) return toast.error("Please write your message");
     setLoading(true);
-    const ok = await saveContact({
+    const res = await saveContact({
       name: form.name, email: form.email,
       phone: form.phone || undefined,
       subject: form.subject || undefined,
       message: form.message,
     });
     setLoading(false);
-    if (!ok) return toast.error("Something went wrong sending your message — please try again.");
+    if (!res.ok) return toast.error(res.error || "Something went wrong sending your message — please try again.");
     setSubmitted(true);
   }
 
