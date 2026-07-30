@@ -8,7 +8,7 @@ import { DEFAULT_SITE_DATA, loadSiteData, type SiteData } from "@/lib/data";
 import { Seo } from "./components/seo/Seo";
 import { getRouteMeta } from "@/config/routes";
 import { getPageJsonLd } from "@/lib/jsonld";
-import { ComingSoonModal } from "./ComingSoonModal";
+import { ComingSoonModal } from "./modals/ComingSoonModal";
 
 // Context
 import { ContentContext } from "./context/ContentContext";
@@ -44,8 +44,18 @@ export default function App() {
   const [siteData, setSiteData] = useState<SiteData>(DEFAULT_SITE_DATA);
 
   useEffect(() => {
-    loadContent().then(setContent);
-    loadSiteData().then(setSiteData);
+    function refreshData() {
+      loadContent().then(setContent);
+      loadSiteData().then(setSiteData);
+    }
+    refreshData();
+    // Only re-fetch CMS data when an admin explicitly saves a change.
+    // The broad "storage" listener was firing on every localStorage write
+    // (submissions polling, session saves, etc.) causing 7 DB requests per cycle.
+    window.addEventListener("mahila_sitedata_changed", refreshData);
+    return () => {
+      window.removeEventListener("mahila_sitedata_changed", refreshData);
+    };
   }, []);
 
   useEffect(() => {

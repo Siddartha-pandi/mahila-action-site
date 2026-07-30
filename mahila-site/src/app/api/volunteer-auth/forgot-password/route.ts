@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const result = await queryDb("SELECT * FROM volunteer_accounts WHERE email = $1", [normalizedEmail]);
+    const result = await queryDb("SELECT * FROM users WHERE email = $1 AND role = 'volunteer'", [normalizedEmail]);
     const user = result.rows[0];
 
     // Deliberate product decision: an unknown address is reported back to the
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
 
     await queryDb(
-      "UPDATE volunteer_accounts SET reset_token_hash = $1, reset_token_expires = $2 WHERE id = $3",
+      "UPDATE users SET reset_token_hash = $1, reset_token_expires = $2 WHERE id = $3",
       [tokenHash, expires, user.id]
     );
 

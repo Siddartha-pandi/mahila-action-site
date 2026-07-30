@@ -6,6 +6,9 @@ import { imgAboutBanner, imgEvent, imgTakeAction, imgStory1 } from "../constants
 import { useSiteData } from "../context/SiteDataContext";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
+import { CouncilorCard } from "../components/CouncilorCard";
+import { FilterTabs } from "../components/FilterTabs";
+import { Button } from "../components/ui/Button";
 import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
 
 export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
@@ -22,6 +25,8 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
     .sort((a, b) => a.order - b.order)
     .map((c) => ({ img: c.image || imgStory1, role: c.role, name: c.name, story: c.bio }));
 
+  const yearTabOptions = timeline.map((t) => ({ id: t.year, name: t.year }));
+
   return (
     <main className="bg-[#f4efe7]">
       <PageBanner img={imgAboutBanner} title="Who Are We" />
@@ -31,7 +36,10 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-[#a65a4a] rounded-2xl p-8 md:p-10">
             <SectionLabel text="Our Mission" />
-            <h3 className={`${fraunces()} text-[#f4efe7] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <h3
+              className={`${fraunces()} text-[#f4efe7] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`}
+              style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
+            >
               Self-Led Sustainable Transformation
             </h3>
             <p className={`${inter()} text-[#f4efe7]/85 text-[17px] leading-relaxed mt-5`}>
@@ -43,7 +51,10 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
           </div>
           <div className="border-2 border-[#a65a4a] rounded-2xl p-8 md:p-10">
             <SectionLabel text="Our Vision" />
-            <h3 className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <h3
+              className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`}
+              style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
+            >
               Self-Led Sustainable Transformation
             </h3>
             <p className={`${inter()} text-[#1e1e1e]/80 text-[17px] leading-relaxed mt-5`}>
@@ -65,16 +76,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {councilors.map((c) => (
-              <div key={c.name} className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-2xl p-8 flex flex-col items-center text-center gap-5">
-                <div className="relative size-[180px] rounded-full overflow-hidden border-4 border-[#a65a4a] shrink-0">
-                  <img loading="lazy" decoding="async" src={c.img} alt={c.name} className="absolute inset-0 size-full object-cover" />
-                </div>
-                <div>
-                  <p className={`${inter()} text-[#a65a4a] text-[14px] italic font-medium`}>{c.role}</p>
-                  <p className={`${inter()} text-[#a65a4a] text-[22px] font-semibold mt-1`}>{c.name}</p>
-                </div>
-                <p className={`${inter()} text-[#a65a4a]/80 text-[17px] leading-relaxed`}>{c.story}</p>
-              </div>
+              <CouncilorCard key={c.name} name={c.name} role={c.role} story={c.story} img={c.img} />
             ))}
           </div>
         </div>
@@ -89,28 +91,31 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
           </div>
           {timeline.length > 0 && (
             <>
-              <div className="flex flex-wrap gap-3 justify-center mb-10">
-                {timeline.map((t) => (
-                  <button
-                    key={t.year}
-                    onClick={() => setActiveYear(t.year)}
-                    className={`${inter()} text-[14px] font-bold px-6 py-2.5 rounded-full transition-colors cursor-pointer ${activeYear === t.year
-                      ? "bg-[#a65a4a] text-[#f4efe7]"
-                      : "bg-[#f4efe7] border border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a]/10"
-                      }`}
-                  >
-                    {t.year}
-                  </button>
-                ))}
+              <div className="mb-10">
+                <FilterTabs
+                  options={yearTabOptions}
+                  activeId={activeYear}
+                  onChange={setActiveYear}
+                  showAllOption={false}
+                />
               </div>
               {active && (
                 <div className="flex flex-col lg:flex-row gap-8 items-center">
                   <div className="relative w-full lg:w-[520px] h-[380px] rounded-2xl overflow-hidden shrink-0">
-                    <img loading="lazy" decoding="async" src={active.img} alt={active.title} className="absolute inset-0 size-full object-cover" />
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src={active.img}
+                      alt={active.title}
+                      className="absolute inset-0 size-full object-cover"
+                    />
                   </div>
                   <div>
                     <p className={`${inter()} text-[14px] text-[#1e1e1e]/60 mb-1`}>{active.year}</p>
-                    <h3 className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] leading-tight capitalize`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+                    <h3
+                      className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] leading-tight capitalize`}
+                      style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
+                    >
                       {active.title}
                     </h3>
                     <p className={`${inter()} text-[#1e1e1e]/80 text-[18px] leading-relaxed mt-5`}>{active.desc}</p>
@@ -129,13 +134,24 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
       <section className="relative py-24 px-6 overflow-hidden">
         <img loading="lazy" decoding="async" src={imgTakeAction} alt="" className="absolute inset-0 size-full object-cover" />
         <div className="absolute inset-0 bg-[#993925]/85" />
-        <div className="relative max-w-[800px] mx-auto text-center">
-          <h2 className={`${fraunces()} text-[#f4efe7] text-[42px] md:text-[52px] leading-tight`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+        <div className="relative max-w-[800px] mx-auto text-center flex flex-col items-center">
+          <h2
+            className={`${fraunces()} text-[#f4efe7] text-[42px] md:text-[52px] leading-tight`}
+            style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
+          >
             One Contribution. Many Futures.
           </h2>
-          <button onClick={() => { setPage("donate"); window.scrollTo({ top: 0 }); }} className={`${inter()} bg-[#f4efe7] text-[#a65a4a] text-[17px] font-bold px-12 py-4 rounded-full mt-8 hover:bg-white transition-colors cursor-pointer`}>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="mt-8 px-12 py-4"
+            onClick={() => {
+              setPage("donate");
+              window.scrollTo({ top: 0 });
+            }}
+          >
             Donate Now
-          </button>
+          </Button>
         </div>
       </section>
     </main>

@@ -728,7 +728,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
                     </div>
                   ) : (
                     <>
-                      <div className="flex gap-2 mb-6">
+                      <div className="flex flex-wrap gap-2 mb-6">
                         {(["all", "ongoing", "upcoming"] as const).map(f => (
                           <button
                             key={f}

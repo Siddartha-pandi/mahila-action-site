@@ -1,5 +1,8 @@
+"use client";
+
 import { useRef, useState } from "react";
 import { X, Check, RotateCcw } from "lucide-react";
+import { Button } from "../components/ui/Button";
 
 type Box = { x: number; y: number; w: number; h: number };
 type DragMode = "move" | "nw" | "ne" | "sw" | "se" | null;
@@ -22,10 +25,6 @@ function clampBox(box: Box, bounds: { w: number; h: number }): Box {
   return { x, y, w, h };
 }
 
-/**
- * A self-contained crop UI: drag to move, drag corners to resize, optional
- * aspect-ratio lock, then exports the selected region as a data URL.
- */
 export function ImageCropModal({
   src,
   onCancel,
@@ -146,19 +145,27 @@ export function ImageCropModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[720px] max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#1e1e1e]/10">
           <h3 className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e]">Crop Image</h3>
-          <button onClick={onCancel} className="size-8 flex items-center justify-center rounded-full hover:bg-[#1e1e1e]/5 cursor-pointer text-[#1e1e1e]/60">
+          <button
+            onClick={onCancel}
+            className="size-8 flex items-center justify-center rounded-full hover:bg-[#1e1e1e]/5 cursor-pointer text-[#1e1e1e]/60"
+            aria-label="Close modal"
+          >
             <X size={18} />
           </button>
         </div>
 
         <div className="flex items-center gap-1.5 px-5 py-2.5 border-b border-[#1e1e1e]/10 bg-[#faf7f3]">
-          <span className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/45 uppercase tracking-wider mr-1">Aspect</span>
+          <span className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/45 uppercase tracking-wider mr-1">
+            Aspect
+          </span>
           {ASPECTS.map((a) => (
             <button
               key={a.label}
               onClick={() => applyAspect(a.value)}
               className={`px-3 py-1 rounded-full text-[12px] font-['Inter',sans-serif] font-medium cursor-pointer transition-colors ${
-                aspect === a.value ? "bg-[#a65a4a] text-white" : "bg-white border border-[#a65a4a]/25 text-[#1e1e1e]/70 hover:border-[#a65a4a]"
+                aspect === a.value
+                  ? "bg-[#a65a4a] text-white"
+                  : "bg-white border border-[#a65a4a]/25 text-[#1e1e1e]/70 hover:border-[#a65a4a]"
               }`}
             >
               {a.label}
@@ -225,22 +232,18 @@ export function ImageCropModal({
         </div>
 
         {error && (
-          <p className="px-5 py-2 text-[12px] font-['Inter',sans-serif] text-red-600 bg-red-50 border-t border-red-100">{error}</p>
+          <p className="px-5 py-2 text-[12px] font-['Inter',sans-serif] text-red-600 bg-red-50 border-t border-red-100 font-medium">
+            {error}
+          </p>
         )}
 
         <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#1e1e1e]/10">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 rounded-full text-[13px] font-['Inter',sans-serif] font-medium text-[#1e1e1e]/70 hover:bg-[#1e1e1e]/5 cursor-pointer"
-          >
+          <Button variant="ghost" onClick={onCancel} size="sm">
             Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-[13px] font-['Inter',sans-serif] font-semibold bg-[#a65a4a] text-white hover:bg-[#993925] transition-colors cursor-pointer"
-          >
-            <Check size={14} /> Apply Crop
-          </button>
+          </Button>
+          <Button variant="primary" onClick={handleConfirm} size="sm" leftIcon={<Check size={14} />}>
+            Apply Crop
+          </Button>
         </div>
       </div>
     </div>

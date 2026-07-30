@@ -44,8 +44,10 @@ export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
 export interface SubmissionItem {
   id: string;
   /** "member" is an account signup — distinct from "volunteer", which is an
-   *  application to help at specific events. */
-  type: "contact" | "volunteer" | "reservation" | "vendor" | "donation" | "member";
+   *  application to help at specific events.
+   *  "perm_volunteer_request" is a user-initiated request for Permanent Volunteer
+   *  status — accepted (Completed) or rejected (Contacted) by admin. */
+  type: "contact" | "volunteer" | "reservation" | "vendor" | "donation" | "member" | "perm_volunteer_request" | "perm_volunteer_deactivate";
   data: any;
   createdAt: string;
   status: "New" | "Contacted" | "Completed";
@@ -192,6 +194,18 @@ export function getUserSubmissions(email?: string, phone?: string): SubmissionIt
   });
 }
 
+function notifySubmissionsChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("mahila_submissions_changed"));
+  try {
+    if ("BroadcastChannel" in window) {
+      const bc = new BroadcastChannel("mahila_live_channel");
+      bc.postMessage("submissions_updated");
+      bc.close();
+    }
+  } catch {}
+}
+
 export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
   try {
     const items = getSubmissions();
@@ -204,6 +218,7 @@ export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
     };
     items.unshift(newItem);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(items));
+    notifySubmissionsChanged();
   } catch (err) {
     console.error("Failed to save local submission:", err);
   }
@@ -214,6 +229,7 @@ export function updateSubmissionStatus(id: string, status: SubmissionItem["statu
     const items = getSubmissions();
     const updated = items.map(item => item.id === id ? { ...item, status } : item);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
+    notifySubmissionsChanged();
   } catch (err) {
     console.error("Failed to update submission status:", err);
   }
@@ -224,6 +240,7 @@ export function deleteSubmission(id: string) {
     const items = getSubmissions();
     const updated = items.filter(item => item.id !== id);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
+    notifySubmissionsChanged();
   } catch (err) {
     console.error("Failed to delete submission:", err);
   }
@@ -461,4 +478,82 @@ export async function resetVolunteerPassword(
   const res = await api.post<{ ok: boolean; profile: VolunteerAccountProfile }>("/api/volunteer-auth/reset-password", { token, password });
   if (!res.ok) return { ok: false, error: res.error };
   return { ok: true, profile: res.data?.profile };
+}
+
+// ── Permanent Volunteer Requests ───────────────────────────────────────────
+//
+// Users submit a perm_volunteer_request via their Account page. Admin staff
+// accept (status → "Completed") or reject (status → "Contacted") it.
+// The badge on the user's profile is driven purely by the resolved status.
+
+export function savePermVolunteerRequest(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  message?: string;
+}) {
+  saveLocalSubmission("perm_volunteer_request", data);
+}
+
+/**
+ * Returns the most recent perm_volunteer_request for the given user,
+ * or null if they have never submitted one.
+ */
+export function getUserPermVolunteerRequest(
+  email?: string,
+  phone?: string
+): SubmissionItem | null {
+  const all = getSubmissions("perm_volunteer_request");
+  if (!email && !phone) return null;
+  const normEmail = email ? email.trim().toLowerCase() : "";
+  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
+
+  const match = all.find((item) => {
+    const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
+    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    if (normEmail && itemEmail === normEmail) return true;
+    if (normPhone && itemPhone === normPhone) return true;
+    return false;
+  });
+
+  return match ?? null;
+}
+
+// ── Permanent Volunteer Deactivation Requests ───────────────────────────────
+//
+// An approved permanent volunteer can request to be deactivated.
+// Admin accepts (status → "Completed") — badge disappears.
+// Admin rejects (status → "Contacted") — they stay permanent volunteer.
+
+export function savePermVolunteerDeactivateRequest(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  message?: string;
+}) {
+  saveLocalSubmission("perm_volunteer_deactivate", data);
+}
+
+/**
+ * Returns the most recent perm_volunteer_deactivate request for the given user,
+ * or null if they have never submitted one.
+ */
+export function getUserPermVolunteerDeactivateRequest(
+  email?: string,
+  phone?: string
+): SubmissionItem | null {
+  const all = getSubmissions("perm_volunteer_deactivate");
+  if (!email && !phone) return null;
+  const normEmail = email ? email.trim().toLowerCase() : "";
+  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
+
+  const match = all.find((item) => {
+    const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
+    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    if (normEmail && itemEmail === normEmail) return true;
+    if (normPhone && itemPhone === normPhone) return true;
+    return false;
+  });
+
+  return match ?? null;
 }

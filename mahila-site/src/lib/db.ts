@@ -4,16 +4,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const dataDir = path.join(process.cwd(), "src/data");
-
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
 let pool: any;
 
 <<<<<<< Updated upstream
 if (process.env.DATABASE_URL) {
+<<<<<<< HEAD
   // PostgreSQL (Neon / Supabase / standard PG)
 =======
 export async function getPool() {
@@ -25,6 +20,9 @@ export async function getPool() {
   }
 
 >>>>>>> Stashed changes
+=======
+  // PostgreSQL (Neon / Supabase / standard PG / Azure)
+>>>>>>> 6292fead7186170bd28a52c7befb43600a8d6d7c
   const pkg = await import("pg");
   const { Pool } = pkg.default || pkg;
   const useSsl =
@@ -38,6 +36,7 @@ export async function getPool() {
   });
 <<<<<<< Updated upstream
 } else {
+<<<<<<< HEAD
   // SQLite fallback
   const Database = (await import("better-sqlite3")).default;
   const dbPath = process.env.DB_PATH || path.join(dataDir, "mahila.db");
@@ -63,6 +62,9 @@ export async function getPool() {
 
   return pool;
 >>>>>>> Stashed changes
+=======
+  throw new Error("DATABASE_URL environment variable is required. SQLite fallback is disabled.");
+>>>>>>> 6292fead7186170bd28a52c7befb43600a8d6d7c
 }
 
 let isInitialized = false;
@@ -92,6 +94,7 @@ export async function initDb() {
       return;
     }
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
     if (process.env.DATABASE_URL) {
       await pool.query(rawSchema);
@@ -135,7 +138,12 @@ export async function initDb() {
     // Run the schema against PostgreSQL pool
     await currentPool.query(rawSchema);
 >>>>>>> Stashed changes
+=======
+    // Run the schema against PostgreSQL pool
+    await pool.query(rawSchema);
+>>>>>>> 6292fead7186170bd28a52c7befb43600a8d6d7c
 
+    // Seed default categories
     const defaultCategories = [
       { id: "cat_women", name: "Women & Leadership" },
       { id: "cat_education", name: "Education & Learning" },
@@ -150,10 +158,12 @@ export async function initDb() {
       );
     }
 
+    // Seed the default superadmin user into the unified users table
     const bcrypt = (await import("bcryptjs")).default;
     const adminPasswordHash = bcrypt.hashSync("1980Jan23", 10);
 <<<<<<< Updated upstream
     await pool.query(
+<<<<<<< HEAD
       `INSERT INTO app_admin_users (id, email, password_hash)
        VALUES ('admin_user_1', 'mahilaaction.vsk@gmail.com', $1)
        ON CONFLICT (id) DO UPDATE SET email = 'mahilaaction.vsk@gmail.com', password_hash = $1`,
@@ -163,11 +173,16 @@ export async function initDb() {
        VALUES ('admin_user_1', 'Lead Super Admin', 'mahilaaction.vsk@gmail.com', 'superadmin', $1, 'Active')
        ON CONFLICT (id) DO UPDATE SET email = 'mahilaaction.vsk@gmail.com', password_hash = $1, role = 'superadmin'`,
 >>>>>>> Stashed changes
+=======
+      `INSERT INTO users (id, name, email, role, password_hash, status)
+       VALUES ('admin_user_1', 'Lead Super Admin', 'mahilaaction.vsk@gmail.com', 'superadmin', $1, 'Active')
+       ON CONFLICT (id) DO UPDATE SET email = 'mahilaaction.vsk@gmail.com', password_hash = $1, role = 'superadmin'`,
+>>>>>>> 6292fead7186170bd28a52c7befb43600a8d6d7c
       [adminPasswordHash]
     );
 
     isInitialized = true;
-    console.log("Database initialized successfully.");
+    console.log("PostgreSQL database initialized successfully.");
   } catch (err) {
     console.error("Failed to initialize database:", err);
     throw err;
