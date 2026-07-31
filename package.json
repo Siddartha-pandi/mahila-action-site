@@ -1,0 +1,10 @@
+{
+  "name": "mahila-action-site-root",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "postinstall": "npm --prefix mahila-site install",
+    "build": "npm --prefix mahila-site run build",
+    "start": "npm --prefix mahila-site run start"
+  }
+}
