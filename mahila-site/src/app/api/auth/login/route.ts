@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       { headers: { "Set-Cookie": cookieHeader } }
     );
   } catch (err: any) {
-    console.error("Login error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("Admin login error:", err);
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }

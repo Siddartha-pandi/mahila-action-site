@@ -64,6 +64,7 @@ export async function initDb(): Promise<void> {
 
       // Run the schema against PostgreSQL pool
       await currentPool.query(rawSchema);
+      await currentPool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
       await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT;");
 
       // Seed default categories
