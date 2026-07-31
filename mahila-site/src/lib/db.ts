@@ -5,10 +5,21 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-let pool: any = null;
-let isInitialized = false;
-let initPromise: Promise<void> | null = null;
-let isUsingSqliteFallback = false;
+// Global cache to persist pool & initialization state across Next.js reloads
+const globalRef = globalThis as any;
+
+let pool: any = globalRef._pgPool || null;
+let isInitialized = globalRef._dbInitialized || false;
+let initPromise: Promise<void> | null = globalRef._dbInitPromise || null;
+let isUsingSqliteFallback = globalRef._isUsingSqliteFallback || false;
+
+// High-speed query cache for SELECT queries (15-second TTL, auto-invalidated on write)
+const queryCache = new Map<string, { data: any; expiresAt: number }>();
+const CACHE_TTL_MS = 15000; // 15s cache for lightning fast responses
+
+function clearQueryCache() {
+  queryCache.clear();
+}
 
 function createSqlitePool() {
   const dataDir = path.join(process.cwd(), "src/data");
@@ -74,7 +85,8 @@ export async function getPool() {
         ssl: useSsl ? { rejectUnauthorized: false } : false,
         max: 20,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2500, // 2.5s fast probe timeout
+        connectionTimeoutMillis: 3000, // 3s probe timeout
+        keepAlive: true,
       });
 
       pgPool.on("error", (err: any) => {
@@ -82,17 +94,22 @@ export async function getPool() {
       });
 
       pool = pgPool;
+      globalRef._pgPool = pool;
       return pool;
     } catch (err) {
       console.warn("⚠️ Failed to initialize PostgreSQL pool:", err);
       isUsingSqliteFallback = true;
+      globalRef._isUsingSqliteFallback = true;
       pool = createSqlitePool();
+      globalRef._pgPool = pool;
       return pool;
     }
   }
 
   isUsingSqliteFallback = true;
+  globalRef._isUsingSqliteFallback = true;
   pool = createSqlitePool();
+  globalRef._pgPool = pool;
   return pool;
 }
 
@@ -269,6 +286,7 @@ export async function initDb(): Promise<void> {
   if (process.env.NEXT_PHASE === "phase-production-build") {
     console.log("Next.js build phase detected. Skipping database initialization.");
     isInitialized = true;
+    globalRef._dbInitialized = true;
     return;
   }
 
@@ -303,7 +321,9 @@ export async function initDb(): Promise<void> {
           console.warn("==================================================================\n");
 
           isUsingSqliteFallback = true;
+          globalRef._isUsingSqliteFallback = true;
           pool = createSqlitePool();
+          globalRef._pgPool = pool;
           currentPool = pool;
         }
       }
@@ -355,6 +375,7 @@ export async function initDb(): Promise<void> {
       await seedAllData(currentPool);
 
       isInitialized = true;
+      globalRef._dbInitialized = true;
       console.log(
         isUsingSqliteFallback
           ? "✓ Local database initialized & seeded successfully."
@@ -363,25 +384,47 @@ export async function initDb(): Promise<void> {
     } catch (err) {
       console.error("Failed to initialize database:", err);
       initPromise = null;
+      globalRef._dbInitPromise = null;
       throw err;
     }
   })();
 
+  globalRef._dbInitPromise = initPromise;
   return initPromise;
 }
 
 export async function queryDb(text: string, params: any[] = []) {
   // Bypass live queries during Next.js static build phase
   if (process.env.NEXT_PHASE === "phase-production-build") {
-    console.log("Next.js build phase query intercepted. Returning empty result.");
     return { rows: [], rowCount: 0 };
+  }
+
+  const isSelect = /^\s*SELECT/i.test(text);
+  const cacheKey = isSelect ? `${text}::${JSON.stringify(params)}` : "";
+
+  // Return cached result if SELECT query is within TTL
+  if (isSelect) {
+    const cached = queryCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+  } else {
+    // Invalidate SELECT cache whenever a write query runs
+    clearQueryCache();
   }
 
   if (!isInitialized) {
     await initDb();
   }
   const currentPool = await getPool();
-  return currentPool.query(text, params);
+  const res = await currentPool.query(text, params);
+
+  // Store in cache for 15 seconds if SELECT query
+  if (isSelect && res) {
+    queryCache.set(cacheKey, { data: res, expiresAt: Date.now() + CACHE_TTL_MS });
+  }
+
+  return res;
 }
 
 export default pool;
