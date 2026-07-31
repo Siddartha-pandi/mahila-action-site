@@ -144,13 +144,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
 
     const adminRes = await signInAdmin(identifier, loginPass);
     if (adminRes.ok) {
-      let canonicalEmail = identifier;
-      if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super" || lowerId === "mahilaaction.vsk@gmail.com") {
-        canonicalEmail = "mahilaaction.vsk@gmail.com";
-      } else if (lowerId === "admin") {
-        canonicalEmail = "admin@organization.org";
-      }
-      setCurrentAdminSession(canonicalEmail);
+      setCurrentAdminSession(identifier);
       setAuthBusy(false);
       handleClose();
       navigate("/admin");

@@ -75,14 +75,17 @@ export async function initDb() {
       );
     }
 
-    // Seed the default superadmin user into the unified users table
+    // Seed the default superadmin user into the unified users table using environment variables
+    const superadminEmail = (process.env.SUPERADMIN_EMAIL || process.env.EMAIL_FROM || "admin@mahilaaction.org").toLowerCase().trim();
+    const superadminPassword = process.env.SUPERADMIN_PASSWORD || "123456";
+
     const bcrypt = (await import("bcryptjs")).default;
-    const adminPasswordHash = bcrypt.hashSync("1980Jan23", 10);
+    const adminPasswordHash = bcrypt.hashSync(superadminPassword, 10);
     await currentPool.query(
       `INSERT INTO users (id, name, email, role, password_hash, status)
-       VALUES ('admin_user_1', 'Lead Super Admin', 'mahilaaction.vsk@gmail.com', 'superadmin', $1, 'Active')
-       ON CONFLICT (email) DO UPDATE SET password_hash = $1, role = 'superadmin', status = 'Active'`,
-      [adminPasswordHash]
+       VALUES ('admin_user_1', 'Lead Super Admin', $1, 'superadmin', $2, 'Active')
+       ON CONFLICT (email) DO UPDATE SET password_hash = $2, role = 'superadmin', status = 'Active'`,
+      [superadminEmail, adminPasswordHash]
     );
 
     isInitialized = true;

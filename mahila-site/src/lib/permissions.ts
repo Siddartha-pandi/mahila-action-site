@@ -122,11 +122,13 @@ export const DEFAULT_ROLES: AdminRole[] = [
   },
 ];
 
+const envSuperAdminEmail = typeof process !== "undefined" ? (process.env.SUPERADMIN_EMAIL || process.env.EMAIL_FROM || "admin@organization.org") : "admin@organization.org";
+
 export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
     id: "usr_superadmin",
     name: "Lead Super Admin",
-    email: "mahilaaction.vsk@gmail.com",
+    email: envSuperAdminEmail.toLowerCase().trim(),
     roleId: "superadmin",
     status: "Active",
     createdAt: new Date().toISOString(),
@@ -299,7 +301,7 @@ export function setCurrentAdminSession(email: string) {
     const users = getStoredAdminUsers();
     let match = users.find(u => u.email.toLowerCase() === normalizedEmail);
 
-    if (normalizedEmail === "mahilaaction.vsk@gmail.com") {
+    if (normalizedEmail === envSuperAdminEmail.toLowerCase().trim()) {
       match = saveAdminUser({
         email: normalizedEmail,
         name: "Lead Super Admin",
