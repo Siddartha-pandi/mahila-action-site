@@ -1,28 +1,16 @@
 -- PostgreSQL Schema for Mahila Action Site
--- Version: 4.0
+-- Version: 4.1
 -- Author: Antigravity
-
-DROP TABLE IF EXISTS contact_submissions CASCADE;
-DROP TABLE IF EXISTS vendor_registrations CASCADE;
-DROP TABLE IF EXISTS event_reservations CASCADE;
-DROP TABLE IF EXISTS donations CASCADE;
-DROP TABLE IF EXISTS site_content CASCADE;
-DROP TABLE IF EXISTS cms_timeline CASCADE;
-DROP TABLE IF EXISTS cms_councilors CASCADE;
-DROP TABLE IF EXISTS cms_blog_posts CASCADE;
-DROP TABLE IF EXISTS cms_categories CASCADE;
-DROP TABLE IF EXISTS cms_events CASCADE;
-DROP TABLE IF EXISTS cms_contact CASCADE;
-DROP TABLE IF EXISTS volunteer_registrations CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
+-- NOTE: Uses CREATE TABLE IF NOT EXISTS — safe to re-run without wiping data.
 
 -- Users table unifying admins and volunteers
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
-  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('superadmin', 'admin', 'member', 'volunteer', 'vendor', 'attendee')),
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('superadmin', 'admin', 'user', 'volunteer', 'vendor', 'attendee')),
+  kind TEXT,
   password_hash TEXT NOT NULL,
   skills TEXT,
   reset_token_hash TEXT,
@@ -32,7 +20,7 @@ CREATE TABLE users (
 );
 
 -- Volunteer registrations (public signup submissions)
-CREATE TABLE volunteer_registrations (
+CREATE TABLE IF NOT EXISTS volunteer_registrations (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
@@ -44,7 +32,7 @@ CREATE TABLE volunteer_registrations (
 );
 
 -- Donations table
-CREATE TABLE donations (
+CREATE TABLE IF NOT EXISTS donations (
   id TEXT PRIMARY KEY,
   amount DOUBLE PRECISION NOT NULL,
   name TEXT,
@@ -59,7 +47,7 @@ CREATE TABLE donations (
 );
 
 -- Event reservations table
-CREATE TABLE event_reservations (
+CREATE TABLE IF NOT EXISTS event_reservations (
   id TEXT PRIMARY KEY,
   event_name TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -73,7 +61,7 @@ CREATE TABLE event_reservations (
 );
 
 -- Vendor registrations table
-CREATE TABLE vendor_registrations (
+CREATE TABLE IF NOT EXISTS vendor_registrations (
   id TEXT PRIMARY KEY,
   event_name TEXT NOT NULL,
   business_name TEXT NOT NULL,
@@ -87,7 +75,7 @@ CREATE TABLE vendor_registrations (
 );
 
 -- Contact submissions table
-CREATE TABLE contact_submissions (
+CREATE TABLE IF NOT EXISTS contact_submissions (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
@@ -99,14 +87,14 @@ CREATE TABLE contact_submissions (
 );
 
 -- Site content key-value store
-CREATE TABLE site_content (
+CREATE TABLE IF NOT EXISTS site_content (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- CMS Events
-CREATE TABLE cms_events (
+CREATE TABLE IF NOT EXISTS cms_events (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
@@ -119,14 +107,14 @@ CREATE TABLE cms_events (
 );
 
 -- CMS Categories
-CREATE TABLE cms_categories (
+CREATE TABLE IF NOT EXISTS cms_categories (
   id TEXT PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- CMS Blog posts
-CREATE TABLE cms_blog_posts (
+CREATE TABLE IF NOT EXISTS cms_blog_posts (
   id TEXT PRIMARY KEY,
   section TEXT NOT NULL,
   category_id TEXT REFERENCES cms_categories(id) ON DELETE SET NULL,
@@ -140,7 +128,7 @@ CREATE TABLE cms_blog_posts (
 );
 
 -- CMS Councilors
-CREATE TABLE cms_councilors (
+CREATE TABLE IF NOT EXISTS cms_councilors (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   role TEXT,
@@ -150,7 +138,7 @@ CREATE TABLE cms_councilors (
 );
 
 -- CMS Timeline
-CREATE TABLE cms_timeline (
+CREATE TABLE IF NOT EXISTS cms_timeline (
   id TEXT PRIMARY KEY,
   year TEXT NOT NULL,
   title TEXT NOT NULL,
@@ -160,7 +148,7 @@ CREATE TABLE cms_timeline (
 );
 
 -- CMS Contact settings
-CREATE TABLE cms_contact (
+CREATE TABLE IF NOT EXISTS cms_contact (
   id SERIAL PRIMARY KEY,
   email TEXT,
   email_note TEXT,
@@ -170,4 +158,16 @@ CREATE TABLE cms_contact (
   address_note TEXT,
   hours TEXT,
   hours_note TEXT
+);
+
+-- Permanent volunteer activation/deactivation requests
+CREATE TABLE IF NOT EXISTS perm_volunteer_requests (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  request_type TEXT NOT NULL DEFAULT 'activate',
+  message TEXT,
+  status TEXT NOT NULL DEFAULT 'New',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

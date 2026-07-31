@@ -37,6 +37,11 @@ export async function POST(req: NextRequest) {
 
     // Anonymous donors are still receipted if they gave an address to send it to.
     if (body.email) {
+      await queryDb(
+        "UPDATE users SET kind = 'donor' WHERE LOWER(email) = LOWER($1)",
+        [String(body.email).trim()]
+      );
+
       sendDonationReceiptEmail(
         body.email,
         body.anonymous ? "" : body.name || "",

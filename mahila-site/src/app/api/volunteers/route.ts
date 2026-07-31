@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    await queryDb(
+      "UPDATE users SET kind = 'volunteer' WHERE LOWER(email) = LOWER($1)",
+      [String(body.email).trim()]
+    );
+
     sendVolunteerConfirmationEmail(body.email, body.name, selectedEvents).catch((err) =>
       console.error("sendVolunteerConfirmationEmail failed:", err)
     );

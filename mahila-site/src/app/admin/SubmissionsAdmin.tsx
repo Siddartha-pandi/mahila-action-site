@@ -136,21 +136,6 @@ export function SubmissionsAdmin() {
       return toast.error("Permission denied: You lack EDIT rights for submissions.");
     }
 
-    // perm_volunteer_request and perm_volunteer_deactivate live only in localStorage — no server endpoint exists.
-    // Update it locally and reflect the change in UI state directly.
-    if (item.type === "perm_volunteer_request" || item.type === "perm_volunteer_deactivate") {
-      updateSubmissionStatus(item.id, status);
-      setSubmissions(prev => prev.map(s => (s.id === item.id ? { ...s, status } : s)));
-      if (selectedItem?.id === item.id) {
-        setSelectedItem(prev => (prev ? { ...prev, status } : null));
-      }
-      const isDeactivate = item.type === "perm_volunteer_deactivate";
-      const actionLabel = isDeactivate ? "Deactivation request" : "Request";
-      const decisionLabel = status === "Completed" ? "Approved ✅" : status === "Contacted" ? "Rejected ✕" : status;
-      toast.success(`${actionLabel} ${decisionLabel}`);
-      return;
-    }
-
     const res = await updateSubmissionStatusRemote(item, status);
     if (!res.ok) return toast.error(res.error || "Could not update the status — please try again.");
 

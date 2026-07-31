@@ -58,6 +58,7 @@ export async function initDb() {
 
     // Run the schema against PostgreSQL pool
     await currentPool.query(rawSchema);
+    await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT;");
 
     // Seed default categories
     const defaultCategories = [
@@ -80,7 +81,7 @@ export async function initDb() {
     await currentPool.query(
       `INSERT INTO users (id, name, email, role, password_hash, status)
        VALUES ('admin_user_1', 'Lead Super Admin', 'mahilaaction.vsk@gmail.com', 'superadmin', $1, 'Active')
-       ON CONFLICT (id) DO UPDATE SET email = 'mahilaaction.vsk@gmail.com', password_hash = $1, role = 'superadmin'`,
+       ON CONFLICT (email) DO UPDATE SET password_hash = $1, role = 'superadmin', status = 'Active'`,
       [adminPasswordHash]
     );
 

@@ -58,6 +58,12 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    const assignedSubRole = isVolunteerSignup ? "volunteer" : "attendee";
+    await queryDb(
+      "UPDATE users SET kind = $1 WHERE LOWER(email) = LOWER($2)",
+      [assignedSubRole, String(body.email).trim()]
+    );
+
     sendReservationConfirmationEmail(body.email, body.name, body.event_name, !!body.volunteer_commitment).catch((err) =>
       console.error("sendReservationConfirmationEmail failed:", err)
     );

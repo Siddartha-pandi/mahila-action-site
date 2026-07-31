@@ -7,18 +7,15 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
     return { ok: false, error: "Enter your admin email and password." };
   }
 
-  // The server is the only authority on credentials. There is deliberately no
-  // local fallback here — one used to let any known-looking identifier in with
-  // any 4-character password.
   const res = await api.post<{ ok?: boolean; email?: string; jwt?: string; token?: string }>("/api/auth/login", {
     email,
     password,
   });
 
   if (res.ok && res.data?.ok) {
-    // Real authentication lives in the httpOnly cookie the server just set.
-    // This value is only a flag telling the UI to render the admin views.
     localStorage.setItem("admin_jwt", res.data.jwt || res.data.token || "session");
+    window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+    window.dispatchEvent(new Event("storage"));
     return { ok: true };
   }
 
@@ -30,13 +27,19 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
 
 export async function signOutAdmin() {
   localStorage.removeItem("admin_jwt");
+  window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+  window.dispatchEvent(new Event("storage"));
 }
 
 export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
   const check = () => cb(Boolean(localStorage.getItem("admin_jwt")));
   check();
+  window.addEventListener("mahila_admin_auth_changed", check);
   window.addEventListener("storage", check);
-  return () => window.removeEventListener("storage", check);
+  return () => {
+    window.removeEventListener("mahila_admin_auth_changed", check);
+    window.removeEventListener("storage", check);
+  };
 }
 
 // ── Local submission storage helpers ────────────────────────────────────
@@ -108,6 +111,7 @@ const SUBMISSION_SOURCES: { type: SubmissionItem["type"]; path: string }[] = [
   { type: "vendor", path: "/api/vendors" },
   { type: "donation", path: "/api/donations" },
   { type: "contact", path: "/api/contact" },
+  { type: "perm_volunteer_request", path: "/api/perm-volunteers" },
 ];
 
 function parseJsonColumn(value: any, fallback: any) {
@@ -121,10 +125,15 @@ function parseJsonColumn(value: any, fallback: any) {
 }
 
 function rowToSubmission(type: SubmissionItem["type"], row: any): SubmissionItem {
-  const { id, status, created_at, createdAt, ...rest } = row;
+  const { id, status, created_at, createdAt, request_type, ...rest } = row;
+  const resolvedType =
+    type === "perm_volunteer_request" && request_type === "deactivate"
+      ? "perm_volunteer_deactivate"
+      : type;
+
   return {
     id: String(id),
-    type,
+    type: resolvedType,
     data: {
       ...rest,
       companions: parseJsonColumn(rest.companions, []),
@@ -239,6 +248,21 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
   }
 }
 
+export async function loadUserSubmissions(email?: string, phone?: string): Promise<SubmissionItem[]> {
+  if (!email && !phone) return [];
+  const all = await loadSubmissions();
+  const normEmail = email ? email.trim().toLowerCase() : "";
+  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
+
+  return all.filter(item => {
+    const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
+    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    if (normEmail && itemEmail === normEmail) return true;
+    if (normPhone && itemPhone === normPhone) return true;
+    return false;
+  });
+}
+
 export function getUserSubmissions(email?: string, phone?: string): SubmissionItem[] {
   const all = getSubmissions();
   if (!email && !phone) return [];
@@ -328,7 +352,7 @@ export type SaveResult = { ok: boolean; error?: string };
 async function submitForm(type: SubmissionItem["type"], path: string, payload: any): Promise<SaveResult> {
   const res = await api.post(path, payload);
   if (res.ok) {
-    saveLocalSubmission(type, payload);
+    notifySubmissionsChanged();
     return { ok: true };
   }
   if (res.status === 0) {
@@ -440,6 +464,18 @@ export function saveUserSession(session: VolunteerAccountProfile | null) {
   window.dispatchEvent(new Event("storage"));
 }
 
+export async function validateUserSession(): Promise<boolean> {
+  const current = getSavedUserSession();
+  if (!current?.email) return false;
+
+  const res = await api.post<{ ok: boolean; exists: boolean }>("/api/volunteer-auth/session", { email: current.email });
+  if (!res.ok || !res.data?.exists) {
+    saveUserSession(null);
+    return false;
+  }
+  return true;
+}
+
 export async function registerVolunteer(data: {
   name: string;
   email: string;
@@ -516,25 +552,15 @@ export async function resetVolunteerPassword(
   return { ok: true, profile: res.data?.profile };
 }
 
-// ── Permanent Volunteer Requests ───────────────────────────────────────────
-//
-// Users submit a perm_volunteer_request via their Account page. Admin staff
-// accept (status → "Completed") or reject (status → "Contacted") it.
-// The badge on the user's profile is driven purely by the resolved status.
-
-export function savePermVolunteerRequest(data: {
+export async function savePermVolunteerRequest(data: {
   name: string;
   email: string;
   phone?: string;
   message?: string;
-}) {
-  saveLocalSubmission("perm_volunteer_request", data);
+}): Promise<SaveResult> {
+  return submitForm("perm_volunteer_request", "/api/perm-volunteers", { ...data, request_type: "activate" });
 }
 
-/**
- * Returns the most recent perm_volunteer_request for the given user,
- * or null if they have never submitted one.
- */
 export function getUserPermVolunteerRequest(
   email?: string,
   phone?: string
@@ -555,25 +581,38 @@ export function getUserPermVolunteerRequest(
   return match ?? null;
 }
 
-// ── Permanent Volunteer Deactivation Requests ───────────────────────────────
-//
-// An approved permanent volunteer can request to be deactivated.
-// Admin accepts (status → "Completed") — badge disappears.
-// Admin rejects (status → "Contacted") — they stay permanent volunteer.
+export function getUserPermVolunteerRequestFromList(
+  all: SubmissionItem[],
+  email?: string,
+  phone?: string
+): SubmissionItem | null {
+  if (!email && !phone) return null;
+  const normEmail = email ? email.trim().toLowerCase() : "";
+  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
-export function savePermVolunteerDeactivateRequest(data: {
+  const match = all.find((item) => {
+    if (item.type !== "perm_volunteer_request") return false;
+    const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
+    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    if (normEmail && itemEmail === normEmail) return true;
+    if (normPhone && itemPhone === normPhone) return true;
+    return false;
+  });
+
+  return match ?? null;
+}
+
+// ── Permanent Volunteer Deactivation Requests ───────────────────────────────
+
+export async function savePermVolunteerDeactivateRequest(data: {
   name: string;
   email: string;
   phone?: string;
   message?: string;
-}) {
-  saveLocalSubmission("perm_volunteer_deactivate", data);
+}): Promise<SaveResult> {
+  return submitForm("perm_volunteer_deactivate", "/api/perm-volunteers", { ...data, request_type: "deactivate" });
 }
 
-/**
- * Returns the most recent perm_volunteer_deactivate request for the given user,
- * or null if they have never submitted one.
- */
 export function getUserPermVolunteerDeactivateRequest(
   email?: string,
   phone?: string
@@ -584,6 +623,27 @@ export function getUserPermVolunteerDeactivateRequest(
   const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
   const match = all.find((item) => {
+    const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
+    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    if (normEmail && itemEmail === normEmail) return true;
+    if (normPhone && itemPhone === normPhone) return true;
+    return false;
+  });
+
+  return match ?? null;
+}
+
+export function getUserPermVolunteerDeactivateRequestFromList(
+  all: SubmissionItem[],
+  email?: string,
+  phone?: string
+): SubmissionItem | null {
+  if (!email && !phone) return null;
+  const normEmail = email ? email.trim().toLowerCase() : "";
+  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
+
+  const match = all.find((item) => {
+    if (item.type !== "perm_volunteer_deactivate") return false;
     const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
     const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
     if (normEmail && itemEmail === normEmail) return true;

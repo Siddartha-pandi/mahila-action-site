@@ -4,8 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getSavedUserSession, saveUserSession,
-  getUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequest,
+  getSavedUserSession, saveUserSession, validateUserSession,
+  getUserSubmissions, loadUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequest,
   savePermVolunteerDeactivateRequest, getUserPermVolunteerDeactivateRequest,
   getRegisteredRoleKeys, registrationKey, normalizeEventTitle,
   type VolunteerAccountProfile, type SubmissionItem, type RegistrationRole,
@@ -41,11 +41,16 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const [reApplying, setReApplying] = useState(false);
 
   useEffect(() => {
-    function syncSession() {
+    async function syncSession() {
       const current = getSavedUserSession();
+      if (current) {
+        const isValid = await validateUserSession();
+        if (!isValid) return;
+      }
       setProfile(current);
       if (current) {
-        setUserSubmissions(getUserSubmissions(current.email, current.phone));
+        const subs = await loadUserSubmissions(current.email, current.phone);
+        setUserSubmissions(subs);
       }
     }
     syncSession();

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const id = nanoid();
     const password_hash = bcrypt.hashSync(String(password), 10);
     await queryDb(
-      `INSERT INTO users (id, name, email, phone, role, password_hash, skills) VALUES ($1, $2, $3, $4, 'volunteer', $5, $6)`,
+      `INSERT INTO users (id, name, email, phone, role, password_hash, skills) VALUES ($1, $2, $3, $4, 'user', $5, $6)`,
       [id, name.trim(), normalizedEmail, normalizedPhone, password_hash, skills || null]
     );
 

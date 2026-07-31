@@ -14,10 +14,13 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const result = await queryDb("SELECT * FROM users WHERE email = $1 AND role IN ('admin', 'superadmin')", [normalizedEmail]);
+    const result = await queryDb(
+      "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role IN ('admin', 'superadmin')",
+      [normalizedEmail]
+    );
     const user = result.rows[0];
 
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (!user || !bcrypt.compareSync(String(password), user.password_hash)) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
 

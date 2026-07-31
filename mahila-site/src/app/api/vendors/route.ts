@@ -47,6 +47,11 @@ export async function POST(req: NextRequest) {
       ]
     );
 
+    await queryDb(
+      "UPDATE users SET kind = 'vendor' WHERE LOWER(email) = LOWER($1)",
+      [String(body.email).trim()]
+    );
+
     sendVendorConfirmationEmail(body.email, body.contact_name, body.business_name, body.event_name).catch((err) =>
       console.error("sendVendorConfirmationEmail failed:", err)
     );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Users,
   Shield,
@@ -21,16 +21,14 @@ import {
   AdminRole,
   AdminModule,
   MODULE_LABELS,
-  getStoredAdminUsers,
   getStoredRoles,
-  saveAdminUser,
-  deleteAdminUser,
   saveRole,
   deleteRole,
   getCurrentAdminSession,
   setCurrentAdminSession,
   hasPermission,
 } from "../../lib/permissions";
+import { api } from "../../lib/api";
 import { toast } from "sonner";
 
 export function RolesAdmin({
@@ -39,9 +37,13 @@ export function RolesAdmin({
   onSessionChange?: (user: AdminUser) => void;
 }) {
   const [activeTab, setActiveTab] = useState<"users" | "matrix">("users");
-  const [users, setUsers] = useState<AdminUser[]>(() => getStoredAdminUsers());
   const [roles, setRoles] = useState<AdminRole[]>(() => getStoredRoles());
   const [currentSession, setCurrentSession] = useState<AdminUser>(() => getCurrentAdminSession());
+
+  // Database Users from PostgreSQL users table
+  const [dbUsers, setDbUsers] = useState<any[]>([]);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   // Search & Filter
   const [search, setSearch] = useState("");
@@ -49,7 +51,7 @@ export function RolesAdmin({
 
   // Modals
   const [showUserModal, setShowUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<Partial<AdminUser> | null>(null);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
 
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
@@ -58,50 +60,92 @@ export function RolesAdmin({
   const canEditRoles = hasPermission(currentSession, "roles", "edit");
   const canDeleteRoles = hasPermission(currentSession, "roles", "delete");
 
+  async function fetchDbUsers() {
+    setDbLoading(true);
+    setDbError(null);
+    try {
+      const res = await api.get<any[]>("/api/members");
+      if (res.ok && Array.isArray(res.data)) {
+        setDbUsers(res.data);
+      } else {
+        setDbError(res.error || "Failed to fetch user accounts.");
+      }
+    } catch (err: any) {
+      setDbError("Could not load user accounts from database.");
+    } finally {
+      setDbLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchDbUsers();
+  }, []);
+
   function refreshData() {
-    const updatedUsers = getStoredAdminUsers();
     const updatedRoles = getStoredRoles();
     const active = getCurrentAdminSession();
-    setUsers(updatedUsers);
     setRoles(updatedRoles);
     setCurrentSession(active);
+    fetchDbUsers();
     if (onSessionChange) onSessionChange(active);
   }
 
-  // ── User Handlers ─────────────────────────────────────────────────────────
+  // ── Database User Handlers ─────────────────────────────────────────────────────────
 
-  function handleSaveUser(e: React.FormEvent) {
+  async function handleSaveUser(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingUser?.email || !editingUser.name) {
+    if (!editingUser?.email || !editingUser?.name) {
       return toast.error("Please fill in both name and email.");
     }
+
     try {
-      const saved = saveAdminUser({
-        id: editingUser.id,
-        name: editingUser.name,
-        email: editingUser.email,
-        roleId: editingUser.roleId || "user",
-        status: editingUser.status || "Active",
-      });
-      toast.success(editingUser.id ? `Updated user ${saved.name}` : `Created user account for ${saved.name}`);
+      if (editingUser.id) {
+        // Edit existing DB user
+        const res = await api.patch(`/api/members/${editingUser.id}`, {
+          name: editingUser.name,
+          email: editingUser.email,
+          phone: editingUser.phone,
+          role: editingUser.role || "user",
+          kind: editingUser.kind || null,
+          status: editingUser.status || "Active",
+          skills: editingUser.skills,
+        });
+        if (!res.ok) throw new Error(res.error || "Failed to update user account.");
+        toast.success(`Updated user ${editingUser.name}`);
+      } else {
+        // Create new user account
+        const res = await api.post("/api/members", {
+          name: editingUser.name,
+          email: editingUser.email,
+          phone: editingUser.phone,
+          role: editingUser.role || "user",
+          kind: editingUser.kind || null,
+          status: editingUser.status || "Active",
+          password: editingUser.password || "123456",
+          skills: editingUser.skills,
+        });
+        if (!res.ok) throw new Error(res.error || "Failed to create user account.");
+        toast.success(`Created user account for ${editingUser.name}`);
+      }
       setShowUserModal(false);
       setEditingUser(null);
-      refreshData();
+      fetchDbUsers();
     } catch (err: any) {
       toast.error(err.message || "Failed to save user account");
     }
   }
 
-  function handleDeleteUser(user: AdminUser) {
+  async function handleDeleteUser(user: any) {
     if (!canDeleteRoles) return toast.error("You do not have permission to delete user accounts.");
-    if (user.roleId === "superadmin") return toast.error("The Super Admin account cannot be deleted.");
-    if (user.id === currentSession.id) return toast.error("You cannot delete your own active user account.");
-    if (!confirm(`Are you sure you want to delete admin account "${user.name}" (${user.email})?`)) return;
+    if (user.role === "superadmin" || user.roleId === "superadmin") return toast.error("The Super Admin account cannot be deleted.");
+    if (user.email === currentSession.email) return toast.error("You cannot delete your own active user account.");
+    if (!confirm(`Are you sure you want to delete user account "${user.name}" (${user.email})?`)) return;
 
     try {
-      deleteAdminUser(user.id);
+      const res = await api.del(`/api/members/${user.id}`);
+      if (!res.ok) throw new Error(res.error || "Cannot delete user.");
       toast.success(`User ${user.name} removed.`);
-      refreshData();
+      fetchDbUsers();
     } catch (err: any) {
       toast.error(err.message || "Cannot delete user.");
     }
@@ -124,12 +168,10 @@ export function RolesAdmin({
       [module]: {
         ...targetRole.permissions[module],
         [action]: !currentPerm,
-        // If edit or delete is enabled, view must automatically be enabled
         view: (!currentPerm && (action === "edit" || action === "delete")) ? true : (action === "view" && currentPerm ? false : targetRole.permissions[module]?.view),
       },
     };
 
-    // If view is toggled off, also turn off edit & delete
     if (action === "view" && currentPerm) {
       updatedPermissions[module] = { view: false, edit: false, delete: false };
     }
@@ -163,7 +205,7 @@ export function RolesAdmin({
     if (!canDeleteRoles) return toast.error("You do not have permission to delete roles.");
     if (role.isSystem) return toast.error("System roles (Super Admin, Admin, User) cannot be deleted.");
 
-    const assignedCount = users.filter(u => u.roleId === role.id).length;
+    const assignedCount = dbUsers.filter(u => u.role === role.id).length;
     if (assignedCount > 0) {
       return toast.error(`Cannot delete role "${role.name}" because ${assignedCount} user(s) are assigned to it.`);
     }
@@ -181,8 +223,22 @@ export function RolesAdmin({
 
   // Helper styling for roles
   function getRoleBadgeLabel(roleId: string) {
-    const role = roles.find(r => r.id === roleId);
-    return role ? role.name : roleId;
+    switch (roleId) {
+      case "superadmin":
+        return "Super Admin";
+      case "admin":
+        return "Admin";
+      case "volunteer":
+        return "Volunteer";
+      case "vendor":
+        return "Vendor";
+      case "attendee":
+        return "Attendee";
+      case "member":
+      case "user":
+      default:
+        return "Member";
+    }
   }
 
   function getRoleBadgeStyle(roleId: string) {
@@ -191,18 +247,24 @@ export function RolesAdmin({
         return "bg-amber-100 text-amber-900 border-amber-300 font-semibold";
       case "admin":
         return "bg-[#a65a4a]/10 text-[#a65a4a] border-[#a65a4a]/30 font-semibold";
-      case "user":
-        return "bg-slate-100 text-slate-700 border-slate-300 font-medium";
-      default:
+      case "volunteer":
+        return "bg-emerald-100 text-emerald-800 border-emerald-300 font-medium";
+      case "vendor":
+        return "bg-blue-100 text-blue-800 border-blue-300 font-medium";
+      case "attendee":
         return "bg-purple-100 text-purple-800 border-purple-300 font-medium";
+      case "member":
+      case "user":
+      default:
+        return "bg-slate-100 text-slate-700 border-slate-300 font-medium";
     }
   }
 
-  const filteredUsers = users.filter(u => {
-    if (roleFilter !== "all" && u.roleId !== roleFilter) return false;
+  const filteredUsers = dbUsers.filter(u => {
+    if (roleFilter !== "all" && u.role !== roleFilter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
-      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      return u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.phone?.toLowerCase().includes(q);
     }
     return true;
   });
@@ -245,7 +307,7 @@ export function RolesAdmin({
             }`}
           >
             <Users className="w-4 h-4" />
-            User Accounts ({users.length})
+            User Accounts ({dbUsers.length})
           </button>
           <button
             onClick={() => setActiveTab("matrix")}
@@ -264,14 +326,14 @@ export function RolesAdmin({
           <button
             onClick={() => {
               if (!canEditRoles) return toast.error("Permission denied.");
-              setEditingUser({ roleId: "user", status: "Active" });
+              setEditingUser({ role: "admin", status: "Active" });
               setShowUserModal(true);
             }}
             disabled={!canEditRoles}
             className="flex items-center gap-2 bg-[#a65a4a] text-white px-4 py-2 rounded-lg text-[13px] font-semibold hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50"
           >
             <UserPlus className="w-4 h-4" />
-            Add Admin User
+            Add User Account
           </button>
         )}
 
@@ -311,48 +373,75 @@ export function RolesAdmin({
       {/* ── USER ACCOUNTS TAB ──────────────────────────────────────────────── */}
       {activeTab === "users" && (
         <div className="space-y-4">
-          {/* Filters */}
-          <div className="bg-white p-4 rounded-xl border border-[#a65a4a]/15 flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#1e1e1e]/40" />
-              <input
-                type="text"
-                placeholder="Search user by name or email..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-[#a65a4a]"
-              />
+          {/* Filters & Refresh */}
+          <div className="bg-white p-4 rounded-xl border border-[#a65a4a]/15 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[240px]">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#1e1e1e]/40" />
+                <input
+                  type="text"
+                  placeholder="Search user by name, email or phone..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-[#a65a4a]"
+                />
+              </div>
+              <select
+                value={roleFilter}
+                onChange={e => setRoleFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-[#a65a4a] bg-white cursor-pointer"
+              >
+                <option value="all">All Roles</option>
+                <option value="superadmin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="member">Member</option>
+                <option value="volunteer">Volunteer</option>
+                <option value="vendor">Vendor</option>
+                <option value="attendee">Attendee</option>
+              </select>
             </div>
-            <select
-              value={roleFilter}
-              onChange={e => setRoleFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-[13px] focus:outline-none focus:border-[#a65a4a] bg-white"
+            <button
+              onClick={fetchDbUsers}
+              disabled={dbLoading}
+              className="flex items-center gap-1.5 px-3 py-2 text-[13px] font-medium text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
             >
-              <option value="all">All Roles</option>
-              {roles.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
+              <RefreshCw className={`w-3.5 h-3.5 ${dbLoading ? "animate-spin" : ""}`} />
+              Refresh Users
+            </button>
           </div>
 
-          {/* User Table */}
+          {/* Unified Database User Accounts Table */}
           <div className="bg-white rounded-xl border border-[#a65a4a]/15 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-[#f0ebe3] text-[#1e1e1e]/70 uppercase text-[11px] font-semibold tracking-wider border-b border-[#a65a4a]/15">
                   <tr>
                     <th className="px-5 py-3.5">User</th>
-                    <th className="px-5 py-3.5">Role</th>
+                    <th className="px-5 py-3.5">Account Role</th>
+                    <th className="px-5 py-3.5">Kind (Participation)</th>
+                    <th className="px-5 py-3.5">Phone</th>
                     <th className="px-5 py-3.5">Status</th>
                     <th className="px-5 py-3.5">Created Date</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredUsers.length === 0 ? (
+                  {dbLoading ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-8 text-center text-[#1e1e1e]/50">
-                        No admin user accounts found matching query.
+                      <td colSpan={7} className="px-5 py-8 text-center text-[#1e1e1e]/40 text-[13px]">
+                        Loading user accounts…
+                      </td>
+                    </tr>
+                  ) : dbError ? (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-6 text-center text-red-500 text-[13px]">
+                        {dbError}
+                      </td>
+                    </tr>
+                  ) : filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-8 text-center text-[#1e1e1e]/50">
+                        No user accounts found matching query.
                       </td>
                     </tr>
                   ) : (
@@ -361,7 +450,7 @@ export function RolesAdmin({
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] font-bold text-sm flex items-center justify-center">
-                              {u.name.charAt(0).toUpperCase()}
+                              {(u.name || "?").charAt(0).toUpperCase()}
                             </div>
                             <div>
                               <p className="font-semibold text-[#1e1e1e]">{u.name}</p>
@@ -370,20 +459,32 @@ export function RolesAdmin({
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] border ${getRoleBadgeStyle(u.roleId)}`}>
-                            {getRoleBadgeLabel(u.roleId)}
+                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] border ${getRoleBadgeStyle(u.role)}`}>
+                            {getRoleBadgeLabel(u.role)}
                           </span>
                         </td>
                         <td className="px-5 py-4">
+                          {u.kind ? (
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] border bg-emerald-50 text-emerald-800 border-emerald-200 capitalize font-medium">
+                              {u.kind}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-[12px]">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-4 text-[#1e1e1e]/70 text-[12px] font-mono">
+                          {u.phone || "—"}
+                        </td>
+                        <td className="px-5 py-4">
                           <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-0.5 rounded-full ${
-                            u.status === "Active" ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"
+                            u.status === "Active" || u.status === "Completed" ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"
                           }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${u.status === "Active" ? "bg-emerald-500" : "bg-gray-400"}`} />
-                            {u.status}
+                            <span className={`w-1.5 h-1.5 rounded-full ${u.status === "Active" || u.status === "Completed" ? "bg-emerald-500" : "bg-gray-400"}`} />
+                            {u.status || "Active"}
                           </span>
                         </td>
                         <td className="px-5 py-4 text-[#1e1e1e]/60 text-[12px]">
-                          {new Date(u.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {u.created_at ? new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -393,15 +494,15 @@ export function RolesAdmin({
                                 setShowUserModal(true);
                               }}
                               className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer"
-                              title="Edit user role or status"
+                              title="Edit user account role or status"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteUser(u)}
-                              disabled={u.roleId === "superadmin" || u.id === currentSession.id || !canDeleteRoles}
+                              disabled={u.role === "superadmin" || u.email === currentSession.email || !canDeleteRoles}
                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                              title={u.roleId === "superadmin" ? "The Super Admin account cannot be deleted" : "Delete user account"}
+                              title={u.role === "superadmin" ? "The Super Admin account cannot be deleted" : "Delete user account"}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -448,7 +549,7 @@ export function RolesAdmin({
                             {r.name}
                           </span>
                           <span className="text-[11px] font-normal text-[#1e1e1e]/50">
-                            {users.filter(u => u.roleId === r.id).length} User(s)
+                            {dbUsers.filter(u => u.role === r.id).length} User(s)
                           </span>
                         </div>
                       </th>
@@ -522,7 +623,7 @@ export function RolesAdmin({
           <div className="bg-white rounded-2xl max-w-[440px] w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b pb-3">
               <h3 className="font-['Fraunces',serif] text-[18px] font-semibold text-[#1e1e1e]">
-                {editingUser?.id ? "Edit Admin User Account" : "Add New Admin User"}
+                {editingUser?.id ? "Edit User Account" : "Add New User Account"}
               </h3>
               <button onClick={() => setShowUserModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
@@ -531,30 +632,54 @@ export function RolesAdmin({
 
             <form onSubmit={handleSaveUser} className="space-y-4 text-[13px]">
               <div>
-                <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Full Name</label>
+                <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Full Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Ananya Rao"
                   value={editingUser?.name || ""}
-                  onChange={e => setEditingUser(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={e => setEditingUser((prev: any) => ({ ...prev, name: e.target.value }))}
                   className={inputBase}
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Email Address</label>
+                <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Email Address *</label>
                 <input
                   type="email"
                   required
                   placeholder="e.g. ananya@mahilaaction.org"
                   value={editingUser?.email || ""}
-                  onChange={e => setEditingUser(prev => ({ ...prev, email: e.target.value }))}
+                  onChange={e => setEditingUser((prev: any) => ({ ...prev, email: e.target.value }))}
                   className={inputBase}
                 />
               </div>
 
-              {editingUser?.roleId === "superadmin" ? (
+              <div>
+                <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Phone Number</label>
+                <input
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={editingUser?.phone || ""}
+                  onChange={e => setEditingUser((prev: any) => ({ ...prev, phone: e.target.value }))}
+                  className={inputBase}
+                />
+              </div>
+
+              {!editingUser?.id && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Password</label>
+                  <input
+                    type="password"
+                    placeholder="Defaults to 123456"
+                    value={editingUser?.password || ""}
+                    onChange={e => setEditingUser((prev: any) => ({ ...prev, password: e.target.value }))}
+                    className={inputBase}
+                  />
+                </div>
+              )}
+
+              {editingUser?.role === "superadmin" ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[12px] text-amber-900 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>Super Admin role and Active status are locked for system security.</span>
@@ -562,17 +687,29 @@ export function RolesAdmin({
               ) : (
                 <>
                   <div>
-                    <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Assigned Role</label>
+                    <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Assigned Account Role</label>
                     <select
-                      value={editingUser?.roleId || "user"}
-                      onChange={e => setEditingUser(prev => ({ ...prev, roleId: e.target.value }))}
+                      value={editingUser?.role || editingUser?.roleId || "user"}
+                      onChange={e => setEditingUser((prev: any) => ({ ...prev, role: e.target.value }))}
                       className={inputBase}
                     >
-                      {roles.filter(r => r.id !== "superadmin").map(r => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} — ({r.description})
-                        </option>
-                      ))}
+                      <option value="admin">Admin</option>
+                      <option value="user">User</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Event Participation (Kind)</label>
+                    <select
+                      value={editingUser?.kind || ""}
+                      onChange={e => setEditingUser((prev: any) => ({ ...prev, kind: e.target.value || null }))}
+                      className={inputBase}
+                    >
+                      <option value="">None (Standard User)</option>
+                      <option value="volunteer">Volunteer</option>
+                      <option value="vendor">Vendor</option>
+                      <option value="attendee">Attendee</option>
+                      <option value="donor">Donor</option>
                     </select>
                   </div>
 
@@ -580,11 +717,14 @@ export function RolesAdmin({
                     <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Account Status</label>
                     <select
                       value={editingUser?.status || "Active"}
-                      onChange={e => setEditingUser(prev => ({ ...prev, status: e.target.value as any }))}
+                      onChange={e => setEditingUser((prev: any) => ({ ...prev, status: e.target.value }))}
                       className={inputBase}
                     >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
+                      <option value="New">New</option>
+                      <option value="Contacted">Contacted</option>
+                      <option value="Completed">Completed</option>
                     </select>
                   </div>
                 </>
