@@ -51,13 +51,14 @@ export function BlogPostsAdmin({
       items={filtered}
       activeId={activeId}
       onSelect={setActiveId}
-      onAdd={section === "impact" ? undefined : handleAdd}
-      onDelete={section === "impact" ? undefined : handleDelete}
+      onAdd={handleAdd}
+      onDelete={handleDelete}
       itemLabel={(p) => p.title}
       itemSubLabel={(p) => (usesCategories ? categories.find((c) => c.id === p.categoryId)?.name ?? "Uncategorized" : new Date(p.createdAt).toLocaleDateString())}
-      addLabel={section === "story" ? "Add New Story" : section === "impact" ? undefined : "Add New Event Blog"}
+      addLabel={section === "story" ? "Add New Story" : section === "impact" ? "Add New Impact Story" : "Add New Event Blog"}
       emptyLabel="Nothing here yet."
     >
+
       {!active ? (
         <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[14px]">Select or add a post to edit it.</p>
       ) : (
