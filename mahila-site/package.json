@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "PORT=${PORT:-3000} node .next/standalone/server.js"
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
