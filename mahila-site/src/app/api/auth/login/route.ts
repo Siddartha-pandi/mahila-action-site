@@ -15,13 +15,13 @@ export async function POST(req: NextRequest) {
 
     const normalizedEmail = String(email).toLowerCase().trim();
     const result = await queryDb(
-      "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role IN ('admin', 'superadmin')",
+      "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role IN ('admin', 'superadmin', 'staff')",
       [normalizedEmail]
     );
     const user = result.rows[0];
 
     if (!user) {
-      return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+      return NextResponse.json({ error: "Invalid email or password, or user account does not have admin/staff access." }, { status: 401 });
     }
 
     const isValidPassword = await bcrypt.compare(String(password), user.password_hash);

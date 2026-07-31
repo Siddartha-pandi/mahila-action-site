@@ -34,11 +34,14 @@ export interface AdminUser {
   name: string;
   email: string;
   roleId: string;
-  status: "Active" | "Inactive";
-  createdAt: string;
+  role?: string;
+  status: "Active" | "Inactive" | string;
+  createdAt?: string;
   lastActiveAt?: string;
   avatarUrl?: string;
+  permissions?: PermissionMatrix | string | null;
 }
+
 
 export const MODULE_LABELS: Record<AdminModule, string> = {
   submissions: "Form Submissions & Applications",
@@ -84,7 +87,7 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
   roles: { view: true, edit: true, delete: true },
 };
 
-const USER_PERMISSIONS: PermissionMatrix = {
+const STAFF_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: false, delete: false },
   events: { view: true, edit: false, delete: false },
   contentTypeBuilder: { view: true, edit: false, delete: false },
@@ -95,6 +98,20 @@ const USER_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: false, delete: false },
   timeline: { view: true, edit: false, delete: false },
   contact: { view: true, edit: false, delete: false },
+  roles: { view: false, edit: false, delete: false },
+};
+
+const USER_PERMISSIONS: PermissionMatrix = {
+  submissions: { view: false, edit: false, delete: false },
+  events: { view: false, edit: false, delete: false },
+  contentTypeBuilder: { view: false, edit: false, delete: false },
+  stories: { view: false, edit: false, delete: false },
+  impactStories: { view: false, edit: false, delete: false },
+  categories: { view: false, edit: false, delete: false },
+  eventsBlog: { view: false, edit: false, delete: false },
+  councilors: { view: false, edit: false, delete: false },
+  timeline: { view: false, edit: false, delete: false },
+  contact: { view: false, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
 };
 
@@ -114,9 +131,16 @@ export const DEFAULT_ROLES: AdminRole[] = [
     permissions: ADMIN_PERMISSIONS,
   },
   {
+    id: "staff",
+    name: "Staff",
+    description: "Staff access with view-only permissions for content and submissions.",
+    isSystem: true,
+    permissions: STAFF_PERMISSIONS,
+  },
+  {
     id: "user",
     name: "User",
-    description: "Standard user access with view-only permissions for content and submissions.",
+    description: "Standard end user account with no admin panel access.",
     isSystem: true,
     permissions: USER_PERMISSIONS,
   },
@@ -260,8 +284,8 @@ export function saveRole(role: AdminRole): AdminRole {
 }
 
 export function deleteRole(roleId: string): boolean {
-  if (["superadmin", "admin", "user"].includes(roleId)) {
-    throw new Error("System roles (Super Admin, Admin, User) cannot be deleted.");
+  if (["superadmin", "admin", "staff", "user"].includes(roleId)) {
+    throw new Error("System roles (Super Admin, Admin, Staff, User) cannot be deleted.");
   }
   const roles = getStoredRoles();
   const filtered = roles.filter(r => r.id !== roleId);
@@ -333,19 +357,33 @@ export function clearAdminSession() {
 // ── Permission Evaluation ───────────────────────────────────────────────────
 
 export function hasPermission(
-  roleIdOrUser: string | AdminUser | undefined | null,
+  roleIdOrUser: string | AdminUser | any | undefined | null,
   module: AdminModule,
   action: PermissionAction
 ): boolean {
   if (!roleIdOrUser) return false;
 
-  let roleId = typeof roleIdOrUser === "string" ? roleIdOrUser : roleIdOrUser.roleId;
+  let roleId = typeof roleIdOrUser === "string" ? roleIdOrUser : (roleIdOrUser.roleId || roleIdOrUser.role);
+  if (roleId === "superadmin") return true;
+
+  // Check custom individual user permission override if provided on user object
+  if (typeof roleIdOrUser === "object" && roleIdOrUser !== null && roleIdOrUser.permissions) {
+    try {
+      const userPerms = typeof roleIdOrUser.permissions === "string"
+        ? JSON.parse(roleIdOrUser.permissions)
+        : roleIdOrUser.permissions;
+
+      if (userPerms && userPerms[module] && typeof userPerms[module][action] === "boolean") {
+        return Boolean(userPerms[module][action]);
+      }
+    } catch {}
+  }
+
+  // Fallback to role-level matrix permission
   const role = getRoleById(roleId);
-
-  if (role.id === "superadmin") return true;
-
   const modulePerms = role.permissions?.[module];
   if (!modulePerms) return false;
 
   return Boolean(modulePerms[action]);
 }
+

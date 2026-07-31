@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   try {
     const body = await req.json();
-    const { role, kind, sub_role, status, name, email, phone, skills } = body || {};
+    const { role, kind, sub_role, status, name, email, phone, skills, permissions } = body || {};
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -48,6 +48,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       updates.push(`skills = $${idx++}`);
       values.push(skills);
     }
+    if (permissions !== undefined) {
+      const serializedPerms = permissions === null
+        ? null
+        : typeof permissions === "string"
+        ? permissions
+        : JSON.stringify(permissions);
+      updates.push(`permissions = $${idx++}`);
+      values.push(serializedPerms);
+    }
+
 
     if (updates.length === 0) {
       return NextResponse.json({ error: "No fields to update." }, { status: 400 });

@@ -18,6 +18,8 @@ import {
   ColSpanType,
 } from "../../lib/contentTypeRegistry";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
+
 
 const FIELD_TYPES: { type: FieldType; label: string; icon: string; desc: string }[] = [
   { type: "string", label: "Text (Short)", icon: "🔤", desc: "Short titles, names, emails, URLs, or small text strings" },
@@ -349,7 +351,7 @@ export function ContentTypeBuilderAdmin() {
               className="bg-[#a65a4a] text-[#f4efe7] text-[11px] font-semibold px-2.5 py-1 rounded-full hover:bg-[#993925] transition-colors cursor-pointer flex items-center gap-1 shadow-sm"
               title="Create new collection or single type"
             >
-              + Create
+              <Plus className="w-3 h-3 stroke-[2.5]" /> Create
             </button>
           </div>
 
@@ -405,11 +407,9 @@ export function ContentTypeBuilderAdmin() {
             </div>
           </div>
         </div>
-
-        <div className="pt-3 border-t border-[#a65a4a]/15 text-[10px] font-['Inter',sans-serif] text-[#1e1e1e]/50">
-          📍 API Prefix: <code className="bg-[#1e1e1e]/5 px-1 py-0.5 rounded">api::*.*</code>
-        </div>
       </div>
+
+
 
       {/* Main Content Area */}
       <div className="flex-1 p-4 md:p-5 flex flex-col justify-between">
@@ -421,10 +421,8 @@ export function ContentTypeBuilderAdmin() {
                 <h2 className="font-['Fraunces',serif] text-[18px] font-bold text-[#1e1e1e]">
                   {currentModel.displayName}
                 </h2>
-                <code className="text-[10.5px] bg-[#a65a4a]/10 text-[#a65a4a] px-2 py-0.5 rounded font-mono font-semibold">
-                  {currentModel.uid}
-                </code>
               </div>
+
               <p className="font-['Inter',sans-serif] text-[11.5px] text-[#1e1e1e]/65 mt-0.5">
                 {currentModel.description}
               </p>
@@ -451,7 +449,7 @@ export function ContentTypeBuilderAdmin() {
                 onClick={handleOpenAddField}
                 className="bg-[#a65a4a] text-[#f4efe7] text-[11.5px] font-semibold px-3.5 py-1.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer shadow-sm flex items-center gap-1"
               >
-                <span>+ Add Another Field</span>
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Add Another Field
               </button>
             </div>
           </div>
@@ -485,15 +483,8 @@ export function ContentTypeBuilderAdmin() {
               <span>👁️ Live Form Preview</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("api")}
-              className={`pb-2 font-['Inter',sans-serif] text-[12.5px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === "api" ? "border-[#a65a4a] text-[#a65a4a]" : "border-transparent text-[#1e1e1e]/50 hover:text-[#1e1e1e]"
-              }`}
-            >
-              <span>⚡ REST API & JSON</span>
-            </button>
           </div>
+
 
           {/* TAB 0: Drag & Drop Canvas */}
           {activeTab === "canvas" && (
@@ -529,7 +520,13 @@ export function ContentTypeBuilderAdmin() {
                         <span className="text-[13px]">{t.icon}</span>
                         <span className="font-medium text-[#1e1e1e] group-hover:text-[#a65a4a]">{t.label}</span>
                       </span>
-                      <span className="text-[10px] font-bold text-[#a65a4a] opacity-80 group-hover:opacity-100">+ Add</span>
+                      <div
+                        className="w-5 h-5 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] group-hover:bg-[#a65a4a] group-hover:text-white flex items-center justify-center transition-colors shrink-0"
+                        title="Add field"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                      </div>
+
                     </button>
                   ))}
                 </div>
@@ -921,71 +918,15 @@ export function ContentTypeBuilderAdmin() {
               </form>
             </div>
           )}
-
-          {/* TAB 2: Live API Reference */}
-          {activeTab === "api" && (
-            <div className="flex flex-col gap-6 font-['Inter',sans-serif]">
-              <div className="bg-[#faf8f5] p-5 rounded-2xl border border-[#a65a4a]/15">
-                <h4 className="font-['Fraunces',serif] text-[16px] font-semibold text-[#1e1e1e] mb-2">
-                  REST API Endpoints for <code className="text-[#a65a4a]">{currentModel.uid}</code>
-                </h4>
-                <div className="flex flex-col gap-2 mt-4 text-[13px] font-mono">
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-green-600 text-white font-bold text-[11px]">GET</span>
-                    <span>{currentModel.apiEndpoint}</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Fetch collection entries</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-blue-600 text-white font-bold text-[11px]">POST</span>
-                    <span>{currentModel.apiEndpoint}</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Create new entry</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-amber-600 text-white font-bold text-[11px]">PUT</span>
-                    <span>{currentModel.apiEndpoint}/[id]</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Update entry by ID</span>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-[#a65a4a]/15">
-                    <span className="px-2.5 py-1 rounded bg-red-600 text-white font-bold text-[11px]">DELETE</span>
-                    <span>{currentModel.apiEndpoint}/[id]</span>
-                    <span className="ml-auto text-[11px] text-[#1e1e1e]/50">Delete entry by ID</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sample JSON Payload */}
-              <div className="bg-[#1e1e1e] text-[#f4efe7] p-5 rounded-2xl font-mono text-[12px]">
-                <p className="text-[#a65a4a] font-bold text-[11px] uppercase tracking-wider mb-2">// Sample JSON Response Object</p>
-                <pre className="overflow-x-auto leading-relaxed">
-{JSON.stringify(
-  {
-    data: {
-      id: "sample_101",
-      ...Object.fromEntries(
-        currentModel.fields
-          .filter(f => f.name !== "id")
-          .map(f => [
-            f.name,
-            f.type === "number" ? 42 : f.type === "boolean" ? true : f.type === "datetime" ? new Date().toISOString() : f.type === "json" ? ["sample"] : f.enumOptions ? f.enumOptions[0] : `Sample ${f.name}`
-          ])
-      ),
-    },
-    meta: { contentType: currentModel.uid, tableName: currentModel.tableName }
-  },
-  null,
-  2
-)}
-                </pre>
-              </div>
-            </div>
-          )}
         </div>
+
 
         {/* Database info banner */}
         <div className="mt-8 pt-4 border-t border-[#a65a4a]/15 flex items-center justify-between text-[12px] font-['Inter',sans-serif] text-[#1e1e1e]/55">
           <span>Table Name: <code className="bg-[#1e1e1e]/5 px-1.5 py-0.5 rounded font-mono font-semibold text-[#1e1e1e]">{currentModel.tableName}</code></span>
-          <span>Database Engine: PostgreSQL / SQLite (Auto-sync)</span>
+          <span>Database Engine: PostgreSQL</span>
         </div>
+
       </div>
 
       {/* MODAL 1: Add Field Modal */}

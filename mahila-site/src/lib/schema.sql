@@ -9,15 +9,17 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
-  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('superadmin', 'admin', 'user', 'volunteer', 'vendor', 'attendee')),
+  role TEXT NOT NULL DEFAULT 'user',
   kind TEXT,
   password_hash TEXT NOT NULL,
   skills TEXT,
+  permissions TEXT,
   reset_token_hash TEXT,
   reset_token_expires TIMESTAMPTZ,
   status TEXT NOT NULL DEFAULT 'New',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 
 -- Volunteer registrations (public signup submissions)
 CREATE TABLE IF NOT EXISTS volunteer_registrations (

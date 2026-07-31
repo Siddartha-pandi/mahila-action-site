@@ -6,9 +6,31 @@ import { saveAllContent, type ContentMap } from "@/lib/content";
 import { type SiteData } from "@/lib/data";
 import { signInAdmin, signOutAdmin, onAdminAuthChange } from "@/lib/backend";
 import {
-  getCurrentAdminSession, setCurrentAdminSession, clearAdminSession,
-  hasPermission, getRoleById, type AdminUser, type AdminModule,
+  getCurrentAdminSession,
+  setCurrentAdminSession,
+  clearAdminSession,
+  hasPermission,
+  getRoleById,
+  type AdminUser,
+  type AdminModule,
 } from "@/lib/permissions";
+import {
+  Inbox,
+  Wrench,
+  Calendar,
+  BookOpen,
+  Sparkles,
+  Tags,
+  Newspaper,
+  UserCheck,
+  History,
+  PhoneCall,
+  ShieldCheck,
+  LogOut,
+  Globe,
+  AlertTriangle,
+  Lock,
+} from "lucide-react";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
 import { EventsAdmin } from "@/app/admin/EventsAdmin";
@@ -22,18 +44,19 @@ import { useContent } from "../context/ContentContext";
 import { LogoMark } from "../components/LogoMark";
 
 const CUSTOM_TABS = [
-  { id: "submissions", label: "Form Submissions & Applications" },
-  { id: "contentTypeBuilder", label: "🛠️ Content-Type Builder" },
-  { id: "events", label: "Upcoming Events" },
-  { id: "stories", label: "Community Stories" },
-  { id: "impactStories", label: "Our Impact — Read More Pages" },
-  { id: "categories", label: "Story Categories" },
-  { id: "eventsBlog", label: "Events Blog" },
-  { id: "councilors", label: "Councilors" },
-  { id: "timeline", label: "Timeline" },
-  { id: "contact", label: "Contact Info" },
-  { id: "roles", label: "User & Role Management" },
+  { id: "submissions", label: "Form Submissions & Applications", icon: Inbox },
+  { id: "events", label: "Upcoming Events", icon: Calendar },
+  { id: "stories", label: "Community Stories", icon: BookOpen },
+  { id: "impactStories", label: "Our Impact Pages", icon: Sparkles },
+  { id: "categories", label: "Story Categories", icon: Tags },
+  { id: "eventsBlog", label: "Events Blog", icon: Newspaper },
+  { id: "councilors", label: "Councilors", icon: UserCheck },
+  { id: "timeline", label: "Timeline", icon: History },
+  { id: "contact", label: "Contact Info", icon: PhoneCall },
+  { id: "roles", label: "User & Role Management", icon: ShieldCheck },
+  { id: "contentTypeBuilder", label: "Content-Type Builder", icon: Wrench, isSuperAdminOnly: true },
 ] as const;
+
 
 export function AdminPage({
   onExit,
@@ -174,7 +197,13 @@ export function AdminPage({
     );
   }
 
-  const visibleTabs = CUSTOM_TABS.filter((t) => hasPermission(currentAdminUser, t.id as AdminModule, "view"));
+  const visibleTabs = CUSTOM_TABS.filter((t) => {
+    if ((t as any).isSuperAdminOnly && currentAdminUser.roleId !== "superadmin") {
+      return false;
+    }
+    return hasPermission(currentAdminUser, t.id as AdminModule, "view");
+  });
+
   const hasViewAccess = hasPermission(currentAdminUser, activeSection as AdminModule, "view");
   const customTab = CUSTOM_TABS.find(t => t.id === activeSection);
   const currentRole = getRoleById(currentAdminUser.roleId);
@@ -185,6 +214,7 @@ export function AdminPage({
 
   return (
     <main className="min-h-screen bg-[#f0ebe3] flex flex-col">
+      {/* Admin Header Bar */}
       <div className="bg-[#a65a4a] px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <LogoMark invert />
@@ -208,59 +238,93 @@ export function AdminPage({
           </div>
 
           {isDirty && (
-            <span className="bg-amber-300 text-amber-950 font-['Inter',sans-serif] text-[10px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full animate-pulse">
-              Unsaved
+            <span className="bg-amber-300 text-amber-950 font-['Inter',sans-serif] text-[10px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full animate-pulse flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" /> Unsaved
             </span>
           )}
-          <button onClick={handleLogout} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap">
-            Sign Out
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
           </button>
-          <button onClick={onExit} className="font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap">
-            ← Site
+          <button
+            onClick={onExit}
+            className="flex items-center gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Site</span>
           </button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar Nav */}
         <nav className="w-[250px] shrink-0 bg-white border-r border-[#a65a4a]/15 py-4 hidden md:block overflow-y-auto">
-          <p className="px-5 pb-2 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/35 uppercase tracking-wider">Manage Content &amp; Access</p>
-          {visibleTabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveSection(t.id)}
-              className={`w-full text-left px-5 py-3 font-['Inter',sans-serif] text-[13px] font-medium transition-colors cursor-pointer ${activeSection === t.id ? "bg-[#a65a4a]/10 text-[#a65a4a] border-r-2 border-[#a65a4a]" : "text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/5"}`}
-            >
-              {t.label}
-            </button>
-          ))}
+          <p className="px-5 pb-3 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/40 uppercase tracking-wider">Manage Content &amp; Access</p>
+          {visibleTabs.map((t) => {
+            const IconComp = t.icon;
+            const isActive = activeSection === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setActiveSection(t.id)}
+                className={`w-full flex items-center gap-3 px-5 py-3 font-['Inter',sans-serif] text-[13px] font-medium transition-all cursor-pointer ${
+                  isActive
+                    ? "bg-[#a65a4a]/10 text-[#a65a4a] border-r-3 border-[#a65a4a] font-semibold"
+                    : "text-[#1e1e1e]/70 hover:text-[#a65a4a] hover:bg-[#a65a4a]/5"
+                }`}
+              >
+                <IconComp className={`w-4 h-4 shrink-0 ${isActive ? "text-[#a65a4a]" : "text-[#1e1e1e]/45"}`} />
+                <span className="truncate">{t.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
+        {/* Mobile Dropdown Nav */}
         <div className="md:hidden w-full px-4 pt-4">
           <select value={activeSection} onChange={e => setActiveSection(e.target.value)} className={`${inputBase} mb-4`}>
             {visibleTabs.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </div>
 
+        {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
-          <h2 className="font-['Fraunces',serif] text-[#1e1e1e] text-[22px] font-semibold mb-6" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-            {customTab?.label}
-          </h2>
+          <div className="flex items-center gap-3 mb-6">
+            {customTab?.icon && (
+              <div className="w-10 h-10 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center shadow-xs">
+                <customTab.icon className="w-5 h-5" />
+              </div>
+            )}
+            <h2 className="font-['Fraunces',serif] text-[#1e1e1e] text-[22px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+              {customTab?.label}
+            </h2>
+          </div>
 
-          {!hasViewAccess ? (
-            <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center max-w-lg mx-auto my-12">
-              <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
-                🔒
+          {!hasViewAccess || visibleTabs.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center max-w-lg mx-auto my-12 shadow-sm">
+              <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3 text-xl">
+                <Lock className="w-6 h-6" />
               </div>
               <h3 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">Access Restricted</h3>
               <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/60 mt-2">
-                Your role <strong>({currentRole.name})</strong> does not have permission to view the <strong>{customTab?.label}</strong> module.
+                Standard user accounts <strong>({currentRole.name})</strong> are not permitted to access the Admin Panel. Access is restricted to Super Admin, Admin, and Staff.
               </p>
-              {visibleTabs.length > 0 && (
+              {visibleTabs.length > 0 ? (
                 <button
                   onClick={() => setActiveSection(visibleTabs[0].id)}
-                  className="mt-5 px-5 py-2.5 bg-[#a65a4a] text-white text-[13px] font-semibold rounded-full hover:bg-[#993925] transition-colors"
+                  className="mt-5 px-5 py-2.5 bg-[#a65a4a] text-white text-[13px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
                 >
                   Return to {visibleTabs[0].label}
+                </button>
+              ) : (
+                <button
+                  onClick={onExit}
+                  className="mt-5 px-5 py-2.5 bg-[#a65a4a] text-white text-[13px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+                >
+                  ← Back to Website
                 </button>
               )}
             </div>

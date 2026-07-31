@@ -4,36 +4,99 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-let pool: any;
+let pool: any = null;
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
+let isUsingSqliteFallback = false;
+
+function createSqlitePool() {
+  const dataDir = path.join(process.cwd(), "src/data");
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const { createRequire } = require("node:module");
+  const req = createRequire(import.meta.url || __filename);
+  const Database = req("better-sqlite3");
+  const dbPath = process.env.DB_PATH || path.join(dataDir, "mahila.db");
+  const sqliteDb = new Database(dbPath);
+  sqliteDb.pragma("journal_mode = WAL");
+
+  return {
+    query: async (text: string, params: any[] = []) => {
+      const sqliteParams: any[] = [];
+      const convertedSql = text
+        .replace(/\$(\d+)/g, (_, numStr) => {
+          const idx = parseInt(numStr, 10) - 1;
+          if (params && idx >= 0 && idx < params.length) {
+            sqliteParams.push(params[idx]);
+          } else {
+            sqliteParams.push(null);
+          }
+          return "?";
+        })
+        .replace(/::text/g, "");
+
+      const isSelectOrReturning = /^\s*(SELECT|WITH)|RETURNING/i.test(convertedSql);
+      if (isSelectOrReturning) {
+        const cleanedSql = convertedSql.replace(/\s+RETURNING\s+[\w\*,\s]+$/i, "");
+        const stmt = sqliteDb.prepare(cleanedSql);
+        const rows = stmt.all(...sqliteParams);
+        return { rows, rowCount: rows.length };
+      } else {
+        const stmt = sqliteDb.prepare(convertedSql);
+        const info = stmt.run(...sqliteParams);
+        return { rows: [], rowCount: info.changes };
+      }
+    },
+    isSqlite: true,
+  };
+}
 
 export async function getPool() {
   if (pool) return pool;
 
   const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL environment variable is required. SQLite fallback is disabled.");
+  if (databaseUrl && !isUsingSqliteFallback) {
+    try {
+      const pkg = await import("pg");
+      const { Pool } = pkg.default || pkg;
+
+      // Replace sslmode=require with sslmode=verify-full to prevent Node security warning
+      const cleanUrl = databaseUrl.replace("sslmode=require", "sslmode=verify-full");
+      const useSsl =
+        process.env.DATABASE_SSL === "true" ||
+        cleanUrl.includes("sslmode=") ||
+        cleanUrl.includes("neon.tech") ||
+        cleanUrl.includes("postgres.database.azure.com");
+
+      const pgPool = new Pool({
+        connectionString: cleanUrl,
+        ssl: useSsl ? { rejectUnauthorized: false } : false,
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 4000, // 4s timeout for fast connection test
+      });
+
+      // Handle background socket errors cleanly without crashing process
+      pgPool.on("error", (err: any) => {
+        console.error("PostgreSQL pool background error:", err?.message || err);
+      });
+
+      pool = pgPool;
+      return pool;
+    } catch (err) {
+      console.warn("⚠️ Failed to connect to PostgreSQL. Switching to local SQLite database.", err);
+      isUsingSqliteFallback = true;
+      pool = createSqlitePool();
+      return pool;
+    }
   }
 
-  const pkg = await import("pg");
-  const { Pool } = pkg.default || pkg;
-  const useSsl =
-    process.env.DATABASE_SSL === "true" ||
-    databaseUrl.includes("sslmode=") ||
-    databaseUrl.includes("neon.tech");
-
-  pool = new Pool({
-    connectionString: databaseUrl,
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
-    max: 15,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-  });
-
+  isUsingSqliteFallback = true;
+  pool = createSqlitePool();
   return pool;
 }
-
-let isInitialized = false;
-let initPromise: Promise<void> | null = null;
 
 export async function initDb(): Promise<void> {
   if (isInitialized) return;
@@ -48,7 +111,7 @@ export async function initDb(): Promise<void> {
 
   initPromise = (async () => {
     try {
-      const currentPool = await getPool();
+      let currentPool = await getPool();
       const schemaPath1 = path.join(process.cwd(), "src/lib/schema.sql");
       const schemaPath2 = path.join(process.cwd(), "src/server/schema.sql");
       let rawSchema = "";
@@ -62,10 +125,62 @@ export async function initDb(): Promise<void> {
         return;
       }
 
-      // Run the schema against PostgreSQL pool
-      await currentPool.query(rawSchema);
-      await currentPool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
-      await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT;");
+      // Test PostgreSQL connection probe if attempting PG
+      if (!isUsingSqliteFallback && currentPool) {
+        try {
+          await currentPool.query("SELECT 1");
+        } catch (pgErr: any) {
+          console.warn(
+            "⚠️ Azure PostgreSQL connection timed out / blocked by firewall:",
+            pgErr?.message || pgErr
+          );
+          console.warn("⚠️ Switching to local SQLite database fallback for uninterrupted operation.");
+          isUsingSqliteFallback = true;
+          pool = createSqlitePool();
+          currentPool = pool;
+        }
+      }
+
+      if (isUsingSqliteFallback) {
+        // Execute SQLite schema
+        const sqliteSchema = rawSchema
+          .replace(/TIMESTAMPTZ/g, "TEXT")
+          .replace(/NOW\(\)/g, "CURRENT_TIMESTAMP")
+          .replace(/SERIAL PRIMARY KEY/g, "INTEGER PRIMARY KEY AUTOINCREMENT")
+          .replace(/DOUBLE PRECISION/g, "REAL")
+          .replace(/::text/g, "");
+
+        const statements = sqliteSchema
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+        for (const statement of statements) {
+          try {
+            await currentPool.query(statement);
+          } catch {}
+        }
+
+        // Ensure newly added columns exist in pre-existing SQLite databases
+        try {
+          await currentPool.query("ALTER TABLE users ADD COLUMN kind TEXT;");
+        } catch {}
+        try {
+          await currentPool.query("ALTER TABLE users ADD COLUMN permissions TEXT;");
+        } catch {}
+      } else {
+        // Run PostgreSQL schema & migrations
+        await currentPool.query(rawSchema);
+        try {
+          await currentPool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
+        } catch {}
+        try {
+          await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT;");
+        } catch {}
+        try {
+          await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT;");
+        } catch {}
+      }
 
       // Seed default categories
       await currentPool.query(`
@@ -77,9 +192,13 @@ export async function initDb(): Promise<void> {
         ON CONFLICT (id) DO NOTHING
       `);
 
-      // Seed the default superadmin user into the unified users table using environment variables
-      const superadminEmail = (process.env.SUPERADMIN_EMAIL || process.env.EMAIL_FROM || "admin@mahilaaction.org").toLowerCase().trim();
-      const superadminPassword = process.env.SUPERADMIN_PASSWORD || "123456";
+      // Seed default superadmin user into unified users table
+      const superadminEmail = (
+        process.env.SUPERADMIN_EMAIL ||
+        process.env.EMAIL_FROM ||
+        "mahilaaction.vsk@gmail.com"
+      ).toLowerCase().trim();
+      const superadminPassword = process.env.SUPERADMIN_PASSWORD || "1980Jan23";
 
       const bcrypt = (await import("bcryptjs")).default;
       const adminPasswordHash = await bcrypt.hash(superadminPassword, 10);
@@ -91,7 +210,11 @@ export async function initDb(): Promise<void> {
       );
 
       isInitialized = true;
-      console.log("PostgreSQL database initialized successfully.");
+      console.log(
+        isUsingSqliteFallback
+          ? "SQLite database initialized & migrated successfully."
+          : "PostgreSQL database initialized & migrated successfully."
+      );
     } catch (err) {
       console.error("Failed to initialize database:", err);
       initPromise = null;
@@ -103,7 +226,7 @@ export async function initDb(): Promise<void> {
 }
 
 export async function queryDb(text: string, params: any[] = []) {
-  // Bypass live queries during Next.js static build phase to prevent build failure
+  // Bypass live queries during Next.js static build phase
   if (process.env.NEXT_PHASE === "phase-production-build") {
     console.log("Next.js build phase query intercepted. Returning empty result.");
     return { rows: [], rowCount: 0 };

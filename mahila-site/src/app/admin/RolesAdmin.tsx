@@ -22,12 +22,14 @@ import {
   AdminModule,
   MODULE_LABELS,
   getStoredRoles,
+  getRoleById,
   saveRole,
   deleteRole,
   getCurrentAdminSession,
   setCurrentAdminSession,
   hasPermission,
 } from "../../lib/permissions";
+
 import { api } from "../../lib/api";
 import { toast } from "sonner";
 
@@ -99,31 +101,26 @@ export function RolesAdmin({
     }
 
     try {
+      const payload: any = {
+        name: editingUser.name,
+        email: editingUser.email,
+        phone: editingUser.phone,
+        role: editingUser.role || "user",
+        kind: editingUser.kind || null,
+        status: editingUser.status || "Active",
+        skills: editingUser.skills,
+        permissions: editingUser.permissions ?? null,
+      };
+
       if (editingUser.id) {
         // Edit existing DB user
-        const res = await api.patch(`/api/members/${editingUser.id}`, {
-          name: editingUser.name,
-          email: editingUser.email,
-          phone: editingUser.phone,
-          role: editingUser.role || "user",
-          kind: editingUser.kind || null,
-          status: editingUser.status || "Active",
-          skills: editingUser.skills,
-        });
+        const res = await api.patch(`/api/members/${editingUser.id}`, payload);
         if (!res.ok) throw new Error(res.error || "Failed to update user account.");
         toast.success(`Updated user ${editingUser.name}`);
       } else {
         // Create new user account
-        const res = await api.post("/api/members", {
-          name: editingUser.name,
-          email: editingUser.email,
-          phone: editingUser.phone,
-          role: editingUser.role || "user",
-          kind: editingUser.kind || null,
-          status: editingUser.status || "Active",
-          password: editingUser.password || "123456",
-          skills: editingUser.skills,
-        });
+        payload.password = editingUser.password || "123456";
+        const res = await api.post("/api/members", payload);
         if (!res.ok) throw new Error(res.error || "Failed to create user account.");
         toast.success(`Created user account for ${editingUser.name}`);
       }
@@ -131,6 +128,7 @@ export function RolesAdmin({
       setEditingUser(null);
       fetchDbUsers();
     } catch (err: any) {
+
       toast.error(err.message || "Failed to save user account");
     }
   }
@@ -228,6 +226,8 @@ export function RolesAdmin({
         return "Super Admin";
       case "admin":
         return "Admin";
+      case "staff":
+        return "Staff";
       case "volunteer":
         return "Volunteer";
       case "vendor":
@@ -237,7 +237,7 @@ export function RolesAdmin({
       case "member":
       case "user":
       default:
-        return "Member";
+        return "User";
     }
   }
 
@@ -247,6 +247,8 @@ export function RolesAdmin({
         return "bg-amber-100 text-amber-900 border-amber-300 font-semibold";
       case "admin":
         return "bg-[#a65a4a]/10 text-[#a65a4a] border-[#a65a4a]/30 font-semibold";
+      case "staff":
+        return "bg-sky-100 text-sky-800 border-sky-300 font-semibold";
       case "volunteer":
         return "bg-emerald-100 text-emerald-800 border-emerald-300 font-medium";
       case "vendor":
@@ -394,7 +396,8 @@ export function RolesAdmin({
                 <option value="all">All Roles</option>
                 <option value="superadmin">Super Admin</option>
                 <option value="admin">Admin</option>
-                <option value="member">Member</option>
+                <option value="staff">Staff</option>
+                <option value="user">User</option>
                 <option value="volunteer">Volunteer</option>
                 <option value="vendor">Vendor</option>
                 <option value="attendee">Attendee</option>
@@ -459,9 +462,17 @@ export function RolesAdmin({
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] border ${getRoleBadgeStyle(u.role)}`}>
-                            {getRoleBadgeLabel(u.role)}
-                          </span>
+                          <div className="flex flex-col items-start gap-1">
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] border ${getRoleBadgeStyle(u.role)}`}>
+                              {getRoleBadgeLabel(u.role)}
+                            </span>
+                            {u.permissions && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-purple-100 text-purple-900 border border-purple-300 font-semibold">
+                                <ShieldCheck className="w-3 h-3 text-purple-700" />
+                                Custom Perms
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-4">
                           {u.kind ? (
@@ -488,16 +499,31 @@ export function RolesAdmin({
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            {u.role !== "superadmin" && (
+                              <button
+                                onClick={() => {
+                                  const basePerms = u.permissions || getRoleById(u.role).permissions;
+                                  setEditingUser({ ...u, permissions: JSON.parse(JSON.stringify(basePerms)) });
+                                  setShowUserModal(true);
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors cursor-pointer"
+                                title="Customize individual user permissions"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                Permissions
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 setEditingUser(u);
                                 setShowUserModal(true);
                               }}
                               className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer"
-                              title="Edit user account role or status"
+                              title="Edit user account details"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
+
                             <button
                               onClick={() => handleDeleteUser(u)}
                               disabled={u.role === "superadmin" || u.email === currentSession.email || !canDeleteRoles}
@@ -508,6 +534,7 @@ export function RolesAdmin({
                             </button>
                           </div>
                         </td>
+
                       </tr>
                     ))
                   )}
@@ -526,9 +553,10 @@ export function RolesAdmin({
             <div>
               <p className="font-semibold">Granular Access Control Rules:</p>
               <p className="mt-0.5 text-amber-800/90">
-                • <strong>Super Admin</strong> retains full access across all modules.<br />
+                • <strong>Super Admin</strong> retains unrestricted full access across all modules (hidden from matrix).<br />
                 • <strong>Admin</strong> has full CRUD permissions across content modules by default.<br />
-                • <strong>User (Staff)</strong> provides read-only view access across modules.<br />
+                • <strong>Staff</strong> provides view-only access across content and submission modules.<br />
+                • <strong>User</strong> (End-user accounts) cannot access the admin panel.<br />
                 • Toggling <strong>EDIT</strong> or <strong>DELETE</strong> automatically ensures <strong>VIEW</strong> permission is enabled.
               </p>
             </div>
@@ -542,7 +570,7 @@ export function RolesAdmin({
                     <th className="px-5 py-4 font-['Fraunces',serif] text-[15px] font-semibold text-[#1e1e1e] min-w-[240px]">
                       Module / Section
                     </th>
-                    {roles.map((r) => (
+                    {roles.filter(r => r.id !== "superadmin").map((r) => (
                       <th key={r.id} className="px-4 py-4 min-w-[180px] text-center border-l border-gray-200/80">
                         <div className="flex flex-col items-center">
                           <span className={`px-3 py-1 rounded-full text-[11px] border mb-1 ${getRoleBadgeStyle(r.id)}`}>
@@ -562,19 +590,18 @@ export function RolesAdmin({
                       <td className="px-5 py-3.5 font-medium text-[#1e1e1e]">
                         {MODULE_LABELS[modKey]}
                       </td>
-                      {roles.map((r) => {
+                      {roles.filter(r => r.id !== "superadmin").map((r) => {
                         const perm = r.permissions[modKey] || { view: false, edit: false, delete: false };
-                        const isSuper = r.id === "superadmin";
 
                         return (
                           <td key={r.id} className="px-3 py-3 border-l border-gray-100 text-center">
                             <div className="flex items-center justify-center gap-3 text-[11px]">
                               {/* View */}
-                              <label className={`flex items-center gap-1 cursor-pointer ${isSuper ? "opacity-70" : ""}`} title="View Access">
+                              <label className="flex items-center gap-1 cursor-pointer" title="View Access">
                                 <input
                                   type="checkbox"
                                   checked={perm.view}
-                                  disabled={isSuper || !canEditRoles}
+                                  disabled={!canEditRoles}
                                   onChange={() => handleTogglePermission(r.id, modKey, "view")}
                                   className="rounded text-[#a65a4a] focus:ring-[#a65a4a] cursor-pointer"
                                 />
@@ -582,11 +609,11 @@ export function RolesAdmin({
                               </label>
 
                               {/* Edit */}
-                              <label className={`flex items-center gap-1 cursor-pointer ${isSuper ? "opacity-70" : ""}`} title="Edit Access">
+                              <label className="flex items-center gap-1 cursor-pointer" title="Edit Access">
                                 <input
                                   type="checkbox"
                                   checked={perm.edit}
-                                  disabled={isSuper || !canEditRoles}
+                                  disabled={!canEditRoles}
                                   onChange={() => handleTogglePermission(r.id, modKey, "edit")}
                                   className="rounded text-[#a65a4a] focus:ring-[#a65a4a] cursor-pointer"
                                 />
@@ -594,11 +621,11 @@ export function RolesAdmin({
                               </label>
 
                               {/* Delete */}
-                              <label className={`flex items-center gap-1 cursor-pointer ${isSuper ? "opacity-70" : ""}`} title="Delete Access">
+                              <label className="flex items-center gap-1 cursor-pointer" title="Delete Access">
                                 <input
                                   type="checkbox"
                                   checked={perm.delete}
-                                  disabled={isSuper || !canEditRoles}
+                                  disabled={!canEditRoles}
                                   onChange={() => handleTogglePermission(r.id, modKey, "delete")}
                                   className="rounded text-[#a65a4a] focus:ring-[#a65a4a] cursor-pointer"
                                 />
@@ -616,6 +643,7 @@ export function RolesAdmin({
           </div>
         </div>
       )}
+
 
       {/* ── ADD / EDIT USER MODAL ─────────────────────────────────────────── */}
       {showUserModal && (
@@ -693,8 +721,9 @@ export function RolesAdmin({
                       onChange={e => setEditingUser((prev: any) => ({ ...prev, role: e.target.value }))}
                       className={inputBase}
                     >
-                      <option value="admin">Admin</option>
-                      <option value="user">User</option>
+                      <option value="admin">Admin (Full Access)</option>
+                      <option value="staff">Staff (View Only Admin Access)</option>
+                      <option value="user">User (No Admin Access)</option>
                     </select>
                   </div>
 
@@ -727,8 +756,103 @@ export function RolesAdmin({
                       <option value="Completed">Completed</option>
                     </select>
                   </div>
+
+                  {/* Per-User Individual Permission Customization Section */}
+                  <div className="border-t border-gray-200 pt-4 mt-2 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[12px] font-semibold text-[#1e1e1e] flex items-center gap-1.5 cursor-pointer">
+                        <ShieldCheck className="w-4 h-4 text-[#a65a4a]" />
+                        Individual User Permissions Override
+                      </label>
+                      {editingUser?.permissions && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingUser((prev: any) => ({ ...prev, permissions: null }))}
+                          className="text-[11px] text-red-600 hover:underline cursor-pointer font-medium"
+                        >
+                          Reset to Role Defaults
+                        </button>
+                      )}
+                    </div>
+
+                    {!editingUser?.permissions ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const baseRolePerms = getRoleById(editingUser?.role || "user").permissions;
+                          setEditingUser((prev: any) => ({
+                            ...prev,
+                            permissions: JSON.parse(JSON.stringify(baseRolePerms)),
+                          }));
+                        }}
+                        className="w-full py-2 px-3 bg-[#a65a4a]/10 text-[#a65a4a] text-[12px] font-semibold rounded-lg hover:bg-[#a65a4a]/20 transition-colors cursor-pointer text-center"
+                      >
+                        + Customize Individual Permissions for {editingUser?.name || "this User"}
+                      </button>
+                    ) : (
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 max-h-[260px] overflow-y-auto space-y-2 text-[12px]">
+                        <p className="text-[11px] text-[#1e1e1e]/60 mb-2 font-medium">
+                          Custom per-user overrides take precedence over the assigned role default.
+                        </p>
+                        {(Object.keys(MODULE_LABELS) as AdminModule[]).map((modKey) => {
+                          const userPerms = typeof editingUser.permissions === "string"
+                            ? JSON.parse(editingUser.permissions)
+                            : (editingUser.permissions || {});
+                          const modPerm = userPerms[modKey] || { view: false, edit: false, delete: false };
+
+                          const updateModPerm = (action: "view" | "edit" | "delete", val: boolean) => {
+                            const nextPerms = {
+                              ...userPerms,
+                              [modKey]: {
+                                ...modPerm,
+                                [action]: val,
+                                view: val && (action === "edit" || action === "delete") ? true : (!val && action === "view" ? false : modPerm.view),
+                              },
+                            };
+                            setEditingUser((prev: any) => ({ ...prev, permissions: nextPerms }));
+                          };
+
+                          return (
+                            <div key={modKey} className="flex items-center justify-between border-b border-gray-200/60 pb-1.5 last:border-b-0">
+                              <span className="font-medium text-[#1e1e1e]/80 text-[11px]">{MODULE_LABELS[modKey]}</span>
+                              <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-1 cursor-pointer text-[10px]">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(modPerm.view)}
+                                    onChange={(e) => updateModPerm("view", e.target.checked)}
+                                    className="rounded text-[#a65a4a] focus:ring-[#a65a4a]"
+                                  />
+                                  <span className={modPerm.view ? "text-emerald-700 font-semibold" : "text-gray-400"}>View</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer text-[10px]">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(modPerm.edit)}
+                                    onChange={(e) => updateModPerm("edit", e.target.checked)}
+                                    className="rounded text-[#a65a4a] focus:ring-[#a65a4a]"
+                                  />
+                                  <span className={modPerm.edit ? "text-[#a65a4a] font-semibold" : "text-gray-400"}>Edit</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer text-[10px]">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(modPerm.delete)}
+                                    onChange={(e) => updateModPerm("delete", e.target.checked)}
+                                    className="rounded text-[#a65a4a] focus:ring-[#a65a4a]"
+                                  />
+                                  <span className={modPerm.delete ? "text-red-700 font-semibold" : "text-gray-400"}>Del</span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
+
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
