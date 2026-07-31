@@ -20,7 +20,12 @@ export async function POST(req: NextRequest) {
     ]);
     const user = result.rows[0];
 
-    if (!user || !bcrypt.compareSync(String(password), user.password_hash)) {
+    if (!user) {
+      return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });
+    }
+
+    const isValidPassword = await bcrypt.compare(String(password), user.password_hash);
+    if (!isValidPassword) {
       return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });
     }
 
