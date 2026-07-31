@@ -7,8 +7,9 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
     return { ok: false, error: "Enter your admin email and password." };
   }
 
+  const cleanEmail = email.trim().toLowerCase();
   const res = await api.post<{ ok?: boolean; email?: string; jwt?: string; token?: string }>("/api/auth/login", {
-    email,
+    email: cleanEmail,
     password,
   });
 

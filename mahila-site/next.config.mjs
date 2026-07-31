@@ -3,14 +3,18 @@ import path from "node:path";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  transpilePackages: ["lucide-react"],
   experimental: {
-    serverComponentsExternalPackages: ["better-sqlite3", "pg", "bcryptjs"],
+    serverComponentsExternalPackages: ["pg", "bcryptjs"],
   },
   images: {
     unoptimized: true,
   },
-  webpack: (config) => {
+  webpack: (config, { dev }) => {
     config.resolve.alias["@"] = path.resolve(process.cwd(), "src");
+    if (dev) {
+      config.cache = false;
+    }
     return config;
   },
 };

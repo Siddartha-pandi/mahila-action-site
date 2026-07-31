@@ -95,6 +95,13 @@ CREATE TABLE IF NOT EXISTS site_content (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- CMS Categories
+CREATE TABLE IF NOT EXISTS cms_categories (
+  id TEXT PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- CMS Events
 CREATE TABLE IF NOT EXISTS cms_events (
   id TEXT PRIMARY KEY,
@@ -105,13 +112,7 @@ CREATE TABLE IF NOT EXISTS cms_events (
   location TEXT,
   total_seats INTEGER DEFAULT 0,
   windows TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- CMS Categories
-CREATE TABLE IF NOT EXISTS cms_categories (
-  id TEXT PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
+  category_id TEXT REFERENCES cms_categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

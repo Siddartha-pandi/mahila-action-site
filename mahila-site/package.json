@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}"
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "seed:pg": "npx tsx src/scripts/seed-postgres.ts"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

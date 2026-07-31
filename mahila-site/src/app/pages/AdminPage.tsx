@@ -127,7 +127,8 @@ export function AdminPage({
     setSigningIn(false);
     if (!result.ok) return toast.error(result.error || "Incorrect email or password");
 
-    setCurrentAdminSession(email);
+    const cleanEmail = email.trim().toLowerCase();
+    setCurrentAdminSession(cleanEmail);
     const userSession = getCurrentAdminSession();
     setCurrentAdminUser(userSession);
     setLoggedIn(true);
