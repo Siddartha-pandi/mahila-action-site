@@ -3,7 +3,9 @@
 // e.g. http://localhost:4000 in development, or your deployed API URL in production.
 
 const envApiUrl = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_API_URL || process.env.VITE_API_URL) : undefined;
-export const BASE_URL = (envApiUrl as string | undefined)?.replace(/\/$/, "") || "";
+export const BASE_URL = typeof window !== "undefined"
+  ? ""
+  : ((envApiUrl as string | undefined)?.replace(/\/$/, "") || "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status: number }> {
   try {

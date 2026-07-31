@@ -48,13 +48,11 @@ export function getAdminFromRequest(req?: NextRequest): AdminPayload | null {
 
 export function createAdminCookieHeader(payload: AdminPayload): string {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "12h" });
-  const secure = process.env.COOKIE_SECURE === "true";
-  const sameSite = secure ? "None" : "Lax";
-  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; Max-Age=${12 * 60 * 60}; SameSite=${sameSite}${secure ? "; Secure" : ""}`;
+  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
+  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; Max-Age=${12 * 60 * 60}; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }
 
 export function createClearAdminCookieHeader(): string {
-  const secure = process.env.COOKIE_SECURE === "true";
-  const sameSite = secure ? "None" : "Lax";
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=${sameSite}${secure ? "; Secure" : ""}`;
+  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }
