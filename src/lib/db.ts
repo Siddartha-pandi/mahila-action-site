@@ -98,12 +98,21 @@ export async function getPool() {
       return pool;
     } catch (err) {
       console.warn("⚠️ Failed to initialize PostgreSQL pool:", err);
+      if (process.env.DISABLE_SQLITE_FALLBACK === "true" || process.env.NODE_ENV === "production") {
+        // In production, do not silently fallback to SQLite. Surface the error so deployment fails clearly.
+        throw err;
+      }
       isUsingSqliteFallback = true;
       globalRef._isUsingSqliteFallback = true;
       pool = createSqlitePool();
       globalRef._pgPool = pool;
       return pool;
     }
+  }
+
+  // If no DATABASE_URL is provided, in production we should not auto-fallback to SQLite.
+  if (!databaseUrl && (process.env.NODE_ENV === "production" || process.env.DISABLE_SQLITE_FALLBACK === "true")) {
+    throw new Error("DATABASE_URL is not set and SQLite fallback is disabled in this environment.");
   }
 
   isUsingSqliteFallback = true;
@@ -287,7 +296,7 @@ export async function seedAllData(dbPool: any): Promise<void> {
     for (const t of tablesToSync) {
       try {
         await dbPool.query(`SELECT setval(pg_get_serial_sequence('${t}', 'id'), COALESCE((SELECT MAX(id) FROM ${t}), 1));`);
-      } catch {}
+      } catch { }
     }
   }
 }
@@ -338,7 +347,7 @@ export async function initDb(): Promise<void> {
                 console.log(`Database "${targetDbName}" not found. Attempting auto-creation on PostgreSQL server...`);
                 const pkg = await import("pg");
                 const { Client, Pool } = pkg.default || pkg;
-                
+
                 parsedUrl.pathname = "/postgres";
                 const adminClient = new Client({ connectionString: parsedUrl.toString() });
                 await adminClient.connect();
@@ -354,7 +363,7 @@ export async function initDb(): Promise<void> {
                   cleanUrl.includes("postgres.database.azure.com");
 
                 if (currentPool && typeof currentPool.end === "function") {
-                  await currentPool.end().catch(() => {});
+                  await currentPool.end().catch(() => { });
                 }
 
                 currentPool = new Pool({
@@ -418,15 +427,15 @@ export async function initDb(): Promise<void> {
         for (const statement of statements) {
           try {
             await currentPool.query(statement);
-          } catch {}
+          } catch { }
         }
 
         try {
           await currentPool.query("ALTER TABLE users ADD COLUMN kind TEXT;");
-        } catch {}
+        } catch { }
         try {
           await currentPool.query("ALTER TABLE users ADD COLUMN permissions TEXT;");
-        } catch {}
+        } catch { }
       } else {
         // PostgreSQL schema
         const statements = cleanRawSchema
@@ -443,16 +452,16 @@ export async function initDb(): Promise<void> {
         }
         try {
           await currentPool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
-        } catch {}
+        } catch { }
         try {
           await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT;");
-        } catch {}
+        } catch { }
         try {
           await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT;");
-        } catch {}
+        } catch { }
         try {
           await currentPool.query("ALTER TABLE cms_events ADD COLUMN IF NOT EXISTS category_id TEXT;");
-        } catch {}
+        } catch { }
       }
 
       // Seed all default data into database
