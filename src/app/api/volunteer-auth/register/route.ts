@@ -40,12 +40,12 @@ export async function POST(req: NextRequest) {
       }, { status: 409 });
     }
 
-    const id = nanoid();
     const password_hash = bcrypt.hashSync(String(password), 10);
-    await queryDb(
-      `INSERT INTO users (id, name, email, phone, role, password_hash, skills) VALUES ($1, $2, $3, $4, 'user', $5, $6)`,
-      [id, name.trim(), normalizedEmail, normalizedPhone, password_hash, skills || null]
+    const insertRes = await queryDb(
+      `INSERT INTO users (name, email, phone, role, password_hash, skills) VALUES ($1, $2, $3, 'user', $4, $5) RETURNING id`,
+      [name.trim(), normalizedEmail, normalizedPhone, password_hash, skills || null]
     );
+    const insertedId = insertRes.rows[0]?.id;
 
     // Fire-and-forget: a mail failure must not fail an account that was created.
     sendWelcomeEmail(normalizedEmail, name.trim()).catch((err) =>
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      id: insertedId ? String(insertedId) : undefined,
       profile: toProfile({ name: name.trim(), email: normalizedEmail, phone: normalizedPhone, skills }),
     }, { status: 201 });
   } catch (err: any) {

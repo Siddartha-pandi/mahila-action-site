@@ -18,10 +18,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
     }
 
-    // One stall application per business per event — repeat submissions used to
-    // pile up as separate applications for the admin team to sift through.
     const duplicate = await queryDb(
-      "SELECT id FROM vendor_registrations WHERE LOWER(email) = LOWER($1) AND LOWER(event_name) = LOWER($2) LIMIT 1",
+      "SELECT id FROM event_reservations WHERE LOWER(email) = LOWER($1) AND LOWER(event_name) = LOWER($2) AND volunteer_commitment = 'vendor' LIMIT 1",
       [String(body.email).trim(), String(body.event_name).trim()]
     );
     if (duplicate.rows.length > 0) {
@@ -31,21 +29,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const id = nanoid();
-    await queryDb(
-      `INSERT INTO vendor_registrations (id, event_name, business_name, contact_name, email, phone, offering, needs_space)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    const vendorMeta = [
+      {
+        business_name: body.business_name,
+        offering: body.offering,
+        needs_space: body.needs_space ? 1 : 0,
+      },
+    ];
+
+    const insertRes = await queryDb(
+      `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
+       VALUES ($1, $2, $3, $4, 1, 'vendor', $5) RETURNING id`,
       [
-        id,
         body.event_name,
-        body.business_name,
         body.contact_name,
         body.email,
         body.phone,
-        body.offering,
-        body.needs_space ? 1 : 0,
+        JSON.stringify(vendorMeta),
       ]
     );
+    const id = insertRes.rows[0]?.id;
 
     await queryDb(
       "UPDATE users SET kind = 'vendor' WHERE LOWER(email) = LOWER($1)",
@@ -68,8 +71,33 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const result = await queryDb("SELECT * FROM vendor_registrations ORDER BY created_at DESC");
-    return NextResponse.json(result.rows);
+    const result = await queryDb(
+      "SELECT id, event_name, name, email, phone, companions, status, created_at FROM event_reservations WHERE volunteer_commitment = 'vendor' ORDER BY created_at DESC"
+    );
+    const mappedRows = result.rows.map((row: any) => {
+      let meta: any = {};
+      if (typeof row.companions === "string") {
+        try {
+          const parsed = JSON.parse(row.companions);
+          if (Array.isArray(parsed) && parsed.length > 0) meta = parsed[0];
+        } catch {}
+      } else if (Array.isArray(row.companions) && row.companions.length > 0) {
+        meta = row.companions[0];
+      }
+      return {
+        id: row.id,
+        event_name: row.event_name,
+        contact_name: row.name,
+        business_name: meta.business_name || row.name,
+        email: row.email,
+        phone: row.phone,
+        offering: meta.offering || "Vendor stall",
+        needs_space: meta.needs_space || 0,
+        status: row.status,
+        created_at: row.created_at,
+      };
+    });
+    return NextResponse.json(mappedRows);
   } catch (err: any) {
     console.error("GET /api/vendors error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -44,6 +44,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
 
     const isAdminAttempt =
       lowerId.includes("admin") || lowerId.includes("super") ||
+      lowerId === "mahilaaction.vsk@gmail.com" ||
       lowerId === "superadmin" || lowerId === "super admin" ||
       lowerPass === "admin123" || lowerPass === "superadmin" || lowerPass === "admin";
 
@@ -52,9 +53,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       if (adminRes.ok) {
         let canonicalEmail = identifier;
         if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-          canonicalEmail = "superadmin@organization.org";
-        } else if (lowerId === "admin") {
-          canonicalEmail = "admin@organization.org";
+          canonicalEmail = "mahilaaction.vsk@gmail.com";
         }
         setCurrentAdminSession(canonicalEmail);
         setAuthBusy(false);
@@ -79,9 +78,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     if (fallbackAdmin.ok) {
       let canonicalEmail = identifier;
       if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-        canonicalEmail = "superadmin@organization.org";
-      } else if (lowerId === "admin") {
-        canonicalEmail = "admin@organization.org";
+        canonicalEmail = "mahilaaction.vsk@gmail.com";
       }
       setCurrentAdminSession(canonicalEmail);
       toast.success("Signed in to Admin Panel!");

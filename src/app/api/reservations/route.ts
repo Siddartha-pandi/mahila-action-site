@@ -42,12 +42,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const id = nanoid();
-    await queryDb(
-      `INSERT INTO event_reservations (id, event_name, name, email, phone, seats, volunteer_commitment, companions)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    const insertRes = await queryDb(
+      `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [
-        id,
         body.event_name,
         body.name,
         body.email,
@@ -57,6 +55,7 @@ export async function POST(req: NextRequest) {
         JSON.stringify(body.companions || []),
       ]
     );
+    const id = insertRes.rows[0]?.id;
 
     const assignedSubRole = isVolunteerSignup ? "volunteer" : "attendee";
     await queryDb(
@@ -80,7 +79,9 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const result = await queryDb("SELECT * FROM event_reservations ORDER BY created_at DESC");
+    const result = await queryDb(
+      "SELECT * FROM event_reservations WHERE volunteer_commitment IS NULL OR volunteer_commitment = '' ORDER BY created_at DESC"
+    );
     return NextResponse.json(result.rows);
   } catch (err: any) {
     console.error("GET /api/reservations error:", err);

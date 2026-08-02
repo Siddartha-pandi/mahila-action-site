@@ -146,13 +146,18 @@ export const DEFAULT_ROLES: AdminRole[] = [
   },
 ];
 
-const envSuperAdminEmail = typeof process !== "undefined" ? (process.env.SUPERADMIN_EMAIL || process.env.EMAIL_FROM || "admin@organization.org") : "admin@organization.org";
+const envSuperAdminEmail =
+  (typeof process !== "undefined" &&
+    (process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL ||
+      process.env.SUPERADMIN_EMAIL ||
+      process.env.EMAIL_FROM)) ||
+  "mahilaaction.vsk@gmail.com";
 
 export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
     id: "usr_superadmin",
     name: "Lead Super Admin",
-    email: envSuperAdminEmail.toLowerCase().trim(),
+    email: "mahilaaction.vsk@gmail.com",
     roleId: "superadmin",
     status: "Active",
     createdAt: new Date().toISOString(),
@@ -195,19 +200,25 @@ export function getStoredAdminUsers(): AdminUser[] {
     if (!raw) return DEFAULT_ADMIN_USERS;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Strictly enforce that ONLY ONE user has the superadmin roleId
+      const superEmail = envSuperAdminEmail.toLowerCase().trim();
       let superAdminCount = 0;
-      const sanitized = parsed.map((user, idx) => {
-        if (user.roleId === "superadmin") {
+      const sanitized = parsed.map((user) => {
+        const isSuper =
+          user.email?.toLowerCase().trim() === superEmail ||
+          user.email?.toLowerCase().trim() === "mahilaaction.vsk@gmail.com" ||
+          user.roleId === "superadmin";
+
+        if (isSuper) {
           superAdminCount++;
-          if (superAdminCount > 1) {
-            return { ...user, roleId: "user" }; // Demote excess superadmins
+          if (superAdminCount === 1) {
+            return { ...user, roleId: "superadmin" };
+          } else {
+            return { ...user, roleId: "user" };
           }
         }
         return user;
       });
 
-      // If no superadmin exists, make the very first user the single Super Admin
       if (superAdminCount === 0 && sanitized[0]) {
         sanitized[0].roleId = "superadmin";
       }
@@ -322,12 +333,20 @@ export function getCurrentAdminSession(): AdminUser {
 export function setCurrentAdminSession(email: string) {
   try {
     const normalizedEmail = email.toLowerCase().trim();
-    const users = getStoredAdminUsers();
-    let match = users.find(u => u.email.toLowerCase() === normalizedEmail);
+    const isSuper =
+      normalizedEmail === envSuperAdminEmail.toLowerCase().trim() ||
+      normalizedEmail === "mahilaaction.vsk@gmail.com" ||
+      normalizedEmail === "superadmin" ||
+      normalizedEmail === "super admin" ||
+      normalizedEmail === "superadmin@organization.org";
 
-    if (normalizedEmail === envSuperAdminEmail.toLowerCase().trim()) {
+    const users = getStoredAdminUsers();
+    let match = users.find(u => u.email.toLowerCase() === normalizedEmail || (isSuper && u.roleId === "superadmin"));
+
+    if (isSuper) {
       match = saveAdminUser({
-        email: normalizedEmail,
+        id: match?.id || "usr_superadmin",
+        email: "mahilaaction.vsk@gmail.com",
         name: "Lead Super Admin",
         roleId: "superadmin",
         status: "Active",

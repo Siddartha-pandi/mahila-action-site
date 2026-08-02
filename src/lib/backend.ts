@@ -33,7 +33,23 @@ export async function signOutAdmin() {
 }
 
 export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
-  const check = () => cb(Boolean(localStorage.getItem("admin_jwt")));
+  const check = async () => {
+    const hasLocalToken = Boolean(localStorage.getItem("admin_jwt"));
+    if (hasLocalToken) {
+      cb(true);
+      return;
+    }
+    try {
+      const res = await api.get<{ loggedIn?: boolean }>("/api/auth/session");
+      if (res.ok && res.data?.loggedIn) {
+        localStorage.setItem("admin_jwt", "session");
+        cb(true);
+        return;
+      }
+    } catch {}
+    cb(false);
+  };
+
   check();
   window.addEventListener("mahila_admin_auth_changed", check);
   window.addEventListener("storage", check);
@@ -155,14 +171,14 @@ function rowToSubmission(type: SubmissionItem["type"], row: any): SubmissionItem
 export async function loadSubmissions(): Promise<SubmissionItem[]> {
   const responses = await Promise.all(SUBMISSION_SOURCES.map((s) => api.get<any[]>(s.path)));
 
-  const failed = responses.find((r) => !r.ok);
-  if (failed) {
-    throw new Error(failed.error || "Could not load submissions from the server.");
+  const allNetworkFailed = responses.every((r) => !r.ok && r.status === 0);
+  if (allNetworkFailed) {
+    throw new Error("Could not load submissions from the server.");
   }
 
   const items = responses.flatMap((res, i) => {
-    const rows = Array.isArray(res.data) ? res.data : [];
-    return rows.map((row) => rowToSubmission(SUBMISSION_SOURCES[i].type, row));
+    if (!res.ok || !Array.isArray(res.data)) return [];
+    return res.data.map((row) => rowToSubmission(SUBMISSION_SOURCES[i].type, row));
   });
 
   return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -251,17 +267,21 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
 
 export async function loadUserSubmissions(email?: string, phone?: string): Promise<SubmissionItem[]> {
   if (!email && !phone) return [];
-  const all = await loadSubmissions();
-  const normEmail = email ? email.trim().toLowerCase() : "";
-  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
+  try {
+    const all = await loadSubmissions();
+    const normEmail = email ? email.trim().toLowerCase() : "";
+    const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
-  return all.filter(item => {
-    const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
-    if (normEmail && itemEmail === normEmail) return true;
-    if (normPhone && itemPhone === normPhone) return true;
-    return false;
-  });
+    return all.filter(item => {
+      const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
+      const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+      if (normEmail && itemEmail === normEmail) return true;
+      if (normPhone && itemPhone === normPhone) return true;
+      return false;
+    });
+  } catch {
+    return getUserSubmissions(email, phone);
+  }
 }
 
 export function getUserSubmissions(email?: string, phone?: string): SubmissionItem[] {
@@ -289,6 +309,19 @@ function notifySubmissionsChanged() {
       bc.close();
     }
   } catch {}
+}
+
+export function restoreRawSubmission(item: SubmissionItem) {
+  try {
+    const items = getSubmissions();
+    if (!items.some((s) => String(s.id) === String(item.id))) {
+      items.unshift(item);
+      localStorage.setItem(SUBMISSION_KEY, JSON.stringify(items));
+      notifySubmissionsChanged();
+    }
+  } catch (err) {
+    console.error("Failed to restore raw submission:", err);
+  }
 }
 
 export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {

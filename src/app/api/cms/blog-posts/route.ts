@@ -34,29 +34,47 @@ export async function POST(req: NextRequest) {
 
   try {
     const b = await req.json();
-    const id = b.id || nanoid();
     const coverImage = b.coverImage || b.cover_image || null;
-    const categoryId = b.categoryId || b.category_id || null;
+    const categoryId = b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null;
+    let finalId = b.id;
 
-    await queryDb(
-      `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT(id) DO UPDATE SET section=EXCLUDED.section, category_id=EXCLUDED.category_id, title=EXCLUDED.title,
-         excerpt=EXCLUDED.excerpt, content=EXCLUDED.content, cover_image=EXCLUDED.cover_image,
-         gallery=EXCLUDED.gallery, tags=EXCLUDED.tags`,
-      [
-        id,
-        b.section,
-        categoryId,
-        b.title,
-        b.excerpt || null,
-        b.content || null,
-        coverImage,
-        JSON.stringify(b.gallery || []),
-        JSON.stringify(b.tags || []),
-      ]
-    );
-    return NextResponse.json({ ok: true, id });
+    if (b.id && !isNaN(Number(b.id))) {
+      await queryDb(
+        `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT(id) DO UPDATE SET section=EXCLUDED.section, category_id=EXCLUDED.category_id, title=EXCLUDED.title,
+           excerpt=EXCLUDED.excerpt, content=EXCLUDED.content, cover_image=EXCLUDED.cover_image,
+           gallery=EXCLUDED.gallery, tags=EXCLUDED.tags`,
+        [
+          Number(b.id),
+          b.section || "story",
+          categoryId,
+          b.title,
+          b.excerpt || null,
+          b.content || null,
+          coverImage,
+          JSON.stringify(b.gallery || []),
+          JSON.stringify(b.tags || []),
+        ]
+      );
+    } else {
+      const res = await queryDb(
+        `INSERT INTO cms_blog_posts (section, category_id, title, excerpt, content, cover_image, gallery, tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [
+          b.section || "story",
+          categoryId,
+          b.title,
+          b.excerpt || null,
+          b.content || null,
+          coverImage,
+          JSON.stringify(b.gallery || []),
+          JSON.stringify(b.tags || []),
+        ]
+      );
+      finalId = res.rows[0]?.id;
+    }
+    return NextResponse.json({ ok: true, id: finalId });
   } catch (err: any) {
     console.error("POST /api/cms/blog-posts error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

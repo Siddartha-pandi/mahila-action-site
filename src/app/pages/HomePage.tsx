@@ -57,7 +57,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   function handleReserveClick() {
     if (!featuredEvent) return;
-    if (eventOpen) openModal("reserve", { id: featuredEvent.id });
+    if (eventOpen) openModal("reserve", { id: String(featuredEvent.id) });
     else openModal("closed");
   }
 

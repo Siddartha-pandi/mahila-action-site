@@ -30,6 +30,7 @@ import {
   Globe,
   AlertTriangle,
   Lock,
+  Trash2,
 } from "lucide-react";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
@@ -40,6 +41,8 @@ import { CouncilorsAdmin } from "@/app/admin/CouncilorsAdmin";
 import { TimelineAdmin } from "@/app/admin/TimelineAdmin";
 import { ContactAdmin } from "@/app/admin/ContactAdmin";
 import { RolesAdmin } from "@/app/admin/RolesAdmin";
+import { RecycleBinAdmin } from "@/app/admin/RecycleBinAdmin";
+import { getTrashItems } from "@/lib/recycleBin";
 import { useContent } from "../context/ContentContext";
 import { LogoMark } from "../components/LogoMark";
 
@@ -53,6 +56,7 @@ const CUSTOM_TABS = [
   { id: "councilors", label: "Councilors", icon: UserCheck },
   { id: "timeline", label: "Timeline", icon: History },
   { id: "contact", label: "Contact Info", icon: PhoneCall },
+  { id: "trash", label: "Recycle Bin", icon: Trash2 },
   { id: "roles", label: "User & Role Management", icon: ShieldCheck },
   { id: "contentTypeBuilder", label: "Content-Type Builder", icon: Wrench, isSuperAdminOnly: true },
 ] as const;
@@ -78,20 +82,53 @@ export function AdminPage({
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("submissions");
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => getCurrentAdminSession());
+  const [trashCount, setTrashCount] = useState<number>(() => getTrashItems().length);
+
+  useEffect(() => {
+    function syncTrash() {
+      setTrashCount(getTrashItems().length);
+    }
+    syncTrash();
+    window.addEventListener("mahila_trash_changed", syncTrash);
+    window.addEventListener("storage", syncTrash);
+    return () => {
+      window.removeEventListener("mahila_trash_changed", syncTrash);
+      window.removeEventListener("storage", syncTrash);
+    };
+  }, []);
 
   const isDirty = useMemo(() => {
     return JSON.stringify(draft) !== JSON.stringify(existing);
   }, [draft, existing]);
 
   useEffect(() => {
+    let mounted = true;
+    let fallbackTimer: NodeJS.Timeout | null = null;
+
     const unsubscribe = onAdminAuthChange((isLoggedIn) => {
+      if (!mounted) return;
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
       setLoggedIn(isLoggedIn);
       if (isLoggedIn) {
         setDraft({ ...existing });
         setCurrentAdminUser(getCurrentAdminSession());
       }
     });
-    return unsubscribe;
+
+    fallbackTimer = setTimeout(() => {
+      if (mounted) {
+        setLoggedIn((current) => (current === null ? false : current));
+      }
+    }, 1500);
+
+    return () => {
+      mounted = false;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -278,7 +315,12 @@ export function AdminPage({
                 }`}
               >
                 <IconComp className={`w-4 h-4 shrink-0 ${isActive ? "text-[#a65a4a]" : "text-[#1e1e1e]/45"}`} />
-                <span className="truncate">{t.label}</span>
+                <span className="truncate flex-1">{t.label}</span>
+                {t.id === "trash" && trashCount > 0 && (
+                  <span className="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                    {trashCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -287,7 +329,7 @@ export function AdminPage({
         {/* Mobile Dropdown Nav */}
         <div className="md:hidden w-full px-4 pt-4">
           <select value={activeSection} onChange={e => setActiveSection(e.target.value)} className={`${inputBase} mb-4`}>
-            {visibleTabs.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            {visibleTabs.map((t) => <option key={t.id} value={t.id}>{t.label} {t.id === "trash" && trashCount > 0 ? `(${trashCount})` : ""}</option>)}
           </select>
         </div>
 
@@ -383,6 +425,9 @@ export function AdminPage({
               )}
               {activeSection === "contact" && (
                 <ContactAdmin contact={siteData.contact} onChange={(contact) => updateSiteData({ contact })} />
+              )}
+              {activeSection === "trash" && (
+                <RecycleBinAdmin />
               )}
             </>
           )}

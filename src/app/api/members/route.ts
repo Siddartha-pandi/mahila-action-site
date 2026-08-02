@@ -12,15 +12,32 @@ export async function GET(req: NextRequest) {
     const result = await queryDb(
       "SELECT id, name, email, phone, role, kind, skills, permissions, status, created_at FROM users ORDER BY created_at DESC"
     );
-    const parsedRows = result.rows.map((row: any) => {
-      let perms = row.permissions;
-      if (typeof perms === "string" && perms.trim()) {
-        try {
-          perms = JSON.parse(perms);
-        } catch {}
-      }
-      return { ...row, permissions: perms };
-    });
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const virtualSuperadmin = {
+      id: "superadmin_env",
+      name: "Lead Super Admin",
+      email: envSuperadminEmail,
+      phone: "+91 XXXXXXXXXX",
+      role: "superadmin",
+      kind: "superadmin",
+      skills: null,
+      permissions: null,
+      status: "Active",
+      created_at: new Date().toISOString(),
+    };
+
+    const parsedRows = [
+      virtualSuperadmin,
+      ...result.rows.map((row: any) => {
+        let perms = row.permissions;
+        if (typeof perms === "string" && perms.trim()) {
+          try {
+            perms = JSON.parse(perms);
+          } catch {}
+        }
+        return { ...row, permissions: perms };
+      }),
+    ];
     return NextResponse.json(parsedRows);
   } catch (err: any) {
     console.error("GET /api/members error:", err);

@@ -10,7 +10,8 @@ export const BASE_URL = typeof window !== "undefined"
 async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status: number }> {
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
-    const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+    const validJwt = token && token !== "session" && token.includes(".") ? token : null;
+    const authHeaders: Record<string, string> = validJwt ? { Authorization: `Bearer ${validJwt}` } : {};
 
     const url = BASE_URL ? `${BASE_URL}${path}` : path;
     const res = await fetch(url, {

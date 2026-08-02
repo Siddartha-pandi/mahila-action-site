@@ -24,17 +24,26 @@ export async function POST(req: NextRequest) {
 
   try {
     const b = await req.json();
-    const id = b.id || nanoid();
     const orderIndex = Number(b.order ?? b.order_index ?? 0);
+    let finalId = b.id;
 
-    await queryDb(
-      `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT(id) DO UPDATE SET year=EXCLUDED.year, title=EXCLUDED.title, description=EXCLUDED.description,
-         image=EXCLUDED.image, order_index=EXCLUDED.order_index`,
-      [id, b.year, b.title, b.description || null, b.image || null, orderIndex]
-    );
-    return NextResponse.json({ ok: true, id });
+    if (b.id && !isNaN(Number(b.id))) {
+      await queryDb(
+        `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT(id) DO UPDATE SET year=EXCLUDED.year, title=EXCLUDED.title, description=EXCLUDED.description,
+           image=EXCLUDED.image, order_index=EXCLUDED.order_index`,
+        [Number(b.id), b.year, b.title, b.description || null, b.image || null, orderIndex]
+      );
+    } else {
+      const res = await queryDb(
+        `INSERT INTO cms_timeline (year, title, description, image, order_index)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [b.year, b.title, b.description || null, b.image || null, orderIndex]
+      );
+      finalId = res.rows[0]?.id;
+    }
+    return NextResponse.json({ ok: true, id: finalId });
   } catch (err: any) {
     console.error("POST /api/cms/timeline error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

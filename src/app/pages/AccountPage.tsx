@@ -42,15 +42,19 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
   useEffect(() => {
     async function syncSession() {
-      const current = getSavedUserSession();
-      if (current) {
-        const isValid = await validateUserSession();
-        if (!isValid) return;
-      }
-      setProfile(current);
-      if (current) {
-        const subs = await loadUserSubmissions(current.email, current.phone);
-        setUserSubmissions(subs);
+      try {
+        const current = getSavedUserSession();
+        if (current) {
+          const isValid = await validateUserSession();
+          if (!isValid) return;
+        }
+        setProfile(current);
+        if (current) {
+          const subs = await loadUserSubmissions(current.email, current.phone);
+          setUserSubmissions(subs);
+        }
+      } catch (err) {
+        console.warn("Error syncing user session/submissions:", err);
       }
     }
     syncSession();

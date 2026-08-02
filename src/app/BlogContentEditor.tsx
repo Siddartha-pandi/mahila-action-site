@@ -13,6 +13,7 @@ import {
   Minus,
   Plus,
   Eraser,
+  UploadCloud,
 } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
 
@@ -125,6 +126,39 @@ export function BlogContentEditor({
   const [plusPos, setPlusPos] = useState<{ top: number } | null>(null);
   const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [cropTarget, setCropTarget] = useState<{ src: string; forImg: HTMLImageElement | null } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) {
+      if (!isDragging) setIsDragging(true);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 1) {
+      const dataUrl = await fileToDataUrl(files[0]);
+      setCropTarget({ src: dataUrl, forImg: null });
+    } else if (files.length > 1) {
+      for (const file of files) {
+        const dataUrl = await fileToDataUrl(file);
+        insertImageHtml(dataUrl);
+      }
+    }
+  }
 
   // Initialize contentEditable HTML once, migrating legacy plain-text content.
   useEffect(() => {
@@ -274,7 +308,22 @@ export function BlogContentEditor({
   }, [updateBubble, updatePlus]);
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div
+      ref={wrapperRef}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="relative"
+    >
+      {isDragging && (
+        <div className="absolute inset-0 z-40 bg-[#faf7f3]/95 border-2 border-dashed border-[#a65a4a] rounded-lg flex flex-col items-center justify-center text-[#a65a4a] gap-2 pointer-events-none transition-all shadow-inner">
+          <UploadCloud size={32} className="animate-bounce" />
+          <span className="font-['Inter',sans-serif] text-[14px] font-semibold">
+            Drop image to insert into story
+          </span>
+        </div>
+      )}
+
       {/* Fixed formatting toolbar */}
       <div className="flex flex-wrap items-center gap-0.5 border border-[#a65a4a]/30 border-b-0 rounded-t-lg bg-[#faf7f3] px-1.5 py-1">
         <ToolbarButton onClick={() => exec("bold")} title="Bold">
@@ -437,8 +486,7 @@ export function BlogContentEditor({
       )}
 
       <p className="font-['Inter',sans-serif] text-[11px] text-[#1e1e1e]/40 mt-1.5">
-        Select any text to format it. Click the <span className="font-semibold">+</span> next to an empty line to
-        insert an image, quote, or divider — just like Medium. Double-click any image in your story to re-crop it.
+        Select any text to format it. Drag & drop images directly onto the editor or click the <span className="font-semibold">+</span> next to an empty line to insert an image, quote, or divider — just like Medium. Double-click any image in your story to re-crop it.
       </p>
     </div>
   );

@@ -24,17 +24,26 @@ export async function POST(req: NextRequest) {
 
   try {
     const b = await req.json();
-    const id = b.id || nanoid();
     const orderIndex = Number(b.order ?? b.order_index ?? 0);
+    let finalId = b.id;
 
-    await queryDb(
-      `INSERT INTO cms_councilors (id, name, role, bio, image, order_index)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name, role=EXCLUDED.role, bio=EXCLUDED.bio,
-         image=EXCLUDED.image, order_index=EXCLUDED.order_index`,
-      [id, b.name, b.role || null, b.bio || null, b.image || null, orderIndex]
-    );
-    return NextResponse.json({ ok: true, id });
+    if (b.id && !isNaN(Number(b.id))) {
+      await queryDb(
+        `INSERT INTO cms_councilors (id, name, role, bio, image, order_index)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name, role=EXCLUDED.role, bio=EXCLUDED.bio,
+           image=EXCLUDED.image, order_index=EXCLUDED.order_index`,
+        [Number(b.id), b.name, b.role || null, b.bio || null, b.image || null, orderIndex]
+      );
+    } else {
+      const res = await queryDb(
+        `INSERT INTO cms_councilors (name, role, bio, image, order_index)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [b.name, b.role || null, b.bio || null, b.image || null, orderIndex]
+      );
+      finalId = res.rows[0]?.id;
+    }
+    return NextResponse.json({ ok: true, id: finalId });
   } catch (err: any) {
     console.error("POST /api/cms/councilors error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

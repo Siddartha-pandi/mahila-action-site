@@ -27,6 +27,7 @@ import {
   SubmissionItem,
 } from "../../lib/backend";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
+import { addToTrash } from "../../lib/recycleBin";
 import { toast } from "sonner";
 
 type SubmissionCategory = SubmissionItem["type"];
@@ -44,13 +45,21 @@ type SubmissionCategory = SubmissionItem["type"];
 export function categoryOf(item: SubmissionItem): SubmissionCategory {
   if (item.type === "perm_volunteer_request") return "perm_volunteer_request";
   if (item.type === "perm_volunteer_deactivate") return "perm_volunteer_deactivate";
-  if (item.type === "reservation" && item.data?.volunteer_commitment) return "volunteer";
+
+  if (item.type === "reservation") {
+    if (item.data?.volunteer_commitment === "vendor") return "vendor";
+    if (item.data?.volunteer_commitment && item.data.volunteer_commitment !== "") return "volunteer";
+    return "reservation";
+  }
 
   // Legacy rows: account signups were filed as "volunteer" before members had
-  // their own category. A genuine volunteer application always names events.
+  // their own category. A genuine volunteer application names events or skills.
   if (item.type === "volunteer") {
     const events = item.data?.selected_events;
-    if (!Array.isArray(events) || events.length === 0) return "member";
+    const hasEvents = (Array.isArray(events) && events.length > 0) || Boolean(item.data?.event_name);
+    const hasSkills = Boolean(item.data?.skills);
+    if (!hasEvents && !hasSkills) return "member";
+    return "volunteer";
   }
 
   return item.type;
@@ -63,6 +72,7 @@ export function SubmissionsAdmin() {
   const [offline, setOffline] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterEvent, setFilterEvent] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState<SubmissionItem | null>(null);
 
@@ -155,12 +165,20 @@ export function SubmissionsAdmin() {
     }
     if (!confirm("Are you sure you want to delete this submission? This removes it for everyone.")) return;
 
+    addToTrash({
+      id: String(item.id),
+      type: "submission",
+      title: item.data?.name || item.data?.contact_name || `Submission #${item.id}`,
+      subtitle: `${CATEGORY_LABEL[categoryOf(item)] || item.type} • ${item.data?.email || "No email"}`,
+      data: item,
+    });
+
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
 
     setSubmissions(prev => prev.filter(s => s.id !== item.id));
     if (selectedItem?.id === item.id) setSelectedItem(null);
-    toast.success("Submission deleted");
+    toast.success("Submission moved to Recycle Bin");
   }
 
   const list = Array.isArray(submissions) ? submissions : [];
@@ -178,10 +196,30 @@ export function SubmissionsAdmin() {
   const totalDonated = donationList.reduce((acc, curr) => acc + (Number(curr.data?.amount) || 0), 0);
   const totalSeats = reservationList.reduce((acc, curr) => acc + (Number(curr.data?.seats) || 1), 0);
 
+  const availableEventTitles = Array.from(
+    new Set(
+      list.flatMap(item => {
+        const d = item.data || {};
+        const evName = d.event_name || d.eventTitle;
+        const selEvents = Array.isArray(d.selected_events) ? d.selected_events : [];
+        return [evName, ...selEvents].filter(Boolean);
+      })
+    )
+  ).sort();
+
   const filtered = list.filter(item => {
     if (!item || !item.id) return false;
     if (filterType !== "all" && categoryOf(item) !== filterType) return false;
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
+    if (filterEvent !== "all") {
+      const d = item.data || {};
+      const evName = String(d.event_name || d.eventTitle || "").trim().toLowerCase();
+      const selEvents: string[] = Array.isArray(d.selected_events)
+        ? d.selected_events.map((s: any) => String(s).trim().toLowerCase())
+        : [];
+      const target = filterEvent.trim().toLowerCase();
+      if (evName !== target && !selEvents.includes(target)) return false;
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       const d = item.data || {};
@@ -303,10 +341,10 @@ export function SubmissionsAdmin() {
       </div>
 
       {/* Metric Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+      <div className="flex overflow-x-auto pb-2 gap-3 xl:grid xl:grid-cols-7 snap-x scrollbar-thin">
         <div
           onClick={() => setFilterType("volunteer")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30" : "bg-white border-gray-200 hover:border-emerald-300"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "volunteer" ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30" : "bg-white border-gray-200 hover:border-emerald-300"}`}
         >
           <div className="flex items-center justify-between text-emerald-700">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Volunteers</span>
@@ -318,7 +356,7 @@ export function SubmissionsAdmin() {
 
         <div
           onClick={() => setFilterType("member")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "member" ? "bg-teal-50 border-teal-300 ring-2 ring-teal-400/30" : "bg-white border-gray-200 hover:border-teal-300"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "member" ? "bg-teal-50 border-teal-300 ring-2 ring-teal-400/30" : "bg-white border-gray-200 hover:border-teal-300"}`}
         >
           <div className="flex items-center justify-between text-teal-700">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Members</span>
@@ -330,7 +368,7 @@ export function SubmissionsAdmin() {
 
         <div
           onClick={() => setFilterType("vendor")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "vendor" ? "bg-purple-50 border-purple-300 ring-2 ring-purple-400/30" : "bg-white border-gray-200 hover:border-purple-300"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "vendor" ? "bg-purple-50 border-purple-300 ring-2 ring-purple-400/30" : "bg-white border-gray-200 hover:border-purple-300"}`}
         >
           <div className="flex items-center justify-between text-purple-700">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Vendors</span>
@@ -342,7 +380,7 @@ export function SubmissionsAdmin() {
 
         <div
           onClick={() => setFilterType("reservation")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "reservation" ? "bg-amber-50 border-amber-300 ring-2 ring-amber-400/30" : "bg-white border-gray-200 hover:border-amber-300"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "reservation" ? "bg-amber-50 border-amber-300 ring-2 ring-amber-400/30" : "bg-white border-gray-200 hover:border-amber-300"}`}
         >
           <div className="flex items-center justify-between text-amber-700">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Attendees</span>
@@ -354,7 +392,7 @@ export function SubmissionsAdmin() {
 
         <div
           onClick={() => setFilterType("donation")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "donation" ? "bg-rose-50 border-rose-300 ring-2 ring-rose-400/30" : "bg-white border-gray-200 hover:border-rose-300"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "donation" ? "bg-rose-50 border-rose-300 ring-2 ring-rose-400/30" : "bg-white border-gray-200 hover:border-rose-300"}`}
         >
           <div className="flex items-center justify-between text-rose-700">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Donors</span>
@@ -366,7 +404,7 @@ export function SubmissionsAdmin() {
 
         <div
           onClick={() => setFilterType("perm_volunteer_request")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a]/10 border-[#a65a4a]/40 ring-2 ring-[#a65a4a]/20" : "bg-white border-gray-200 hover:border-[#a65a4a]/40"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a]/10 border-[#a65a4a]/40 ring-2 ring-[#a65a4a]/20" : "bg-white border-gray-200 hover:border-[#a65a4a]/40"}`}
         >
           <div className="flex items-center justify-between text-[#a65a4a]">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Perm Volunteers</span>
@@ -378,7 +416,7 @@ export function SubmissionsAdmin() {
 
         <div
           onClick={() => setFilterType("perm_volunteer_deactivate")}
-          className={`p-4 rounded-xl border transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-50 border-rose-200 ring-2 ring-rose-400/20" : "bg-white border-gray-200 hover:border-rose-400/40"}`}
+          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "perm_volunteer_deactivate" ? "bg-rose-50 border-rose-200 ring-2 ring-rose-400/20" : "bg-white border-gray-200 hover:border-rose-400/40"}`}
         >
           <div className="flex items-center justify-between text-rose-700">
             <span className="text-[12px] font-semibold uppercase tracking-wider">Deactivations</span>
@@ -469,6 +507,21 @@ export function SubmissionsAdmin() {
               className="w-full pl-9 pr-3 py-1.5 text-[13px] border border-[#a65a4a]/25 rounded-lg focus:outline-none focus:border-[#a65a4a] bg-white"
             />
           </div>
+
+          {availableEventTitles.length > 0 && (
+            <select
+              value={filterEvent}
+              onChange={e => setFilterEvent(e.target.value)}
+              className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium max-w-[180px] truncate"
+            >
+              <option value="all">All Events</option>
+              {availableEventTitles.map(title => (
+                <option key={title} value={title}>
+                  🗓️ {title}
+                </option>
+              ))}
+            </select>
+          )}
 
           <select
             value={filterStatus}

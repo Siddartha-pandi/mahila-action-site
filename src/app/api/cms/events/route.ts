@@ -28,28 +28,48 @@ export async function POST(req: NextRequest) {
 
   try {
     const b = await req.json();
-    const id = b.id || nanoid();
     const title = b.title || "New Event";
     const eventDate = b.eventDate || b.event_date || new Date().toISOString().slice(0, 10);
     const totalSeats = Number(b.totalSeats ?? b.total_seats ?? 0);
+    const categoryId = b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null;
+    let finalId = b.id;
 
-    await queryDb(
-      `INSERT INTO cms_events (id, title, description, image, event_date, location, total_seats, windows)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title, description=EXCLUDED.description, image=EXCLUDED.image,
-         event_date=EXCLUDED.event_date, location=EXCLUDED.location, total_seats=EXCLUDED.total_seats, windows=EXCLUDED.windows`,
-      [
-        id,
-        title,
-        b.description || null,
-        b.image || null,
-        eventDate,
-        b.location || null,
-        totalSeats,
-        JSON.stringify(b.windows || []),
-      ]
-    );
-    return NextResponse.json({ ok: true, id });
+    if (b.id && !isNaN(Number(b.id))) {
+      await queryDb(
+        `INSERT INTO cms_events (id, title, description, image, event_date, location, total_seats, windows, category_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title, description=EXCLUDED.description, image=EXCLUDED.image,
+           event_date=EXCLUDED.event_date, location=EXCLUDED.location, total_seats=EXCLUDED.total_seats, windows=EXCLUDED.windows, category_id=EXCLUDED.category_id`,
+        [
+          Number(b.id),
+          title,
+          b.description || null,
+          b.image || null,
+          eventDate,
+          b.location || null,
+          totalSeats,
+          JSON.stringify(b.windows || []),
+          categoryId,
+        ]
+      );
+    } else {
+      const res = await queryDb(
+        `INSERT INTO cms_events (title, description, image, event_date, location, total_seats, windows, category_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [
+          title,
+          b.description || null,
+          b.image || null,
+          eventDate,
+          b.location || null,
+          totalSeats,
+          JSON.stringify(b.windows || []),
+          categoryId,
+        ]
+      );
+      finalId = res.rows[0]?.id;
+    }
+    return NextResponse.json({ ok: true, id: finalId });
   } catch (err: any) {
     console.error("POST /api/cms/events error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

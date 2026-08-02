@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Plus, Trash2, Pencil, X, ImagePlus, Crop } from "lucide-react";
+import { Plus, Trash2, Pencil, X, ImagePlus, Crop, UploadCloud } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
 
 export const inputBase =
@@ -52,22 +52,52 @@ export function ImageField({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [cropping, setCropping] = useState(false);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [resolvingCrop, setResolvingCrop] = useState(false);
 
   const safeVal = typeof value === "string" ? value : "";
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function processFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
     setUploading(true);
     try {
       const dataUrl = await fileToDataUrl(file);
       onChange(dataUrl);
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await processFile(file);
     }
   }
 
@@ -87,46 +117,62 @@ export function ImageField({
   return (
     <div>
       <label className={labelBase}>{label}</label>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={safeVal.startsWith("data:") ? "" : safeVal}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={safeVal.startsWith("data:") ? "(uploaded image)" : "Paste image URL…"}
-          className={inputBase}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-medium hover:bg-[#a65a4a]/5 cursor-pointer"
-        >
-          <ImagePlus size={14} /> {uploading ? "…" : "Upload"}
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-      </div>
-      {safeVal && (
-        <div className="relative w-fit mt-2">
-          <img
-            src={safeVal}
-            alt="preview"
-            className="h-24 rounded-lg object-cover border border-[#a65a4a]/20"
-            onError={(e) => (e.currentTarget.style.display = "none")}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`relative transition-all rounded-lg p-1.5 border-2 ${
+          isDragging
+            ? "border-dashed border-[#a65a4a] bg-[#a65a4a]/10 ring-2 ring-[#a65a4a]/20"
+            : "border-dashed border-transparent hover:border-[#a65a4a]/20"
+        }`}
+      >
+        {isDragging && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#faf7f3]/95 border-2 border-dashed border-[#a65a4a] rounded-lg text-[#a65a4a] font-medium text-[13px] pointer-events-none gap-2">
+            <UploadCloud size={20} className="animate-bounce" /> Drop image to upload
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={safeVal.startsWith("data:") ? "" : safeVal}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={safeVal.startsWith("data:") ? "(uploaded image)" : "Paste image URL or drag & drop file…"}
+            className={inputBase}
           />
           <button
             type="button"
-            onClick={openCrop}
-            disabled={resolvingCrop}
-            className="absolute -top-1.5 -right-1.5 size-6 bg-[#a65a4a] text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#993925] disabled:opacity-60"
-            title="Crop image"
+            onClick={() => fileRef.current?.click()}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-medium hover:bg-[#a65a4a]/5 cursor-pointer transition-colors"
           >
-            {resolvingCrop ? (
-              <svg className="animate-spin size-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-            ) : (
-              <Crop size={12} />
-            )}
+            <ImagePlus size={14} /> {uploading ? "…" : "Upload"}
           </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         </div>
-      )}
+        {safeVal && (
+          <div className="relative w-fit mt-2">
+            <img
+              src={safeVal}
+              alt="preview"
+              className="h-24 rounded-lg object-cover border border-[#a65a4a]/20"
+              onError={(e) => (e.currentTarget.style.display = "none")}
+            />
+            <button
+              type="button"
+              onClick={openCrop}
+              disabled={resolvingCrop}
+              className="absolute -top-1.5 -right-1.5 size-6 bg-[#a65a4a] text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#993925] disabled:opacity-60"
+              title="Crop image"
+            >
+              {resolvingCrop ? (
+                <svg className="animate-spin size-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              ) : (
+                <Crop size={12} />
+              )}
+            </button>
+          </div>
+        )}
+      </div>
       {cropping && cropSrc && (
         <ImageCropModal
           src={cropSrc}
@@ -157,13 +203,44 @@ export function GalleryField({
   const [cropIndex, setCropIndex] = useState<number | null>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [resolvingIndex, setResolvingIndex] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  async function processFiles(files: File[]) {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    const dataUrls = await Promise.all(imageFiles.map(fileToDataUrl));
+    onChange([...value, ...dataUrls]);
+  }
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
-    const dataUrls = await Promise.all(files.map(fileToDataUrl));
-    onChange([...value, ...dataUrls]);
+    await processFiles(files);
     if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length) {
+      await processFiles(files);
+    }
   }
 
   async function openCrop(i: number) {
@@ -183,60 +260,76 @@ export function GalleryField({
   return (
     <div>
       <label className={labelBase}>{label}</label>
-      <div className="flex flex-wrap gap-2 mb-2">
-        {value.map((img, i) => (
-          <div key={i} className="relative group">
-            <img src={img} alt="" className="size-20 rounded-lg object-cover border border-[#a65a4a]/20" />
-            <button
-              type="button"
-              onClick={() => openCrop(i)}
-              disabled={resolvingIndex === i}
-              className="absolute -top-1.5 -left-1.5 size-5 bg-white text-[#a65a4a] border border-[#a65a4a]/40 rounded-full flex items-center justify-center cursor-pointer hover:bg-[#a65a4a] hover:text-white disabled:opacity-60"
-              title="Crop image"
-            >
-              {resolvingIndex === i ? (
-                <svg className="animate-spin size-2.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              ) : (
-                <Crop size={11} />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange(value.filter((_, idx) => idx !== i))}
-              className="absolute -top-1.5 -right-1.5 size-5 bg-[#a65a4a] text-white rounded-full flex items-center justify-center cursor-pointer"
-            >
-              <X size={11} />
-            </button>
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`relative transition-all rounded-lg p-1.5 border-2 ${
+          isDragging
+            ? "border-dashed border-[#a65a4a] bg-[#a65a4a]/10 ring-2 ring-[#a65a4a]/20"
+            : "border-dashed border-transparent hover:border-[#a65a4a]/20"
+        }`}
+      >
+        {isDragging && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#faf7f3]/95 border-2 border-dashed border-[#a65a4a] rounded-lg text-[#a65a4a] font-medium text-[13px] pointer-events-none gap-2">
+            <UploadCloud size={20} className="animate-bounce" /> Drop images here to add to gallery
           </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={urlDraft}
-          onChange={(e) => setUrlDraft(e.target.value)}
-          placeholder="Paste image URL, then Add…"
-          className={inputBase}
-        />
-        <button
-          type="button"
-          onClick={() => {
-            if (!urlDraft.trim()) return;
-            onChange([...value, urlDraft.trim()]);
-            setUrlDraft("");
-          }}
-          className="shrink-0 px-3 py-2 rounded-lg border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-medium hover:bg-[#a65a4a]/5 cursor-pointer"
-        >
-          Add
-        </button>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-medium hover:bg-[#a65a4a]/5 cursor-pointer"
-        >
-          <ImagePlus size={14} /> Upload
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+        )}
+        <div className="flex flex-wrap gap-2 mb-2">
+          {value.map((img, i) => (
+            <div key={i} className="relative group">
+              <img src={img} alt="" className="size-20 rounded-lg object-cover border border-[#a65a4a]/20" />
+              <button
+                type="button"
+                onClick={() => openCrop(i)}
+                disabled={resolvingIndex === i}
+                className="absolute -top-1.5 -left-1.5 size-5 bg-white text-[#a65a4a] border border-[#a65a4a]/40 rounded-full flex items-center justify-center cursor-pointer hover:bg-[#a65a4a] hover:text-white disabled:opacity-60"
+                title="Crop image"
+              >
+                {resolvingIndex === i ? (
+                  <svg className="animate-spin size-2.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                ) : (
+                  <Crop size={11} />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(value.filter((_, idx) => idx !== i))}
+                className="absolute -top-1.5 -right-1.5 size-5 bg-[#a65a4a] text-white rounded-full flex items-center justify-center cursor-pointer"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={urlDraft}
+            onChange={(e) => setUrlDraft(e.target.value)}
+            placeholder="Paste image URL or drag & drop image files…"
+            className={inputBase}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (!urlDraft.trim()) return;
+              onChange([...value, urlDraft.trim()]);
+              setUrlDraft("");
+            }}
+            className="shrink-0 px-3 py-2 rounded-lg border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-medium hover:bg-[#a65a4a]/5 cursor-pointer"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-medium hover:bg-[#a65a4a]/5 cursor-pointer"
+          >
+            <ImagePlus size={14} /> Upload
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+        </div>
       </div>
       {cropIndex !== null && cropSrc && (
         <ImageCropModal

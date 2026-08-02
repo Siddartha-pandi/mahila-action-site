@@ -18,11 +18,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
     }
 
-    // ── Duplicate guard ──────────────────────────────────────────────────
-    // Nothing stopped the same person volunteering for the same event again
-    // and again — a double-click, or a second visit to the dashboard, filed a
-    // fresh application every time. Events this email already covers are
-    // dropped; if that leaves nothing, the whole request is a repeat.
     const requested: string[] = Array.isArray(body.selected_events)
       ? body.selected_events.map((t: unknown) => String(t)).filter((t: string) => t.trim() !== "")
       : [];
@@ -30,22 +25,12 @@ export async function POST(req: NextRequest) {
 
     if (requested.length > 0) {
       const existing = await queryDb(
-        "SELECT selected_events FROM volunteer_registrations WHERE LOWER(email) = LOWER($1)",
+        "SELECT event_name FROM event_reservations WHERE LOWER(email) = LOWER($1) AND volunteer_commitment IS NOT NULL AND volunteer_commitment != 'vendor'",
         [String(body.email).trim()]
       );
       const alreadyRegistered = new Set<string>();
       for (const row of existing.rows) {
-        let titles: unknown = row.selected_events;
-        if (typeof titles === "string") {
-          try {
-            titles = JSON.parse(titles);
-          } catch {
-            titles = [];
-          }
-        }
-        if (Array.isArray(titles)) {
-          titles.forEach((t) => alreadyRegistered.add(String(t).trim().toLowerCase()));
-        }
+        if (row.event_name) alreadyRegistered.add(String(row.event_name).trim().toLowerCase());
       }
 
       selectedEvents = requested.filter((t) => !alreadyRegistered.has(t.trim().toLowerCase()));
@@ -62,30 +47,36 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const id = nanoid();
-    await queryDb(
-      `INSERT INTO volunteer_registrations (id, name, email, phone, skills, selected_events)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        id,
-        body.name,
-        body.email,
-        body.phone,
-        body.skills || null,
-        JSON.stringify(selectedEvents),
-      ]
-    );
+    let firstId: string | number = "";
+    const commitment = body.volunteer_commitment || "event_only";
+    const eventsToSave = selectedEvents.length > 0 ? selectedEvents : ["General Volunteer"];
+
+    for (const evt of eventsToSave) {
+      const insertRes = await queryDb(
+        `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
+         VALUES ($1, $2, $3, $4, 1, $5, $6) RETURNING id`,
+        [
+          evt,
+          body.name.trim(),
+          String(body.email).trim(),
+          String(body.phone).trim(),
+          commitment,
+          JSON.stringify([]),
+        ]
+      );
+      if (!firstId && insertRes.rows[0]?.id) firstId = String(insertRes.rows[0].id);
+    }
 
     await queryDb(
-      "UPDATE users SET kind = 'volunteer' WHERE LOWER(email) = LOWER($1)",
-      [String(body.email).trim()]
+      "UPDATE users SET kind = 'volunteer', skills = COALESCE($1, skills) WHERE LOWER(email) = LOWER($2)",
+      [body.skills || null, String(body.email).trim()]
     );
 
     sendVolunteerConfirmationEmail(body.email, body.name, selectedEvents).catch((err) =>
       console.error("sendVolunteerConfirmationEmail failed:", err)
     );
 
-    return NextResponse.json({ ok: true, id }, { status: 201 });
+    return NextResponse.json({ ok: true, id: firstId }, { status: 201 });
   } catch (err: any) {
     console.error("POST /api/volunteers error:", err);
     return NextResponse.json({ error: "Could not save submission." }, { status: 500 });
@@ -97,8 +88,20 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const result = await queryDb("SELECT * FROM volunteer_registrations ORDER BY created_at DESC");
-    return NextResponse.json(result.rows);
+    const result = await queryDb(
+      "SELECT id, name, email, phone, event_name, volunteer_commitment, companions, status, created_at FROM event_reservations WHERE volunteer_commitment IS NOT NULL AND volunteer_commitment != 'vendor' ORDER BY created_at DESC"
+    );
+    const mappedRows = result.rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      phone: row.phone,
+      selected_events: [row.event_name],
+      volunteer_commitment: row.volunteer_commitment,
+      status: row.status,
+      created_at: row.created_at,
+    }));
+    return NextResponse.json(mappedRows);
   } catch (err: any) {
     console.error("GET /api/volunteers error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

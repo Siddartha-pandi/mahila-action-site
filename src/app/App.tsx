@@ -60,10 +60,20 @@ export default function App() {
 
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "") {
-      // Keep the query string — emailed links land on "/" carrying the modal
-      // they need to open (e.g. ?modal=volunteer&kind=reset&id=<token>), and
-      // dropping it here sent people to a bare home page instead.
       navigate({ pathname: "/home", search: location.search }, { replace: true });
+      return;
+    }
+
+    const segments = location.pathname.split("/").filter(Boolean);
+    const first = segments[0]?.toLowerCase();
+    const slugId = segments[1];
+
+    if (slugId && !location.search.includes("modal=")) {
+      if (first === "events" || first === "event") {
+        navigate({ pathname: "/events", search: `?modal=reserve&id=${encodeURIComponent(slugId)}` }, { replace: true });
+      } else if (first === "stories" || first === "story") {
+        navigate({ pathname: "/stories", search: `?modal=story&id=${encodeURIComponent(slugId)}` }, { replace: true });
+      }
     }
   }, [location.pathname, location.search, navigate]);
 

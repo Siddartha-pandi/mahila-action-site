@@ -297,13 +297,27 @@ function getDeletedEventIds(): string[] {
   }
 }
 
-function recordDeletedEventId(id: string) {
+export function isDeletedEventId(id: string | number, deletedIds?: string[]): boolean {
+  const list = deletedIds ?? getDeletedEventIds();
+  const strId = String(id);
+  const rawId = strId.replace(/^evt_/, "");
+  const prefixedId = strId.startsWith("evt_") ? strId : `evt_${strId}`;
+
+  return list.includes(strId) || list.includes(rawId) || list.includes(prefixedId);
+}
+
+function recordDeletedEventId(id: string | number) {
   try {
     const ids = getDeletedEventIds();
-    if (!ids.includes(id)) {
-      ids.push(id);
-      localStorage.setItem(DELETED_EVENT_IDS_KEY, JSON.stringify(ids));
-    }
+    const strId = String(id);
+    const rawId = strId.replace(/^evt_/, "");
+    const prefixedId = strId.startsWith("evt_") ? strId : `evt_${strId}`;
+
+    if (!ids.includes(strId)) ids.push(strId);
+    if (!ids.includes(rawId)) ids.push(rawId);
+    if (!ids.includes(prefixedId)) ids.push(prefixedId);
+
+    localStorage.setItem(DELETED_EVENT_IDS_KEY, JSON.stringify(ids));
   } catch {
     // ignore
   }
@@ -321,8 +335,12 @@ export function getLocalSiteData(): Partial<SiteData> {
 export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
   try {
     const current = getLocalSiteData();
+    const deletedIds = getDeletedEventIds();
+    const rawEvents = patch.events ?? current.events ?? DEFAULT_EVENTS;
+    const cleanEvents = rawEvents.filter((e) => !isDeletedEventId(e.id, deletedIds));
+
     const updated = {
-      events: patch.events ?? current.events ?? DEFAULT_EVENTS,
+      events: cleanEvents,
       categories: patch.categories ?? current.categories ?? DEFAULT_CATEGORIES,
       blogPosts: patch.blogPosts ?? current.blogPosts ?? DEFAULT_BLOG_POSTS,
       councilors: patch.councilors ?? current.councilors ?? DEFAULT_COUNCILORS,
@@ -343,7 +361,9 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
 
 export async function loadSiteData(): Promise<SiteData> {
   const local = getLocalSiteData();
-  let events = local.events ?? DEFAULT_EVENTS;
+  const deletedIds = getDeletedEventIds();
+
+  let events = (local.events ?? DEFAULT_EVENTS).filter((e) => !isDeletedEventId(e.id, deletedIds));
   let categories = local.categories ?? DEFAULT_CATEGORIES;
   let blogPosts = local.blogPosts ?? DEFAULT_BLOG_POSTS;
   let councilors = local.councilors ?? DEFAULT_COUNCILORS;
@@ -368,11 +388,10 @@ export async function loadSiteData(): Promise<SiteData> {
     const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
     if (Array.isArray(eventRows) && eventRows.length > 0) {
-      const deletedIds = getDeletedEventIds();
       events = eventRows
-        .filter((r: any) => !deletedIds.includes(String(r.id)))
+        .filter((r: any) => !isDeletedEventId(r.id, deletedIds))
         .map((r: any) => ({
-          id: r.id,
+          id: String(r.id),
           title: r.title,
           description: r.description || "",
           image: mediaUrl(r.image),
@@ -487,17 +506,54 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
   }
 }
 
+export function unrecordDeletedEventId(id: string | number) {
+  try {
+    const ids = getDeletedEventIds();
+    const strId = String(id);
+    const rawId = strId.replace(/^evt_/, "");
+    const prefixedId = strId.startsWith("evt_") ? strId : `evt_${strId}`;
+
+    const filtered = ids.filter((i) => i !== strId && i !== rawId && i !== prefixedId);
+    localStorage.setItem(DELETED_EVENT_IDS_KEY, JSON.stringify(filtered));
+  } catch {
+    // ignore
+  }
+}
+
 export async function deleteEvent(id: string): Promise<boolean> {
+  const current = getLocalSiteData();
+  const deletedIds = getDeletedEventIds();
+  const allEvents = current.events ?? DEFAULT_EVENTS;
+  const targetEvent = allEvents.find((e) => String(e.id) === String(id));
+
   // Record the deletion so it survives refresh even if the API doesn't persist it
   recordDeletedEventId(id);
 
-  const current = getLocalSiteData();
-  const events = (current.events ?? DEFAULT_EVENTS).filter((e) => e.id !== id);
+  if (targetEvent && typeof window !== "undefined") {
+    try {
+      const { addToTrash } = require("./recycleBin");
+      addToTrash({
+        id: String(targetEvent.id),
+        type: "event",
+        title: targetEvent.title,
+        subtitle: targetEvent.eventDate ? `Date: ${targetEvent.eventDate}` : "Event",
+        data: targetEvent,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  const events = allEvents.filter((e) => !isDeletedEventId(e.id, deletedIds) && String(e.id) !== String(id));
   saveLocalSiteData({ events });
 
   try {
-    const res = await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    const rawId = String(id).replace(/^evt_/, "");
+    await api.del(`${ENDPOINTS.events}/${encodeURIComponent(id)}`);
+    if (rawId !== id) {
+      await api.del(`${ENDPOINTS.events}/${encodeURIComponent(rawId)}`);
+    }
+    return true;
   } catch {
     return true;
   }
@@ -531,7 +587,25 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
   const current = getLocalSiteData();
-  const blogPosts = (current.blogPosts ?? DEFAULT_BLOG_POSTS).filter((p) => p.id !== id);
+  const allBlogs = current.blogPosts ?? DEFAULT_BLOG_POSTS;
+  const target = allBlogs.find((p) => p.id === id);
+
+  if (target && typeof window !== "undefined") {
+    try {
+      const { addToTrash } = require("./recycleBin");
+      addToTrash({
+        id: target.id,
+        type: "blog",
+        title: target.title,
+        subtitle: `Blog Post (${target.section})`,
+        data: target,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  const blogPosts = allBlogs.filter((p) => p.id !== id);
   saveLocalSiteData({ blogPosts });
 
   try {
@@ -619,7 +693,25 @@ export async function saveCouncilor(c: Councilor): Promise<boolean> {
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
   const current = getLocalSiteData();
-  const councilors = (current.councilors ?? DEFAULT_COUNCILORS).filter((c) => c.id !== id);
+  const allCouncilors = current.councilors ?? DEFAULT_COUNCILORS;
+  const target = allCouncilors.find((c) => c.id === id);
+
+  if (target && typeof window !== "undefined") {
+    try {
+      const { addToTrash } = require("./recycleBin");
+      addToTrash({
+        id: target.id,
+        type: "councilor",
+        title: target.name,
+        subtitle: target.role || "Councilor",
+        data: target,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  const councilors = allCouncilors.filter((c) => c.id !== id);
   saveLocalSiteData({ councilors });
 
   try {
@@ -655,7 +747,25 @@ export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {
   const current = getLocalSiteData();
-  const timeline = (current.timeline ?? DEFAULT_TIMELINE).filter((t) => t.id !== id);
+  const allTimeline = current.timeline ?? DEFAULT_TIMELINE;
+  const target = allTimeline.find((t) => t.id === id);
+
+  if (target && typeof window !== "undefined") {
+    try {
+      const { addToTrash } = require("./recycleBin");
+      addToTrash({
+        id: target.id,
+        type: "timeline",
+        title: target.title,
+        subtitle: target.year ? `Year: ${target.year}` : "Timeline Milestone",
+        data: target,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  const timeline = allTimeline.filter((t) => t.id !== id);
   saveLocalSiteData({ timeline });
 
   try {

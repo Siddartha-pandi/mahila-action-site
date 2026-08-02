@@ -2,11 +2,38 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
-const ALLOWED_STATUSES = ["New", "Contacted", "Completed"];
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const admin = getAdminFromRequest(req);
+  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-// Review status only. There is deliberately no DELETE here: a member row is a
-// real sign-in account, and removing one while tidying the submissions list
-// would lock that person out of the site.
+  if (params.id === "superadmin_env") {
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    return NextResponse.json({
+      id: "superadmin_env",
+      name: "Lead Super Admin",
+      email: envSuperadminEmail,
+      phone: "+91 XXXXXXXXXX",
+      role: "superadmin",
+      kind: "superadmin",
+      skills: null,
+      permissions: null,
+      status: "Active",
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  try {
+    const res = await queryDb("SELECT id, name, email, phone, role, kind, skills, permissions, status, created_at FROM users WHERE id = $1", [params.id]);
+    if (res.rows.length === 0) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    return NextResponse.json(res.rows[0]);
+  } catch (err: any) {
+    console.error("GET /api/members/[id] error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const admin = getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -58,7 +85,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       values.push(serializedPerms);
     }
 
-
     if (updates.length === 0) {
       return NextResponse.json({ error: "No fields to update." }, { status: 400 });
     }
@@ -70,6 +96,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     console.error("PATCH /api/members/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
+  return PATCH(req, ctx);
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {

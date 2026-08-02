@@ -33,7 +33,7 @@ export function GlobalModals() {
   if (modal === "closed") return <ClosedEventNoticeModal events={siteData.events} onClose={closeModal} />;
 
   if (modal === "reserve" && modalId) {
-    const event = siteData.events.find(e => e.id === modalId);
+    const event = siteData.events.find(e => String(e.id) === String(modalId));
     if (!event) return null;
     return (
       <ReserveSeatModal
@@ -49,8 +49,8 @@ export function GlobalModals() {
     const impactPosts = siteData.blogPosts.filter(p => p.section === "impact");
     const post =
       modal === "impact"
-        ? impactPosts.find(p => p.id === modalId) ?? impactPosts.find(p => p.categoryId === IMPACT_CARD_CATEGORY[modalId])
-        : siteData.blogPosts.find(p => p.id === modalId);
+        ? impactPosts.find(p => String(p.id) === String(modalId)) ?? impactPosts.find(p => String(p.categoryId) === String(IMPACT_CARD_CATEGORY[modalId]) || String(p.categoryId) === String(modalId))
+        : siteData.blogPosts.find(p => String(p.id) === String(modalId));
     if (!post) return null;
 
     const fb =
@@ -63,7 +63,7 @@ export function GlobalModals() {
       gallery: post.gallery?.length ? post.gallery : (fb?.gallery ?? []),
     };
     const categoryLabel =
-      siteData.categories.find(cat => cat.id === post.categoryId)?.name ??
+      siteData.categories.find(cat => String(cat.id) === String(post.categoryId))?.name ??
       (modal === "impact" ? "Our Impacts" : "Our Stories");
 
     return <BlogDetailModal post={enrichedPost} categoryLabel={categoryLabel} onClose={closeModal} />;

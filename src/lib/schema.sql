@@ -1,11 +1,9 @@
 -- PostgreSQL Schema for Mahila Action Site
--- Version: 4.1
--- Author: Antigravity
--- NOTE: Uses CREATE TABLE IF NOT EXISTS — safe to re-run without wiping data.
+-- Version: 5.1 (Persistent INTEGER SERIAL Schema — Safe to re-run without wiping data)
 
--- Users table unifying admins and volunteers
+-- 1. Users table (Admins, Members, Volunteers, Vendors)
 CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
@@ -20,91 +18,16 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-
--- Volunteer registrations (public signup submissions)
-CREATE TABLE IF NOT EXISTS volunteer_registrations (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  skills TEXT,
-  selected_events TEXT,
-  status TEXT NOT NULL DEFAULT 'New',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Donations table
-CREATE TABLE IF NOT EXISTS donations (
-  id TEXT PRIMARY KEY,
-  amount DOUBLE PRECISION NOT NULL,
-  name TEXT,
-  email TEXT,
-  phone TEXT,
-  donation_type TEXT,
-  anonymous INTEGER DEFAULT 0,
-  event_name TEXT,
-  campaign_name TEXT,
-  status TEXT NOT NULL DEFAULT 'New',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Event reservations table
-CREATE TABLE IF NOT EXISTS event_reservations (
-  id TEXT PRIMARY KEY,
-  event_name TEXT NOT NULL,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  seats INTEGER NOT NULL DEFAULT 1,
-  volunteer_commitment TEXT,
-  companions TEXT,
-  status TEXT NOT NULL DEFAULT 'New',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Vendor registrations table
-CREATE TABLE IF NOT EXISTS vendor_registrations (
-  id TEXT PRIMARY KEY,
-  event_name TEXT NOT NULL,
-  business_name TEXT NOT NULL,
-  contact_name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  offering TEXT NOT NULL,
-  needs_space INTEGER DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'New',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Contact submissions table
-CREATE TABLE IF NOT EXISTS contact_submissions (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT,
-  subject TEXT,
-  message TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'New',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Site content key-value store
-CREATE TABLE IF NOT EXISTS site_content (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- CMS Categories
+-- 2. CMS Categories
 CREATE TABLE IF NOT EXISTS cms_categories (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- CMS Events
+-- 3. CMS Events
 CREATE TABLE IF NOT EXISTS cms_events (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT,
   image TEXT,
@@ -112,15 +35,15 @@ CREATE TABLE IF NOT EXISTS cms_events (
   location TEXT,
   total_seats INTEGER DEFAULT 0,
   windows TEXT NOT NULL,
-  category_id TEXT REFERENCES cms_categories(id) ON DELETE SET NULL,
+  category_id INTEGER REFERENCES cms_categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- CMS Blog posts
+-- 4. CMS Blog posts & Impact Stories
 CREATE TABLE IF NOT EXISTS cms_blog_posts (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   section TEXT NOT NULL,
-  category_id TEXT REFERENCES cms_categories(id) ON DELETE SET NULL,
+  category_id INTEGER REFERENCES cms_categories(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
   excerpt TEXT,
   content TEXT,
@@ -130,9 +53,9 @@ CREATE TABLE IF NOT EXISTS cms_blog_posts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- CMS Councilors
+-- 5. CMS Councilors
 CREATE TABLE IF NOT EXISTS cms_councilors (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   role TEXT,
   bio TEXT,
@@ -140,9 +63,9 @@ CREATE TABLE IF NOT EXISTS cms_councilors (
   order_index INTEGER DEFAULT 0
 );
 
--- CMS Timeline
+-- 6. CMS Timeline
 CREATE TABLE IF NOT EXISTS cms_timeline (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   year TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -150,7 +73,7 @@ CREATE TABLE IF NOT EXISTS cms_timeline (
   order_index INTEGER DEFAULT 0
 );
 
--- CMS Contact settings
+-- 7. CMS Contact settings
 CREATE TABLE IF NOT EXISTS cms_contact (
   id SERIAL PRIMARY KEY,
   email TEXT,
@@ -163,9 +86,50 @@ CREATE TABLE IF NOT EXISTS cms_contact (
   hours_note TEXT
 );
 
--- Permanent volunteer activation/deactivation requests
+-- 8. Donations table
+CREATE TABLE IF NOT EXISTS donations (
+  id SERIAL PRIMARY KEY,
+  amount DOUBLE PRECISION NOT NULL,
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  donation_type TEXT,
+  anonymous INTEGER DEFAULT 0,
+  event_name TEXT,
+  campaign_name TEXT,
+  status TEXT NOT NULL DEFAULT 'New',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 9. Event reservations table (seat bookings, volunteers, vendors)
+CREATE TABLE IF NOT EXISTS event_reservations (
+  id SERIAL PRIMARY KEY,
+  event_name TEXT NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  seats INTEGER NOT NULL DEFAULT 1,
+  volunteer_commitment TEXT,
+  companions TEXT,
+  status TEXT NOT NULL DEFAULT 'New',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 10. Contact submissions table
+CREATE TABLE IF NOT EXISTS contact_submissions (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  subject TEXT,
+  message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'New',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 11. Permanent volunteer activation/deactivation requests
 CREATE TABLE IF NOT EXISTS perm_volunteer_requests (
-  id TEXT PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   phone TEXT,
@@ -173,4 +137,11 @@ CREATE TABLE IF NOT EXISTS perm_volunteer_requests (
   message TEXT,
   status TEXT NOT NULL DEFAULT 'New',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 12. Site content key-value store
+CREATE TABLE IF NOT EXISTS site_content (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
