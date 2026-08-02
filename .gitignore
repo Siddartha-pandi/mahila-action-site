@@ -1,146 +1,44 @@
-############################
-# Environment Variables
-############################
-
-# Never commit secrets or local env overrides
+# Environment variables (NEVER commit secrets)
 .env
 .env.local
 .env.*.local
 .env.development
 .env.production
-.env.staging
 
-############################
-# Node.js / Package Managers
-############################
-
+# Node modules
 node_modules/
 **/node_modules/
 
-# pnpm
-.pnpm-store/
-.pnpm-debug.log
-
-# yarn
-.yarn/*
-!.yarn/cache
-!.yarn/unplugged
-!.yarn/patches
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-.pnp.*
-yarn-error.log
-
-# npm
-npm-debug.log*
-package-lock.json.bak
-
-############################
-# Build Outputs
-############################
-
+# Build outputs
 dist/
 build/
 .next/
 .nuxt/
 .cache/
-**/dist/
-**/build/
 
-############################
+# Strapi specific
+.tmp/
+exports/
+
 # Logs
-############################
-
 *.log
-logs/
-pids/
-*.pid
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-############################
-# Strapi Specific
-############################
-
-.tmp/
-exports/
-.strapi/
-.strapi-updater.json
-.strapi-cloud.json
-**/public/uploads/*
-!**/public/uploads/.gitkeep
-
-
-
-############################
-# OS Files
-############################
-
-# macOS
+# OS files
 .DS_Store
-.AppleDouble
-.LSOverride
-.Spotlight-V100
-.Trashes
-._*
-
-# Windows
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
 
-# Linux
-*~
-
-############################
-# Editor / IDE
-############################
-
+# Editor directories
+.vscode/
 .idea/
 *.swp
 *.swo
-*.swn
-*.swm
-.tsbuildinfo
-.eslintcache
-nbproject/
 
-############################
-# Archives / Binaries
-############################
+# Local Netlify folder
+.netlify
 
-*.7z
-*.gz
-*.tar
-*.zip
-*.rar
-*.dmg
-*.iso
-*.jar
-*.exe
-*.dll
-*.o
-*.so
-*.class
-*.seed
-*.out
-
-############################
-# Testing / Coverage
-############################
-
-coverage/
-lcov.info
-lib-cov/
-results/
-
-############################
-# Misc
-############################
-
-ssl/
-*.bak
-.node_history
+# Local SQLite databases
+src/data/*.db*
+*.db
