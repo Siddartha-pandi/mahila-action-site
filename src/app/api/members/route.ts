@@ -3,6 +3,7 @@ import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
+import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
   const admin = getAdminFromRequest(req);
@@ -53,8 +54,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, email, phone, role, kind, status, password, skills, permissions } = body || {};
 
-    if (!name?.trim() || !email?.trim()) {
-      return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
+    const invalid = firstError(
+      validateName(name),
+      validateEmail(email),
+      phone ? validatePhone(phone) : null,
+      // Admins may leave the password blank to accept the default below; only a
+      // supplied one has to meet the strength rules.
+      password ? validatePassword(password) : null
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();

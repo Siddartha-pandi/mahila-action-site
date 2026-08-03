@@ -8,7 +8,7 @@ import {
   registrationKey, type RegistrationRole, type VolunteerAccountProfile,
 } from "@/lib/backend";
 import { isWindowOpen, type EventItem } from "@/lib/data";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
 import { DonationFormCard } from "../forms/DonationFormCard";
 import { reserveInputClass, reserveLabelClass } from "./ReserveSeatModal";
 
@@ -150,11 +150,14 @@ export function EventRegistrationModal({
 
   async function handleVolunteerSubmit(): Promise<boolean> {
     if (!skills.trim()) return fail("Please choose the skill or interest you'd like to help with");
-    for (const c of volunteerParty.companions) {
-      if (!c.name.trim() || !isValidPhoneNumber(c.phone)) {
-        return fail("Please enter a valid name and phone number for each additional volunteer");
-      }
-    }
+    const invalid = firstError(
+      validateSeats(Number(volunteerParty.count)),
+      ...volunteerParty.companions.flatMap((c, i) => [
+        validateName(c.name, `name for additional volunteer ${i + 1}`),
+        validatePhone(c.phone, `phone number for additional volunteer ${i + 1}`),
+      ])
+    );
+    if (invalid) return fail(invalid);
     // The volunteer application itself carries the event; any extra people come
     // through as a seat reservation so their details aren't lost.
     const res = await saveVolunteer({
@@ -178,11 +181,14 @@ export function EventRegistrationModal({
   }
 
   async function handleAttendeeSubmit(): Promise<boolean> {
-    for (const c of attendeeParty.companions) {
-      if (!c.name.trim() || !isValidPhoneNumber(c.phone)) {
-        return fail("Please enter a valid name and phone number for each additional attendee");
-      }
-    }
+    const invalid = firstError(
+      validateSeats(Number(attendeeParty.count)),
+      ...attendeeParty.companions.flatMap((c, i) => [
+        validateName(c.name, `name for additional attendee ${i + 1}`),
+        validatePhone(c.phone, `phone number for additional attendee ${i + 1}`),
+      ])
+    );
+    if (invalid) return fail(invalid);
     const res = await saveReservation({
       name, email, phone,
       seats: Number(attendeeParty.count),
@@ -194,8 +200,11 @@ export function EventRegistrationModal({
   }
 
   async function handleVendorSubmit(): Promise<boolean> {
-    if (!businessName.trim()) return fail("Please enter your business or organization name");
-    if (!offering.trim()) return fail("Please describe what you'd like to offer");
+    const invalid = firstError(
+      validateText(businessName, "your business or organization name", { min: 2, max: 150 }),
+      validateText(offering, "what you'd like to offer", { min: 3, max: 500 })
+    );
+    if (invalid) return fail(invalid);
     const res = await saveVendor({
       business_name: businessName,
       contact_name: name,
@@ -211,9 +220,8 @@ export function EventRegistrationModal({
     e.preventDefault();
     if (submitting || !role) return;
 
-    if (!name.trim()) { toast.error("Please enter your full name"); return; }
-    if (!email.trim() || !email.includes("@")) { toast.error("Please enter a valid email"); return; }
-    if (!isValidPhoneNumber(phone)) { toast.error("Please enter a valid phone number (e.g. +91 98765 43210)"); return; }
+    const invalid = firstError(validateName(name), validateEmail(email), validatePhone(phone));
+    if (invalid) { toast.error(invalid); return; }
 
     // Last line of defence in the browser; the API rejects repeats too.
     if (registeredKeys.has(registrationKey(role, event.title))) {

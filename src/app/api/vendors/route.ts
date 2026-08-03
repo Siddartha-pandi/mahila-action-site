@@ -2,20 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 import { sendVendorConfirmationEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const requiredFields = ["business_name", "contact_name", "email", "phone", "offering", "event_name"];
-    for (const field of requiredFields) {
-      if (body[field] === undefined || body[field] === null || body[field] === "") {
-        return NextResponse.json({ error: `${field} is required.` }, { status: 400 });
-      }
-    }
-    if (body.phone && !isValidPhoneNumber(String(body.phone))) {
-      return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
+    const invalid = firstError(
+      // A business name may legitimately contain digits and symbols ("Café 24"),
+      // so it is length-checked rather than run through the person-name rule.
+      validateText(body.business_name, "your business name", { min: 2, max: 150 }),
+      validateName(body.contact_name, "contact name"),
+      validateEmail(body.email),
+      validatePhone(body.phone),
+      validateText(body.offering, "what you will be offering", { min: 3, max: 500 }),
+      validateText(body.event_name, "the event name", { max: 200 })
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const duplicate = await queryDb(

@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { name, email, phone, request_type, message } = body || {};
 
-    if (!name?.trim() || !email?.trim()) {
-      return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
+    const invalid = firstError(
+      validateName(name),
+      validateEmail(email),
+      phone ? validatePhone(phone) : null,
+      validateText(message, "your message", { max: LIMITS.message.max, required: false })
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const id = nanoid();

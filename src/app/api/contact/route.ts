@@ -3,19 +3,21 @@ import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { sendContactAcknowledgementEmail } from "@/lib/email";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const requiredFields = ["name", "email", "message"];
-    for (const field of requiredFields) {
-      if (body[field] === undefined || body[field] === null || body[field] === "") {
-        return NextResponse.json({ error: `${field} is required.` }, { status: 400 });
-      }
-    }
-    if (body.phone && !isValidPhoneNumber(String(body.phone))) {
-      return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
+    const invalid = firstError(
+      validateName(body.name),
+      validateEmail(body.email),
+      // Phone is optional on the contact form, but must be sane when supplied.
+      body.phone ? validatePhone(body.phone) : null,
+      validateText(body.subject, "a subject", { max: LIMITS.subject.max, required: false }),
+      validateText(body.message, "your message", { min: LIMITS.message.min, max: LIMITS.message.max })
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const id = nanoid();

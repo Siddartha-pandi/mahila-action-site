@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { sendWelcomeEmail } from "@/lib/email";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 
 function toProfile(row: any) {
   return { name: row.name, email: row.email, phone: row.phone, skills: row.skills || "" };
@@ -14,14 +14,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, email, phone, password, skills } = body || {};
 
-    if (!name?.trim() || !email?.trim() || !phone?.trim() || !password) {
-      return NextResponse.json({ error: "Name, email, phone, and password are required." }, { status: 400 });
-    }
-    if (!isValidPhoneNumber(phone)) {
-      return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
-    }
-    if (String(password).length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+    const invalid = firstError(
+      validateName(name),
+      validateEmail(email),
+      validatePhone(phone),
+      validatePassword(password)
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();

@@ -5,7 +5,7 @@ import { X, Calendar, MapPin, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { saveReservation, saveVendor } from "@/lib/backend";
 import { isWindowOpen, upcomingOrOpenEvents, type EventItem, type RegKind } from "@/lib/data";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
 import { useSiteData } from "../context/SiteDataContext";
 import { DonationFormCard } from "../forms/DonationFormCard";
 import { inter, fraunces } from "../components/shared/styleHelpers";
@@ -41,12 +41,17 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return toast.error("Please enter your full name");
-    if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
-    for (const c of companions) {
-      if (!c.name.trim() || !isValidPhoneNumber(c.phone)) return toast.error("Please enter a valid name and phone number for each additional volunteer");
-    }
+    const invalid = firstError(
+      validateName(name),
+      validateEmail(email),
+      validatePhone(phone),
+      validateSeats(Number(seats)),
+      ...companions.flatMap((c, i) => [
+        validateName(c.name, `name for additional volunteer ${i + 1}`),
+        validatePhone(c.phone, `phone number for additional volunteer ${i + 1}`),
+      ])
+    );
+    if (invalid) return toast.error(invalid);
     const res = await saveReservation({
       name, email, phone, seats: Number(seats), event_name: event.title,
       volunteer_commitment: commitment, companions,
@@ -159,11 +164,14 @@ export function VendorReserveForm({ event, onClose }: { event: EventItem; onClos
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!businessName.trim()) return toast.error("Please enter your business or organization name");
-    if (!contactName.trim()) return toast.error("Please enter a contact person's name");
-    if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid contact phone number (e.g. +91 98765 43210)");
-    if (!offering.trim()) return toast.error("Please describe what you'd like to offer");
+    const invalid = firstError(
+      validateText(businessName, "your business or organization name", { min: 2, max: 150 }),
+      validateName(contactName, "contact person's name"),
+      validateEmail(email),
+      validatePhone(phone, "contact phone number"),
+      validateText(offering, "what you'd like to offer", { min: 3, max: 500 })
+    );
+    if (invalid) return toast.error(invalid);
     const res = await saveVendor({
       business_name: businessName, contact_name: contactName, email, phone,
       offering, needs_space: needsSpace, event_name: event.title,
@@ -268,13 +276,18 @@ export function AttendEventForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return toast.error("Please enter your full name");
-    if (!email.trim() || !email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
     if (!eventId || !selectedEvent) return toast.error("Please select an event to attend");
-    for (const c of companions) {
-      if (!c.name.trim() || !isValidPhoneNumber(c.phone)) return toast.error("Please enter a valid name and phone number for each additional attendee");
-    }
+    const invalid = firstError(
+      validateName(name),
+      validateEmail(email),
+      validatePhone(phone),
+      validateSeats(Number(members)),
+      ...companions.flatMap((c, i) => [
+        validateName(c.name, `name for additional attendee ${i + 1}`),
+        validatePhone(c.phone, `phone number for additional attendee ${i + 1}`),
+      ])
+    );
+    if (invalid) return toast.error(invalid);
     const res = await saveReservation({
       name, email, phone, seats: Number(members),
       event_name: selectedEvent.title, companions,

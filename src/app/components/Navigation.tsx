@@ -134,12 +134,20 @@ export function Navigation({
           ) : (
             <button
               onClick={() => nav("account")}
-              className={`${inter()} bg-[#a65a4a]/10 border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[12px] sm:text-[14px] font-semibold px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
-                page === "account" ? "bg-[#a65a4a] text-[#f4efe7]" : ""
+              className={`${inter()} border-2 border-[#a65a4a] text-[12px] sm:text-[14px] font-semibold px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
+                page === "account"
+                  ? "bg-[#a65a4a] text-[#f4efe7] hover:bg-[#993925]"
+                  : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/15 hover:text-[#993925]"
               }`}
               title="View My Account Profile"
             >
-              <div className="size-5 sm:size-6 rounded-full bg-[#a65a4a] text-[#f4efe7] font-bold text-[10px] sm:text-[12px] flex items-center justify-center shrink-0">
+              <div
+                className={`size-5 sm:size-6 rounded-full font-bold text-[10px] sm:text-[12px] flex items-center justify-center shrink-0 transition-colors ${
+                  page === "account"
+                    ? "bg-[#f4efe7] text-[#a65a4a]"
+                    : "bg-[#a65a4a] text-[#f4efe7]"
+                }`}
+              >
                 {userSession.name.charAt(0).toUpperCase()}
               </div>
               <span className="max-w-[55px] sm:max-w-[100px] lg:max-w-[140px] truncate">

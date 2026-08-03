@@ -2,20 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
 import { sendReservationConfirmationEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const requiredFields = ["name", "email", "phone", "event_name"];
-    for (const field of requiredFields) {
-      if (body[field] === undefined || body[field] === null || body[field] === "") {
-        return NextResponse.json({ error: `${field} is required.` }, { status: 400 });
-      }
+    const invalid = firstError(
+      validateName(body.name),
+      validateEmail(body.email),
+      validatePhone(body.phone),
+      validateText(body.event_name, "the event name", { max: 200 }),
+      body.seats === undefined || body.seats === null ? null : validateSeats(body.seats)
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
-    if (body.phone && !isValidPhoneNumber(String(body.phone))) {
-      return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
+
+    // Companions are booked on someone else's behalf, so their details get the
+    // same treatment as the lead booker's.
+    const companions = Array.isArray(body.companions) ? body.companions : [];
+    for (const [i, companion] of companions.entries()) {
+      const badCompanion = firstError(
+        validateName(companion?.name, `name for additional guest ${i + 1}`),
+        validatePhone(companion?.phone, `phone number for additional guest ${i + 1}`)
+      );
+      if (badCompanion) {
+        return NextResponse.json({ error: badCompanion }, { status: 400 });
+      }
     }
 
     // One booking per person per event, per role. The commitment column is what

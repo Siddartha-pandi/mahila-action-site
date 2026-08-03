@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { queryDb } from "@/lib/db";
 import { sendPasswordChangedEmail } from "@/lib/email";
+import { validatePassword } from "@/lib/validation";
 
 function toProfile(row: any) {
   return { name: row.name, email: row.email, phone: row.phone, skills: row.skills || "" };
@@ -15,8 +16,9 @@ export async function POST(req: NextRequest) {
     if (!token || !password) {
       return NextResponse.json({ error: "Reset token and new password are required." }, { status: 400 });
     }
-    if (String(password).length < 6) {
-      return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+    const weak = validatePassword(password, "New password");
+    if (weak) {
+      return NextResponse.json({ error: weak }, { status: 400 });
     }
 
     const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");

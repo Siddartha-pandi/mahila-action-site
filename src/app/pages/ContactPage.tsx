@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { saveContact } from "@/lib/backend";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 import { imgAboutBanner } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
@@ -24,10 +24,14 @@ export function ContactPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) return toast.error("Please enter your full name");
-    if (!form.email.trim() || !form.email.includes("@")) return toast.error("Please enter a valid email");
-    if (form.phone.trim() && !isValidPhoneNumber(form.phone)) return toast.error("Please enter a valid phone number (e.g. +91 98765 43210)");
-    if (!form.message.trim()) return toast.error("Please write your message");
+    const invalid = firstError(
+      validateName(form.name),
+      validateEmail(form.email),
+      form.phone.trim() ? validatePhone(form.phone) : null,
+      validateText(form.subject, "a subject", { max: LIMITS.subject.max, required: false }),
+      validateText(form.message, "your message", { min: LIMITS.message.min, max: LIMITS.message.max })
+    );
+    if (invalid) return toast.error(invalid);
     setLoading(true);
     const res = await saveContact({
       name: form.name, email: form.email,
