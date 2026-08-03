@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { sendContactAcknowledgementEmail } from "@/lib/email";
@@ -20,12 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
-    const id = nanoid();
-    await queryDb(
-      `INSERT INTO contact_submissions (id, name, email, phone, subject, message)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+    // contact_submissions.id is SERIAL — let the sequence assign it.
+    const insertRes = await queryDb(
+      `INSERT INTO contact_submissions (name, email, phone, subject, message)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [
-        id,
         body.name,
         body.email,
         body.phone || null,
@@ -33,6 +31,7 @@ export async function POST(req: NextRequest) {
         body.message,
       ]
     );
+    const id = insertRes.rows[0]?.id;
 
     sendContactAcknowledgementEmail(body.email, body.name, body.subject || undefined).catch((err) =>
       console.error("sendContactAcknowledgementEmail failed:", err)

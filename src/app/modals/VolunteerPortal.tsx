@@ -17,6 +17,7 @@ import { isEventOpen, type EventItem } from "@/lib/data";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { setCurrentAdminSession } from "@/lib/permissions";
 import { useModal } from "../hooks/useModal";
+import { clearIntendedDestination, consumeIntendedDestination } from "../hooks/useAuthGuard";
 import { type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
 
 // Fallback static volunteer events (used as display items when no CMS events exist)
@@ -62,13 +63,28 @@ const VOLUNTEER_EVENTS = [
 const inputCls = `w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]`;
 const labelCls = `font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider mb-1 block`;
 
-export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events: EventItem[] }) {
+export function VolunteerPortal({ onClose, initialStep, resetToken, events, prompt }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events: EventItem[]; prompt?: string }) {
   const navigate = useNavigate();
   const { closeModal } = useModal();
   const handleClose = useCallback(() => {
     if (onClose) onClose();
     closeModal();
   }, [onClose, closeModal]);
+
+  /**
+   * Where to go once signed in: back to whatever the visitor was trying to
+   * reach, or their account when they came here of their own accord.
+   */
+  const goAfterAuth = useCallback(() => {
+    navigate(consumeIntendedDestination() ?? "/account");
+  }, [navigate]);
+
+  // Abandoning the sign-in prompt should not leave a stale destination behind
+  // to hijack an unrelated login later on.
+  const handleDismiss = useCallback(() => {
+    clearIntendedDestination();
+    handleClose();
+  }, [handleClose]);
 
   const [step, setStep] = useState<VolAuthStep>(initialStep ?? "login");
   const [profile, setProfile] = useState<VolunteerProfile | null>(null);
@@ -146,6 +162,9 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
     if (adminRes.ok) {
       setCurrentAdminSession(identifier);
       setAuthBusy(false);
+      // An admin sign-in is not the visitor account a protected form wants, so
+      // drop any pending destination rather than bouncing them into it.
+      clearIntendedDestination();
       handleClose();
       navigate("/admin");
       toast.success("Signed in to Admin Panel!");
@@ -159,7 +178,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
       saveUserSession(result.profile);
       handleClose();
       toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
-      navigate("/account");
+      goAfterAuth();
       window.scrollTo({ top: 0 });
       return;
     }
@@ -187,7 +206,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
     saveUserSession(result.profile);
     handleClose();
     toast.success(`Registered successfully! Welcome, ${result.profile.name}!`);
-    navigate("/account");
+    goAfterAuth();
     window.scrollTo({ top: 0 });
   }
 
@@ -361,7 +380,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
               </h3>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer"><X size={20} /></button>
+          <button onClick={handleDismiss} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer"><X size={20} /></button>
         </div>
 
         <div className="overflow-y-auto flex-1">
@@ -393,6 +412,16 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
           {/* ── Login screen ── */}
           {step === "login" && (
             <form onSubmit={handleLogin} className="p-8 flex flex-col gap-4">
+              {/* Set when the visitor was sent here from a protected action, so
+                  the reason for the interruption is stated rather than implied. */}
+              {prompt && (
+                <div className="flex gap-2.5 items-start bg-[#a65a4a]/8 border border-[#a65a4a]/25 rounded-xl p-3.5 -mt-1">
+                  <AlertCircle size={16} className="text-[#a65a4a] mt-0.5 shrink-0" />
+                  <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/75 leading-relaxed">
+                    {prompt} We'll take you straight back once you're signed in.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className={labelCls}>Email or Username</label>
                 <input value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="you@email.com" type="text" className={inputCls} />

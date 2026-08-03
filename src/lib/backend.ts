@@ -498,6 +498,47 @@ export function saveUserSession(session: VolunteerAccountProfile | null) {
   window.dispatchEvent(new Event("storage"));
 }
 
+/**
+ * Re-reads the signed-in person's own profile from the server and updates the
+ * stored session, so details they changed elsewhere are what forms prefill from
+ * next time. Only ever asks for the email already held in this browser's
+ * session, so it cannot be pointed at anybody else's account.
+ *
+ * Returns null when nobody is signed in, or when the account no longer exists —
+ * in which case the stale session is dropped rather than left to prefill from.
+ */
+export async function refreshUserProfile(): Promise<VolunteerAccountProfile | null> {
+  const current = getSavedUserSession();
+  if (!current?.email) return null;
+
+  const res = await api.post<{ ok: boolean; exists: boolean; profile?: Partial<VolunteerAccountProfile> }>(
+    "/api/volunteer-auth/session",
+    { email: current.email }
+  );
+
+  if (!res.ok || !res.data?.exists) {
+    saveUserSession(null);
+    return null;
+  }
+
+  const fresh = res.data.profile;
+  if (!fresh) return current;
+
+  // A column that is null in the database becomes an empty string, so a missing
+  // detail leaves its field blank instead of prefilling the old cached value.
+  const merged: VolunteerAccountProfile = {
+    name: fresh.name ?? "",
+    email: fresh.email ?? current.email,
+    phone: fresh.phone ?? "",
+    skills: fresh.skills ?? "",
+  };
+
+  if (JSON.stringify(merged) !== JSON.stringify(current)) {
+    saveUserSession(merged);
+  }
+  return merged;
+}
+
 export async function validateUserSession(): Promise<boolean> {
   const current = getSavedUserSession();
   if (!current?.email) return false;

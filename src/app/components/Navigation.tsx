@@ -17,6 +17,7 @@ import {
 import { getSavedUserSession, type VolunteerAccountProfile } from "@/lib/backend";
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
+import { clearIntendedDestination } from "../hooks/useAuthGuard";
 import { inter, type Page } from "./shared/styleHelpers";
 
 export function Navigation({
@@ -125,7 +126,12 @@ export function Navigation({
           {/* User Profile / Login */}
           {!userSession ? (
             <button
-              onClick={() => openModal("login")}
+              onClick={() => {
+                // Signing in deliberately from the header should land on the
+                // account page, not resume a gate the visitor walked away from.
+                clearIntendedDestination();
+                openModal("login");
+              }}
               className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[12px] sm:text-[14px] font-semibold px-3 sm:px-5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap`}
             >
               <LogIn size={14} className="shrink-0" />
@@ -223,6 +229,7 @@ export function Navigation({
                 <button
                   onClick={() => {
                     setMenuOpen(false);
+                    clearIntendedDestination();
                     openModal("login");
                   }}
                   className={`${inter()} w-full border-2 border-[#a65a4a] text-[#a65a4a] text-[14px] sm:text-[15px] font-semibold px-6 py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-all`}

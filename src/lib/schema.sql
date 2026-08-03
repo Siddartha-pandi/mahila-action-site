@@ -146,7 +146,16 @@ CREATE TABLE IF NOT EXISTS site_content (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 13. Recycle Bin (soft-deleted items held for restore or permanent erase)
+-- 13. Internal bookkeeping for the app itself (schema version marker, etc).
+-- Deliberately separate from site_content, which is user-editable CMS copy and
+-- is returned wholesale by GET /api/content.
+CREATE TABLE IF NOT EXISTS app_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 14. Recycle Bin (soft-deleted items held for restore or permanent erase)
 -- item_id is TEXT because sources use both integer (CMS tables) and string (submissions) ids.
 -- data holds a full JSON snapshot of the original row so it can be restored later.
 CREATE TABLE IF NOT EXISTS recycle_bin (

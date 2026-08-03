@@ -13,6 +13,7 @@ import {
 import { isEventOpen } from "@/lib/data";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
+import { rememberIntendedDestination } from "../hooks/useAuthGuard";
 import { EventRegistrationModal } from "../modals/EventRegistrationModal";
 import { PageBanner } from "../components/PageBanner";
 import { type Page } from "../components/shared/styleHelpers";
@@ -225,7 +226,10 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 Please sign in to access your registered events, seat reservations, volunteer activities, and contribution history.
               </p>
               <button
-                onClick={() => openModal("login")}
+                onClick={() => {
+                  rememberIntendedDestination("/account");
+                  openModal("login");
+                }}
                 className="mt-6 px-8 py-3.5 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
               >
                 <LogIn size={18} /> Sign In / Create Account →

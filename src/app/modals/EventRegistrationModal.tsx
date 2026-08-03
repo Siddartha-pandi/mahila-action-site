@@ -11,6 +11,7 @@ import { isWindowOpen, type EventItem } from "@/lib/data";
 import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
 import { DonationFormCard } from "../forms/DonationFormCard";
 import { reserveInputClass, reserveLabelClass } from "./ReserveSeatModal";
+import { useProfileField } from "../hooks/useUserProfile";
 
 // The four ways someone can take part in a single event. "attendee" has no
 // registration window of its own — attending is always open while the event is.
@@ -101,9 +102,9 @@ export function EventRegistrationModal({
   onRegistered: (role: RegistrationRole) => void;
 }) {
   // Shared contact details, prefilled from the signed-in account.
-  const [name, setName] = useState(profile.name ?? "");
-  const [email, setEmail] = useState(profile.email ?? "");
-  const [phone, setPhone] = useState(profile.phone ?? "");
+  const [name, setName] = useProfileField(profile.name);
+  const [email, setEmail] = useProfileField(profile.email);
+  const [phone, setPhone] = useProfileField(profile.phone);
 
   // Volunteer fields
   const [skills, setSkills] = useState(profile.skills ?? "");
