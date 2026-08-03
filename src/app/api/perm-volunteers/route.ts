@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
@@ -19,14 +18,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
-    const id = nanoid();
     const typeVal = request_type === "deactivate" ? "deactivate" : "activate";
 
-    await queryDb(
-      `INSERT INTO perm_volunteer_requests (id, name, email, phone, request_type, message)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, name.trim(), email.trim().toLowerCase(), phone || null, typeVal, message || null]
+    // perm_volunteer_requests.id is SERIAL — let the sequence assign it.
+    const insertRes = await queryDb(
+      `INSERT INTO perm_volunteer_requests (name, email, phone, request_type, message)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [name.trim(), email.trim().toLowerCase(), phone || null, typeVal, message || null]
     );
+    const id = insertRes.rows[0]?.id;
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {

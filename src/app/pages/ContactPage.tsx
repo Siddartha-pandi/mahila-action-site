@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { saveContact } from "@/lib/backend";
@@ -10,17 +10,35 @@ import { useSiteData } from "../context/SiteDataContext";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
 import { inter, fraunces } from "../components/shared/styleHelpers";
+import { useUserProfile } from "../hooks/useUserProfile";
 
 export function ContactPage() {
   const siteData = useSiteData();
+  const profile = useUserProfile();
   const [form, setForm] = useState({ name: "", email: "", phone: "", subject: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  /** Fields the visitor has typed in, which prefilling must not overwrite. */
+  const editedFields = useRef<Set<string>>(new Set());
 
   function set(field: string) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      editedFields.current.add(field);
       setForm(f => ({ ...f, [field]: e.target.value }));
+    };
   }
+
+  // Prefill contact details for a signed-in visitor. A detail they have not got
+  // on file stays blank, and signing out clears anything they never touched.
+  useEffect(() => {
+    setForm(f => {
+      const next = { ...f };
+      for (const field of ["name", "email", "phone"] as const) {
+        if (!editedFields.current.has(field)) next[field] = profile?.[field] ?? "";
+      }
+      return next;
+    });
+  }, [profile]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

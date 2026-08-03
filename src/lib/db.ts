@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import dotenv from "dotenv";
 
@@ -122,6 +123,59 @@ export async function getPool() {
   return pool;
 }
 
+// Marker row recording which schema.sql has already been applied. Startup
+// compares it against a hash of the current file, so the ~50 schema and seed
+// statements only run when something actually changed. Against a remote
+// database every one of those statements costs a full network round trip.
+const SCHEMA_MARKER_KEY = "__schema_version";
+
+function schemaFingerprint(rawSchema: string): string {
+  return crypto.createHash("sha256").update(rawSchema).digest("hex").slice(0, 16);
+}
+
+async function readAppliedSchemaVersion(dbPool: any): Promise<string | null> {
+  try {
+    const res = await dbPool.query("SELECT value FROM app_meta WHERE key = $1", [SCHEMA_MARKER_KEY]);
+    return res.rows[0]?.value ?? null;
+  } catch {
+    // app_meta does not exist yet — this is a first boot.
+    return null;
+  }
+}
+
+async function recordSchemaVersion(dbPool: any, version: string): Promise<void> {
+  await dbPool.query(
+    `INSERT INTO app_meta (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+    [SCHEMA_MARKER_KEY, version]
+  );
+}
+
+/**
+ * Superadmin credentials live in environment variables and must never be stored
+ * in the database. This runs on every start, including the fast path, so a row
+ * inserted by hand cannot survive a restart.
+ */
+async function removeSuperadminRows(dbPool: any): Promise<void> {
+  const superadminEmail = (
+    process.env.SUPERADMIN_EMAIL ||
+    process.env.EMAIL_FROM ||
+    "mahilaaction.vsk@gmail.com"
+  ).toLowerCase().trim();
+
+  await dbPool.query(
+    `DELETE FROM users WHERE role = 'superadmin' OR LOWER(email) = LOWER($1)`,
+    [superadminEmail]
+  );
+}
+
+/** Builds a `($1, $2, ...), ($n, ...)` placeholder list for a multi-row insert. */
+function rowPlaceholders(rowCount: number, columnCount: number): string {
+  return Array.from({ length: rowCount }, (_, row) =>
+    `(${Array.from({ length: columnCount }, (_, col) => `$${row * columnCount + col + 1}`).join(", ")})`
+  ).join(", ");
+}
+
 export async function seedAllData(dbPool: any): Promise<void> {
   // 1. Categories (IDs: 1, 2, 3, 4)
   await dbPool.query(`
@@ -141,18 +195,9 @@ export async function seedAllData(dbPool: any): Promise<void> {
     cat_wellbeing: 4,
   };
 
-  // 2. Security Enhancement: Superadmin is authenticated via environment variables (SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD).
-  // Clean up any superadmin row from database table so credentials are NEVER stored in DB.
-  const superadminEmail = (
-    process.env.SUPERADMIN_EMAIL ||
-    process.env.EMAIL_FROM ||
-    "mahilaaction.vsk@gmail.com"
-  ).toLowerCase().trim();
-
-  await dbPool.query(
-    `DELETE FROM users WHERE role = 'superadmin' OR LOWER(email) = LOWER($1)`,
-    [superadminEmail]
-  );
+  // 2. Superadmin is authenticated via environment variables and must never be
+  // stored in the database. Also runs on the fast path — see removeSuperadminRows.
+  await removeSuperadminRows(dbPool);
 
   // 3. Default Events (ID: 1)
   const defaultWindows = [
@@ -231,24 +276,23 @@ export async function seedAllData(dbPool: any): Promise<void> {
     },
   ];
 
-  for (const post of blogPosts) {
-    await dbPool.query(
-      `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (id) DO NOTHING`,
-      [
-        post.id,
-        post.section,
-        post.categoryId,
-        post.title,
-        post.excerpt,
-        post.content,
-        post.coverImage,
-        JSON.stringify(post.gallery),
-        JSON.stringify(post.tags),
-      ]
-    );
-  }
+  // One multi-row insert rather than one round trip per post.
+  await dbPool.query(
+    `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
+     VALUES ${rowPlaceholders(blogPosts.length, 9)}
+     ON CONFLICT (id) DO NOTHING`,
+    blogPosts.flatMap((post) => [
+      post.id,
+      post.section,
+      post.categoryId,
+      post.title,
+      post.excerpt,
+      post.content,
+      post.coverImage,
+      JSON.stringify(post.gallery),
+      JSON.stringify(post.tags),
+    ])
+  );
 
   // 5. Default Councilors (IDs: 1, 2, 3)
   const councilors = [
@@ -256,14 +300,12 @@ export async function seedAllData(dbPool: any): Promise<void> {
     { id: 2, name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order_index: 1 },
     { id: 3, name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order_index: 2 },
   ];
-  for (const c of councilors) {
-    await dbPool.query(
-      `INSERT INTO cms_councilors (id, name, role, bio, image, order_index)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO NOTHING`,
-      [c.id, c.name, c.role, c.bio, c.image, c.order_index]
-    );
-  }
+  await dbPool.query(
+    `INSERT INTO cms_councilors (id, name, role, bio, image, order_index)
+     VALUES ${rowPlaceholders(councilors.length, 6)}
+     ON CONFLICT (id) DO NOTHING`,
+    councilors.flatMap((c) => [c.id, c.name, c.role, c.bio, c.image, c.order_index])
+  );
 
   // 6. Default Timeline (IDs: 1..6)
   const timeline = [
@@ -274,14 +316,12 @@ export async function seedAllData(dbPool: any): Promise<void> {
     { id: 5, year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order_index: 4 },
     { id: 6, year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order_index: 5 },
   ];
-  for (const t of timeline) {
-    await dbPool.query(
-      `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO NOTHING`,
-      [t.id, t.year, t.title, t.description, t.image, t.order_index]
-    );
-  }
+  await dbPool.query(
+    `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
+     VALUES ${rowPlaceholders(timeline.length, 6)}
+     ON CONFLICT (id) DO NOTHING`,
+    timeline.flatMap((t) => [t.id, t.year, t.title, t.description, t.image, t.order_index])
+  );
 
   // 7. Default Contact Info (ID: 1)
   await dbPool.query(
@@ -293,11 +333,14 @@ export async function seedAllData(dbPool: any): Promise<void> {
   // Synchronize PostgreSQL SERIAL sequences past manually seeded IDs
   if (!dbPool.isSqlite) {
     const tablesToSync = ["users", "cms_categories", "cms_events", "cms_blog_posts", "cms_councilors", "cms_timeline", "cms_contact"];
-    for (const t of tablesToSync) {
-      try {
-        await dbPool.query(`SELECT setval(pg_get_serial_sequence('${t}', 'id'), COALESCE((SELECT MAX(id) FROM ${t}), 1));`);
-      } catch { }
-    }
+    // Sent as one batch — seven separate statements meant seven round trips.
+    try {
+      await dbPool.query(
+        tablesToSync
+          .map((t) => `SELECT setval(pg_get_serial_sequence('${t}', 'id'), COALESCE((SELECT MAX(id) FROM ${t}), 1));`)
+          .join("\n")
+      );
+    } catch { }
   }
 }
 
@@ -410,6 +453,25 @@ export async function initDb(): Promise<void> {
         .replace(/--.*$/gm, "")
         .replace(/\/\*[\s\S]*?\*\//g, "");
 
+      // Applying the schema and seed costs one network round trip per statement
+      // — around fifty of them. Once a given schema.sql has been applied there is
+      // nothing left to do, so check a marker row first and skip the whole thing.
+      // Changing schema.sql changes its hash, which makes the next start reapply.
+      const schemaVersion = schemaFingerprint(rawSchema);
+      const appliedVersion = await readAppliedSchemaVersion(currentPool);
+
+      if (appliedVersion === schemaVersion) {
+        await removeSuperadminRows(currentPool).catch(() => { });
+        isInitialized = true;
+        globalRef._dbInitialized = true;
+        console.log(
+          isUsingSqliteFallback
+            ? "✓ Local database already up to date."
+            : "✓ PostgreSQL database already up to date."
+        );
+        return;
+      }
+
       if (isUsingSqliteFallback) {
         // Execute SQLite schema
         const sqliteSchema = cleanRawSchema
@@ -437,35 +499,36 @@ export async function initDb(): Promise<void> {
           await currentPool.query("ALTER TABLE users ADD COLUMN permissions TEXT;");
         } catch { }
       } else {
-        // PostgreSQL schema
-        const statements = cleanRawSchema
-          .split(";")
-          .map((s) => s.trim())
-          .filter(Boolean);
+        // PostgreSQL schema. Every statement is idempotent (IF NOT EXISTS), so
+        // they go out as a single batch instead of one round trip each.
+        const statements = [
+          ...cleanRawSchema.split(";").map((s) => s.trim()).filter(Boolean),
+          "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check",
+          "ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT",
+          "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT",
+          "ALTER TABLE cms_events ADD COLUMN IF NOT EXISTS category_id TEXT",
+        ];
 
-        for (const statement of statements) {
-          try {
-            await currentPool.query(statement);
-          } catch (stmtErr: any) {
-            // Ignore benign notice/warning errors during statement execution
+        try {
+          await currentPool.query(statements.join(";\n") + ";");
+        } catch (batchErr: any) {
+          // A batch aborts at the first failure, so fall back to running them
+          // one by one — slower, but it recovers the previous behaviour of
+          // letting a single bad statement pass without stopping the rest.
+          console.warn("Batched schema apply failed, retrying statement by statement:", batchErr?.message || batchErr);
+          for (const statement of statements) {
+            try {
+              await currentPool.query(statement);
+            } catch { }
           }
         }
-        try {
-          await currentPool.query("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;");
-        } catch { }
-        try {
-          await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT;");
-        } catch { }
-        try {
-          await currentPool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT;");
-        } catch { }
-        try {
-          await currentPool.query("ALTER TABLE cms_events ADD COLUMN IF NOT EXISTS category_id TEXT;");
-        } catch { }
       }
 
       // Seed all default data into database
       await seedAllData(currentPool);
+      await recordSchemaVersion(currentPool, schemaVersion).catch((err) =>
+        console.warn("Could not record schema version marker:", err?.message || err)
+      );
 
       isInitialized = true;
       globalRef._dbInitialized = true;

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 
@@ -77,7 +76,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "An account with this email address already exists." }, { status: 409 });
     }
 
-    const id = nanoid();
     const password_hash = bcrypt.hashSync(String(password || "123456"), 10);
     const assignedRole = role || "user";
     const assignedStatus = status || "Active";
@@ -87,10 +85,12 @@ export async function POST(req: NextRequest) {
         : JSON.stringify(permissions)
       : null;
 
-    await queryDb(
-      `INSERT INTO users (id, name, email, phone, role, kind, password_hash, skills, permissions, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [id, name.trim(), normalizedEmail, normalizedPhone, assignedRole, kind || null, password_hash, skills || null, serializedPerms, assignedStatus]
+    // users.id is SERIAL — let the sequence assign it.
+    const insertRes = await queryDb(
+      `INSERT INTO users (name, email, phone, role, kind, password_hash, skills, permissions, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [name.trim(), normalizedEmail, normalizedPhone, assignedRole, kind || null, password_hash, skills || null, serializedPerms, assignedStatus]
     );
+    const id = insertRes.rows[0]?.id;
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {

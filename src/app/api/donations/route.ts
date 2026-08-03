@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { sendDonationReceiptEmail } from "@/lib/email";
@@ -23,12 +22,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
-    const id = nanoid();
-    await queryDb(
-      `INSERT INTO donations (id, amount, name, email, phone, donation_type, anonymous, event_name, campaign_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    // donations.id is SERIAL — let the sequence assign it. Supplying a nanoid
+    // string here makes PostgreSQL reject the whole insert (22P02).
+    const insertRes = await queryDb(
+      `INSERT INTO donations (amount, name, email, phone, donation_type, anonymous, event_name, campaign_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
-        id,
         Number(body.amount),
         body.name || null,
         body.email || null,
@@ -39,6 +38,7 @@ export async function POST(req: NextRequest) {
         body.campaign_name || null,
       ]
     );
+    const id = insertRes.rows[0]?.id;
 
     // Anonymous donors are still receipted if they gave an address to send it to.
     if (body.email) {

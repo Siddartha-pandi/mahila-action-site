@@ -9,6 +9,7 @@ import { firstError, validateEmail, validateName, validatePhone, validateSeats, 
 import { useSiteData } from "../context/SiteDataContext";
 import { DonationFormCard } from "../forms/DonationFormCard";
 import { inter, fraunces } from "../components/shared/styleHelpers";
+import { useProfileField, useUserProfile } from "../hooks/useUserProfile";
 
 // ── Shared form styles ────────────────────────────────────────────────────
 export const reserveInputClass = `w-full border-b-2 border-[#a65a4a] bg-transparent py-2.5 text-[15px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none font-['Inter',sans-serif]`;
@@ -16,9 +17,10 @@ export const reserveLabelClass = `font-['Inter',sans-serif] text-[11px] font-sem
 
 // ── Volunteer tab of the Reserve Seat modal ────────────────────────────────
 export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onClose: () => void }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const profile = useUserProfile();
+  const [name, setName] = useProfileField(profile?.name);
+  const [email, setEmail] = useProfileField(profile?.email);
+  const [phone, setPhone] = useProfileField(profile?.phone);
   const [commitment, setCommitment] = useState<"event_only" | "ongoing">("event_only");
   const [seats, setSeats] = useState("1");
   const [companions, setCompanions] = useState<{ name: string; phone: string }[]>([]);
@@ -154,10 +156,11 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
 
 // ── Vendor tab of the Reserve Seat modal ─────────────────────────────────────
 export function VendorReserveForm({ event, onClose }: { event: EventItem; onClose: () => void }) {
+  const profile = useUserProfile();
   const [businessName, setBusinessName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [contactName, setContactName] = useProfileField(profile?.name);
+  const [email, setEmail] = useProfileField(profile?.email);
+  const [phone, setPhone] = useProfileField(profile?.phone);
   const [offering, setOffering] = useState("");
   const [needsSpace, setNeedsSpace] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -249,9 +252,10 @@ export function AttendEventForm({
   defaultEventId?: string;
   onClose: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const profile = useUserProfile();
+  const [name, setName] = useProfileField(profile?.name);
+  const [email, setEmail] = useProfileField(profile?.email);
+  const [phone, setPhone] = useProfileField(profile?.phone);
   const [eventId, setEventId] = useState(defaultEventId ?? events[0]?.id ?? "");
   const [members, setMembers] = useState("1");
   const [companions, setCompanions] = useState<{ name: string; phone: string }[]>([]);

@@ -1,9 +1,16 @@
 "use client";
 
+import { useLocation } from "react-router";
 import { upcomingOrOpenEvents, type RegKind } from "@/lib/data";
 import { BlogDetailModal } from "./BlogDetailModal";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
+import { useUserProfile } from "../hooks/useUserProfile";
+import {
+  PROTECTED_MODAL_PROMPTS,
+  isProtectedModal,
+  rememberIntendedDestination,
+} from "../hooks/useAuthGuard";
 import { IMPACT_FALLBACK_IMAGES, STORY_FALLBACK_IMAGES, IMPACT_CARD_CATEGORY } from "../constants/fallbacks";
 import { VolunteerPortal } from "./VolunteerPortal";
 import { AttendEventModal, PartnerWithUsModal, ClosedEventNoticeModal, ReserveSeatModal } from "./ReserveSeatModal";
@@ -15,8 +22,25 @@ type ReserveUIKind = RegKind | "attendee";
 // making them deep-linkable.
 export function GlobalModals() {
   const siteData = useSiteData();
+  const location = useLocation();
+  const profile = useUserProfile();
   const { modal, modalId, modalKind, closeModal, setModalKind } = useModal();
   const attendEvents = upcomingOrOpenEvents(siteData.events);
+
+  // Single gate for every protected modal. Because these modals are addressed
+  // by URL, checking here covers buttons, deep links, shared links and the back
+  // button alike — there is no second way in to leave unguarded.
+  if (isProtectedModal(modal) && !profile) {
+    rememberIntendedDestination(location.pathname + location.search);
+    return (
+      <VolunteerPortal
+        onClose={closeModal}
+        initialStep="login"
+        events={siteData.events}
+        prompt={PROTECTED_MODAL_PROMPTS[modal!]}
+      />
+    );
+  }
 
   if (modal === "volunteer" || modal === "login") {
     return (

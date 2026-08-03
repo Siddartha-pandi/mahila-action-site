@@ -7,8 +7,10 @@ import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
 import { DonationFormCard } from "../forms/DonationFormCard";
 import { inter } from "../components/shared/styleHelpers";
+import { useUserProfile } from "../hooks/useUserProfile";
 
 export function DonatePage() {
+  const profile = useUserProfile();
   const featured = CAMPAIGNS[0];
   const otherCampaigns = CAMPAIGNS.slice(1);
   const campaignImages: Record<string, string> = {
@@ -69,7 +71,12 @@ export function DonatePage() {
 
           {/* Donation form */}
           <div id="donate-form" className="w-full lg:w-[420px] shrink-0">
-            <DonationFormCard initialCampaignId={selectedCampaignId} />
+            <DonationFormCard
+              initialCampaignId={selectedCampaignId}
+              initialName={profile?.name}
+              initialEmail={profile?.email}
+              initialPhone={profile?.phone}
+            />
           </div>
         </div>
       </section>

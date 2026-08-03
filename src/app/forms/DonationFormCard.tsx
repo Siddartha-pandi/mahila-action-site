@@ -8,6 +8,7 @@ import { firstError, validateAmount, validateEmail, validateName, validatePhone 
 import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
 import { inter, fraunces } from "../components/shared/styleHelpers";
 import { PaymentModal } from "../modals/PaymentModal";
+import { useProfileField } from "../hooks/useUserProfile";
 
 export function DonationFormCard({
   eventName,
@@ -27,9 +28,10 @@ export function DonationFormCard({
   onSaved?: () => void;
 }) {
   const [customAmount, setCustomAmount] = useState("");
-  const [donorName, setDonorName] = useState(initialName ?? "");
-  const [donorEmail, setDonorEmail] = useState(initialEmail ?? "");
-  const [donorPhone, setDonorPhone] = useState(initialPhone ?? "");
+  // Prefilled from the signed-in donor's profile, and still fully editable.
+  const [donorName, setDonorName] = useProfileField(initialName);
+  const [donorEmail, setDonorEmail] = useProfileField(initialEmail);
+  const [donorPhone, setDonorPhone] = useProfileField(initialPhone);
   const [campaignId, setCampaignId] = useState(initialCampaignId ?? CAMPAIGNS[0].id);
   const [anonymous, setAnonymous] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
