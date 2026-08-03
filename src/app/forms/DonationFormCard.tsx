@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { CheckCircle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { saveDonation } from "@/lib/backend";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateAmount, validateEmail, validateName, validatePhone } from "@/lib/validation";
 import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
 import { inter, fraunces } from "../components/shared/styleHelpers";
 import { PaymentModal } from "../modals/PaymentModal";
@@ -45,15 +45,17 @@ export function DonationFormCard({
   const finalAmount = parseInt(customAmount, 10) || 0;
 
   function handleProceed() {
-    if (!finalAmount || finalAmount < 10)
-      return toast.error("Please enter a valid donation amount");
-    if (!donorPhone.trim())
-      return toast.error("Please enter your phone number");
-    // Checked here rather than after payment — the server rejects a malformed
-    // number, and a donation that fails to record once money has moved is the
-    // worst place to find that out.
-    if (!isValidPhoneNumber(donorPhone))
-      return toast.error("Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)");
+    // Checked here rather than after payment — the server rejects malformed
+    // details, and a donation that fails to record once money has moved is the
+    // worst place to find that out. Anonymous donors submit no name or email,
+    // so those are only checked when the donor chose to be named.
+    const invalid = firstError(
+      validateAmount(finalAmount),
+      validatePhone(donorPhone),
+      !anonymous && donorName.trim() ? validateName(donorName) : null,
+      !anonymous && donorEmail.trim() ? validateEmail(donorEmail) : null
+    );
+    if (invalid) return toast.error(invalid);
     setShowPayment(true);
   }
 

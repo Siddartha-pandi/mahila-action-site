@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { queryDb } from "@/lib/db";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { validateEmail } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { email } = body || {};
-    if (!email?.trim()) {
-      return NextResponse.json({ error: "Email is required." }, { status: 400 });
+    const invalidEmail = validateEmail(email);
+    if (invalidEmail) {
+      return NextResponse.json({ error: invalidEmail }, { status: 400 });
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();

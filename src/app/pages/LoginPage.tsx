@@ -7,7 +7,7 @@ import {
   saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer,
   saveUserSession, getUserSubmissions, type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { setCurrentAdminSession } from "@/lib/permissions";
 import { imgHeroCard } from "../constants/images";
 import { PageBanner } from "../components/PageBanner";
@@ -91,10 +91,13 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    if (!regName.trim()) return toast.error("Please enter your full name");
-    if (!email.includes("@")) return toast.error("Please enter a valid email");
-    if (!isValidPhoneNumber(regPhone)) return toast.error("Please enter a valid phone number (+91 98765 43210)");
-    if (password.length < 6) return toast.error("Password must be at least 6 characters");
+    const invalid = firstError(
+      validateName(regName),
+      validateEmail(email),
+      validatePhone(regPhone),
+      validatePassword(password)
+    );
+    if (invalid) return toast.error(invalid);
 
     setAuthBusy(true);
     const result = await registerVolunteer({ name: regName, email, phone: regPhone, password, skills: regSkill });

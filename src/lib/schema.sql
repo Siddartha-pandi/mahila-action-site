@@ -145,3 +145,21 @@ CREATE TABLE IF NOT EXISTS site_content (
   value TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 13. Recycle Bin (soft-deleted items held for restore or permanent erase)
+-- item_id is TEXT because sources use both integer (CMS tables) and string (submissions) ids.
+-- data holds a full JSON snapshot of the original row so it can be restored later.
+CREATE TABLE IF NOT EXISTS recycle_bin (
+  id SERIAL PRIMARY KEY,
+  item_type TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  subtitle TEXT,
+  data TEXT NOT NULL,
+  deleted_by TEXT,
+  deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- One trash entry per source row: re-deleting the same item overwrites its entry.
+CREATE UNIQUE INDEX IF NOT EXISTS recycle_bin_item_unique ON recycle_bin (item_type, item_id);
+CREATE INDEX IF NOT EXISTS recycle_bin_deleted_at_idx ON recycle_bin (deleted_at);

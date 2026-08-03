@@ -3,19 +3,24 @@ import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { sendDonationReceiptEmail } from "@/lib/email";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateAmount, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const requiredFields = ["amount", "phone", "donation_type"];
-    for (const field of requiredFields) {
-      if (body[field] === undefined || body[field] === null || body[field] === "") {
-        return NextResponse.json({ error: `${field} is required.` }, { status: 400 });
-      }
+    if (!body.donation_type) {
+      return NextResponse.json({ error: "donation_type is required." }, { status: 400 });
     }
-    if (body.phone && !isValidPhoneNumber(String(body.phone))) {
-      return NextResponse.json({ error: "Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)." }, { status: 400 });
+    // Anonymous donors give neither name nor email, so those are only checked
+    // when present. The amount and phone are always required.
+    const invalid = firstError(
+      validateAmount(body.amount),
+      validatePhone(body.phone),
+      body.name ? validateName(body.name) : null,
+      body.email ? validateEmail(body.email) : null
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
     }
 
     const id = nanoid();

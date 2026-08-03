@@ -14,7 +14,7 @@ import {
   type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { isEventOpen, type EventItem } from "@/lib/data";
-import { isValidPhoneNumber } from "@/lib/validation";
+import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { setCurrentAdminSession } from "@/lib/permissions";
 import { useModal } from "../hooks/useModal";
 import { type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
@@ -169,10 +169,13 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    if (!reg.name.trim()) return toast.error("Enter your full name");
-    if (!reg.email.includes("@")) return toast.error("Enter a valid email");
-    if (!isValidPhoneNumber(reg.phone)) return toast.error("Please enter a valid phone number (10–15 digits, e.g. +91 98765 43210)");
-    if (reg.password.length < 6) return toast.error("Password must be at least 6 characters");
+    const invalid = firstError(
+      validateName(reg.name),
+      validateEmail(reg.email),
+      validatePhone(reg.phone),
+      validatePassword(reg.password)
+    );
+    if (invalid) return toast.error(invalid);
     setAuthBusy(true);
     const result = await registerVolunteer(reg);
     setAuthBusy(false);
@@ -190,7 +193,8 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events }: { 
 
   async function handleForgotSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!forgotEmail.includes("@")) return toast.error("Enter a valid email");
+    const invalidEmail = validateEmail(forgotEmail);
+    if (invalidEmail) return toast.error(invalidEmail);
     setAuthBusy(true);
     setForgotError(null);
     const result = await requestVolunteerPasswordReset(forgotEmail);
