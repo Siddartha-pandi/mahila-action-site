@@ -2,9 +2,10 @@ import path from "node:path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["192.168.1.6"],
   reactStrictMode: false,
+  serverExternalPackages: ["pg", "bcryptjs"],
   experimental: {
-    serverComponentsExternalPackages: ["pg", "bcryptjs"],
     optimizePackageImports: [
       "lucide-react",
       "@mui/material",
@@ -14,6 +15,7 @@ const nextConfig = {
       "@radix-ui/react-icons",
     ],
   },
+  turbopack: {},
   images: {
     unoptimized: true,
   },

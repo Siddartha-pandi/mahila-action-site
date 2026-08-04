@@ -289,7 +289,7 @@ export function EventsAdmin({
   });
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1150px] font-['Inter',sans-serif]">
+    <div className="flex flex-col gap-6 w-full font-['Inter',sans-serif]">
       {/* Top Mode Switcher Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm">
         {viewMode === "event_detail" ? (
