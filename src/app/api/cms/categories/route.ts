@@ -6,7 +6,11 @@ import { getAdminFromRequest } from "@/lib/auth";
 export async function GET() {
   try {
     const result = await queryDb("SELECT * FROM cms_categories ORDER BY name ASC");
-    return NextResponse.json(result.rows);
+    return NextResponse.json(result.rows, {
+      headers: {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+      },
+    });
   } catch (err: any) {
     console.error("GET /api/cms/categories error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

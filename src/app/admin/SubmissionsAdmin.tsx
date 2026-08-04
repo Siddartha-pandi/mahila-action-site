@@ -46,21 +46,33 @@ export function categoryOf(item: SubmissionItem): SubmissionCategory {
   if (item.type === "perm_volunteer_request") return "perm_volunteer_request";
   if (item.type === "perm_volunteer_deactivate") return "perm_volunteer_deactivate";
 
-  if (item.type === "reservation") {
-    if (item.data?.volunteer_commitment === "vendor") return "vendor";
-    if (item.data?.volunteer_commitment && item.data.volunteer_commitment !== "") return "volunteer";
-    return "reservation";
-  }
+  const commitment = String(item.data?.volunteer_commitment || "").trim().toLowerCase();
 
-  // Legacy rows: account signups were filed as "volunteer" before members had
-  // their own category. A genuine volunteer application names events or skills.
-  if (item.type === "volunteer") {
-    const events = item.data?.selected_events;
-    const hasEvents = (Array.isArray(events) && events.length > 0) || Boolean(item.data?.event_name);
-    const hasSkills = Boolean(item.data?.skills);
-    if (!hasEvents && !hasSkills) return "member";
+  // Vendor check
+  if (item.type === "vendor" || commitment === "vendor") return "vendor";
+
+  // Check for genuine volunteer commitment ("event_only", "ongoing", or explicit volunteer type with events/skills)
+  const isVolunteerCommitment =
+    commitment !== "" &&
+    commitment !== "none" &&
+    commitment !== "attendee" &&
+    commitment !== "false" &&
+    commitment !== "0";
+
+  if (item.type === "volunteer" || (item.type === "reservation" && isVolunteerCommitment)) {
+    if (item.type === "volunteer") {
+      const events = item.data?.selected_events;
+      const hasEvents = (Array.isArray(events) && events.length > 0) || Boolean(item.data?.event_name);
+      const hasSkills = Boolean(item.data?.skills);
+      if (!hasEvents && !hasSkills) return "member";
+    }
     return "volunteer";
   }
+
+  if (item.type === "reservation") return "reservation";
+  if (item.type === "member") return "member";
+  if (item.type === "donation") return "donation";
+  if (item.type === "contact") return "contact";
 
   return item.type;
 }
@@ -432,49 +444,49 @@ export function SubmissionsAdmin() {
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setFilterType("all")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "all" ? "bg-[#a65a4a] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "all" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             All Submissions ({list.length})
           </button>
           <button
             onClick={() => setFilterType("volunteer")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🙋‍♀️ Volunteers ({volunteerList.length})
           </button>
           <button
             onClick={() => setFilterType("member")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white" : "bg-teal-50 text-teal-800 hover:bg-teal-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white shadow-sm ring-2 ring-teal-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🧡 Members ({memberList.length})
           </button>
           <button
             onClick={() => setFilterType("vendor")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "vendor" ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-800 hover:bg-purple-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "vendor" ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🛍️ Vendors ({vendorList.length})
           </button>
           <button
             onClick={() => setFilterType("reservation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "reservation" ? "bg-amber-600 text-white" : "bg-amber-50 text-amber-800 hover:bg-amber-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "reservation" ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🎟️ Event Attendees ({reservationList.length})
           </button>
           <button
             onClick={() => setFilterType("donation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "donation" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-800 hover:bg-rose-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "donation" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             💖 Donors ({donationList.length})
           </button>
           <button
             onClick={() => setFilterType("contact")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-800 hover:bg-blue-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             ✉️ Contact ({contactList.length})
           </button>
           <button
             onClick={() => setFilterType("perm_volunteer_request")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white" : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/20"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             ⭐ Perm Volunteers ({permVolList.length})
             {permVolList.filter(v => v.status === "New").length > 0 && (
@@ -485,7 +497,7 @@ export function SubmissionsAdmin() {
           </button>
           <button
             onClick={() => setFilterType("perm_volunteer_deactivate")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-800 hover:bg-rose-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             ❌ Deactivations ({permDeactivateList.length})
             {permDeactivateList.filter(v => v.status === "New").length > 0 && (
