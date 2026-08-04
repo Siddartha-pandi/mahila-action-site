@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {

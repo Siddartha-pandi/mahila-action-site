@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 
 export async function GET(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {

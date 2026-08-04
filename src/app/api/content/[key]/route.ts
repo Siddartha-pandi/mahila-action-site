@@ -6,12 +6,12 @@ export function generateStaticParams() {
   return [];
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { key: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ key: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const { key } = params;
+    const { key } = await params;
     const body = await req.json();
     const { value } = body || {};
     if (typeof value !== "string") {

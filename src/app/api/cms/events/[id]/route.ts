@@ -6,9 +6,10 @@ export function generateStaticParams() {
   return [];
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const res = await queryDb("SELECT * FROM cms_events WHERE id = $1", [params.id]);
+    const { id } = await params;
+    const res = await queryDb("SELECT * FROM cms_events WHERE id = $1", [id]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
@@ -27,11 +28,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const b = await req.json();
     const title = b.title;
     const description = b.description;
@@ -53,7 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
          windows = COALESCE($7, windows),
          category_id = COALESCE($8, category_id)
        WHERE id = $9 RETURNING *`,
-      [title || null, description || null, image || null, eventDate || null, location || null, totalSeats ?? null, windows || null, categoryId ?? null, params.id]
+      [title || null, description || null, image || null, eventDate || null, location || null, totalSeats ?? null, windows || null, categoryId ?? null, id]
     );
 
     if (res.rows.length === 0) {
@@ -67,16 +69,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return PATCH(req, ctx);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const targetId = params.id;
+    const { id } = await params;
+    const targetId = id;
     const isNum = /^\d+$/.test(targetId);
     let res;
     if (isNum) {
@@ -92,6 +95,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ ok: true, id: targetId });
   } catch (err: any) {
     console.error("DELETE /api/cms/events/[id] error:", err);
-    return NextResponse.json({ ok: true, id: params.id });
+    const { id: targetId } = await params;
+    return NextResponse.json({ ok: true, id: targetId });
   }
 }

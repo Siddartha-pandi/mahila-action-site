@@ -10,7 +10,7 @@ export interface AdminPayload {
   email: string;
 }
 
-export function getAdminFromRequest(req?: NextRequest): AdminPayload | null {
+export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPayload | null> {
   const candidates: string[] = [];
 
   try {
@@ -23,7 +23,8 @@ export function getAdminFromRequest(req?: NextRequest): AdminPayload | null {
       const cookieToken = req.cookies.get(COOKIE_NAME)?.value;
       if (cookieToken) candidates.push(cookieToken);
     } else {
-      const cookieToken = cookies().get(COOKIE_NAME)?.value;
+      const cookieStore = await cookies();
+      const cookieToken = cookieStore.get(COOKIE_NAME)?.value;
       if (cookieToken) candidates.push(cookieToken);
     }
   } catch {
