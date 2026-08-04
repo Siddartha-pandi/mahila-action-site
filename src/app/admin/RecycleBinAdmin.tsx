@@ -20,6 +20,8 @@ import {
   TrashItem,
 } from "../../lib/recycleBin";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
+import { Pagination } from "../components/ui/Pagination";
+import { usePagination } from "../hooks/usePagination";
 
 export function RecycleBinAdmin() {
   const [items, setItems] = useState<TrashItem[]>(() => getTrashItems());
@@ -104,6 +106,16 @@ export function RecycleBinAdmin() {
     }
     return true;
   });
+
+  const {
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems,
+    setPage,
+    setPageSize,
+  } = usePagination(filtered, { initialPageSize: 10 });
 
   const getTypeIcon = (type: TrashItem["type"]) => {
     switch (type) {
@@ -262,7 +274,7 @@ export function RecycleBinAdmin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#a65a4a]/10">
-                {filtered.map((item) => (
+                {paginatedItems.map((item) => (
                   <tr key={`${item.type}_${item.id}`} className="hover:bg-[#a65a4a]/5 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
@@ -308,6 +320,16 @@ export function RecycleBinAdmin() {
                 ))}
               </tbody>
             </table>
+            <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
           </div>
         )}
       </div>

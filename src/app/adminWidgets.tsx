@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
-import { Plus, Trash2, Pencil, X, ImagePlus, Crop, UploadCloud } from "lucide-react";
+import { Plus, Trash2, Pencil, X, ImagePlus, Crop, UploadCloud, Search } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
+import { Pagination } from "./components/ui/Pagination";
+import { usePagination } from "./hooks/usePagination";
 
 export const inputBase =
   "w-full border border-[#a65a4a]/30 rounded-lg px-3 py-2 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif] bg-white";
@@ -438,22 +440,67 @@ export function AdminListEditor<T extends { id: string }>({
   emptyLabel: string;
   children: React.ReactNode;
 }) {
+  const [search, setSearch] = useState("");
+
+  const filteredItems = items.filter((item) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    const lbl = itemLabel(item).toLowerCase();
+    const sub = itemSubLabel ? itemSubLabel(item).toLowerCase() : "";
+    return lbl.includes(q) || sub.includes(q);
+  });
+
+  const {
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems,
+    setPage,
+  } = usePagination(filteredItems, { initialPageSize: 8 });
+
   return (
     <div className="flex flex-col md:flex-row gap-6">
-      <div className="w-full md:w-[260px] shrink-0">
+      <div className="w-full md:w-[260px] shrink-0 flex flex-col gap-2">
         {onAdd && (
           <button
             onClick={onAdd}
-            className="w-full flex items-center justify-center gap-2 bg-[#a65a4a] text-white text-[13px] font-semibold py-2.5 rounded-lg hover:bg-[#993925] transition-colors cursor-pointer mb-3"
+            className="w-full flex items-center justify-center gap-2 bg-[#a65a4a] text-white text-[13px] font-semibold py-2.5 rounded-lg hover:bg-[#993925] transition-colors cursor-pointer mb-1"
           >
             <Plus size={15} /> {addLabel}
           </button>
         )}
-        {items.length === 0 && (
-          <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[13px] px-1">{emptyLabel}</p>
+
+        {/* Real-time Search Input */}
+        {items.length > 3 && (
+          <div className="relative mb-1">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#1e1e1e]/40 pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search list…"
+              className="w-full bg-white border border-[#a65a4a]/25 rounded-lg pl-8 pr-7 py-1.5 text-[12px] text-[#1e1e1e] placeholder-[#1e1e1e]/40 focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif]"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-[#1e1e1e]/40 hover:text-[#a65a4a] cursor-pointer"
+                title="Clear"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
         )}
-        <div className="flex flex-col gap-1.5 max-h-[520px] overflow-y-auto pr-1">
-          {items.map((item) => (
+
+        {filteredItems.length === 0 && (
+          <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[13px] px-1 py-2">{emptyLabel}</p>
+        )}
+
+        <div className="flex flex-col gap-1.5 max-h-[460px] overflow-y-auto pr-1">
+          {paginatedItems.map((item) => (
             <div
               key={item.id}
               onClick={() => onSelect(item.id)}
@@ -484,6 +531,18 @@ export function AdminListEditor<T extends { id: string }>({
             </div>
           ))}
         </div>
+
+        {/* Compact Pagination */}
+        {totalItems > pageSize && (
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            compact
+          />
+        )}
       </div>
       <div className="flex-1 min-w-0">{children}</div>
     </div>

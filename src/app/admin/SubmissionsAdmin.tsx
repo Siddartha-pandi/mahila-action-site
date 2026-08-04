@@ -28,6 +28,8 @@ import {
 } from "../../lib/backend";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { addToTrash } from "../../lib/recycleBin";
+import { Pagination } from "../components/ui/Pagination";
+import { usePagination } from "../hooks/usePagination";
 import { toast } from "sonner";
 
 type SubmissionCategory = SubmissionItem["type"];
@@ -244,6 +246,16 @@ export function SubmissionsAdmin() {
     }
     return true;
   });
+
+  const {
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems,
+    setPage,
+    setPageSize,
+  } = usePagination(filtered, { initialPageSize: 10 });
 
   function exportCSV() {
     if (!filtered.length) {
@@ -569,7 +581,7 @@ export function SubmissionsAdmin() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#a65a4a]/10">
-                  {filtered.map(item => {
+                  {paginatedItems.map(item => {
                     const isSel = selectedItem?.id === item.id && selectedItem?.type === item.type;
                     const name = item.data.name || item.data.contact_name || "Anonymous";
                     const email = item.data.email || "No email";
@@ -609,6 +621,16 @@ export function SubmissionsAdmin() {
                   })}
                 </tbody>
               </table>
+              <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
+              </div>
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import "@/styles/globals.css";
 import type { Metadata } from "next";
+import { TooltipProvider } from "@/app/components/ui/tooltip";
 
 export const metadata: Metadata = {
   title: "Mahila Action — Empowering Women & Community",
@@ -20,7 +21,9 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="h-full">
-        <div id="root" className="h-full">{children}</div>
+        <TooltipProvider>
+          <div id="root" className="h-full">{children}</div>
+        </TooltipProvider>
       </body>
     </html>
   );
