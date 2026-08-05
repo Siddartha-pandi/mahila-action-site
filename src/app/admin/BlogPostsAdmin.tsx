@@ -53,11 +53,11 @@ export function BlogPostsAdmin({
       items={filtered}
       activeId={activeId}
       onSelect={setActiveId}
-      onAdd={handleAdd}
+      onAdd={section === 'impact' ? undefined : handleAdd}
       onDelete={handleDelete}
       itemLabel={(p) => p.title}
       itemSubLabel={(p) => (usesCategories ? categories.find((c) => c.id === p.categoryId)?.name ?? "Uncategorized" : new Date(p.createdAt).toLocaleDateString())}
-      addLabel={section === "story" ? "Add New Story" : section === "impact" ? "Add New Impact Story" : "Add New Event Blog"}
+      addLabel={section === "story" ? "Add New Story" : section === "impact" ? "Edit Impact Pages" : "Add New Event Blog"}
       emptyLabel="Nothing here yet."
     >
 

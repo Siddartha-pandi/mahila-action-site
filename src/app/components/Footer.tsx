@@ -79,8 +79,9 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
               <button
                 onClick={() => openModal("volunteer")}
                 className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[15px] font-bold px-10 py-3 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}
+                aria-label="Become a Volunteer"
               >
-                Join The Movement
+                Become a Volunteer
               </button>
             </div>
           </div>
