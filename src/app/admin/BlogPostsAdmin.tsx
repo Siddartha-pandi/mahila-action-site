@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { AdminListEditor, GalleryField, ImageField, TagsField, inputBase, labelBase } from "../adminWidgets";
 import { BlogContentEditor } from "../BlogContentEditor";
@@ -15,64 +15,52 @@ export function BlogPostsAdmin({
   categories: Category[];
   onChange: (next: BlogPost[]) => void;
 }) {
-  // For non-impact sections we keep the existing behavior. For the Impact section
-  // we show one editable slot per category. If a category has an authored impact
-  // post (section === 'impact' && categoryId matches) we show that post; otherwise
-  // we expose a placeholder editable slot so admins can edit the impact page for
-  // that category without being able to add arbitrary new impact pages.
   const usesCategories = section === "story" || section === "impact";
   const sectionNoun = section === "story" ? "Story" : section === "impact" ? "Impact page" : "Event blog";
 
-  // Build a working list for the UI. For impact section, ensure exactly one
-  // entry per category so new categories become editable here automatically.
-  const uiItems: BlogPost[] =
-    section !== "impact"
-      ? posts.filter((p) => p.section === section)
-      : (() => {
-          const existing = posts.filter((p) => p.section === "impact");
-          return categories.map((cat) => {
-            const found = existing.find((p) => p.categoryId === cat.id);
-            if (found) return found;
-            return {
-              id: `imp_cat_${cat.id}`,
-              section: "impact",
-              categoryId: cat.id,
-              title: cat.name,
-              excerpt: "",
-              content: "",
-              coverImage: "",
-              gallery: [],
-              tags: [],
-              createdAt: new Date().toISOString(),
-            } as BlogPost;
-          });
-        })();
+  const buildUiItems = (): BlogPost[] => {
+    if (section !== "impact") {
+      return posts.filter((p) => p.section === section);
+    }
 
+    const existingImpacts = posts.filter((p) => p.section === "impact");
+    return categories.map((cat) => {
+      const found = existingImpacts.find((p) => p.categoryId === cat.id);
+      if (found) return found;
+      return {
+        id: `imp_cat_${cat.id}`,
+        section: "impact",
+        categoryId: cat.id,
+        title: cat.name,
+        excerpt: "",
+        content: "",
+        coverImage: "",
+        gallery: [],
+        tags: [],
+        createdAt: new Date().toISOString(),
+      } as BlogPost;
+    });
+  };
+
+  const [uiItems, setUiItems] = useState<BlogPost[]>(buildUiItems);
   const [activeId, setActiveId] = useState<string | null>(uiItems[0]?.id ?? null);
 
-  // The active item is taken from the uiItems list (which may include placeholders)
-  const active = uiItems.find((p) => p.id === activeId) ?? null;
+  useEffect(() => {
+    const items = buildUiItems();
+    setUiItems(items);
+    if (!items.find((item) => item.id === activeId)) {
+      setActiveId(items[0]?.id ?? null);
+    }
+  }, [posts, categories, section]);
 
-  // Local update helper that updates the UI list and also writes back to the
-  // persisted posts array when saving. Updates to placeholders only change the
-  // local UI until the admin clicks Save Post.
+  const active = uiItems.find((p) => p.id === activeId) ?? uiItems[0] ?? null;
+
   const update = (patch: Partial<BlogPost>) => {
     if (!active) return;
-    const next = uiItems.map((p) => (p.id === active.id ? { ...p, ...patch } : p));
-    // Reflect UI changes in-memory by setting activeId to force a re-render.
-    // We intentionally do NOT call onChange here — changes are saved when the
-    // admin clicks "Save Post" which will persist and notify the parent.
-    setActiveId((id) => (id === active.id ? active.id : id));
-
-    // Replace uiItems in place by mutating (small local update) — the component
-    // reads uiItems anew each render so we don't keep a separate state for it.
-    // To keep things simple, write-through happens on Save.
-    // NOTE: Nothing else to do here.
+    setUiItems((current) => current.map((item) => (item.id === active.id ? { ...item, ...patch } : item)));
   };
 
   function handleAdd() {
-    // For impact pages adding is disabled — we create placeholders automatically
-    // from categories. For other sections, keep existing add behaviour.
     if (section === "impact") return;
     const post = newBlogPost(section, usesCategories ? categories[0]?.id ?? null : null);
     onChange([...posts, post]);
@@ -80,18 +68,10 @@ export function BlogPostsAdmin({
   }
 
   async function handleDelete(id: string) {
-    // If the ID looks synthetic (imp_cat_) we treat it as an empty placeholder
-    // and simply clear its content by saving a post-less state (no-op) or we
-    // could delete an authored post.
-    if (id.startsWith("imp_cat_")) {
-      // Deleting a placeholder isn't meaningful — convert it to an empty post
-      // (no server call) and update UI by removing any authored post with the
-      // same category if present.
+    if (section === "impact" && id.startsWith("imp_cat_")) {
       const catId = id.replace(/^imp_cat_/, "");
       const next = posts.filter((p) => !(p.section === "impact" && p.categoryId === catId));
       onChange(next);
-      if (activeId === id) setActiveId(next.filter((p) => p.section === section)[0]?.id ?? null);
-      toast.success(`${sectionNoun} updated.`);
       return;
     }
 
@@ -105,26 +85,17 @@ export function BlogPostsAdmin({
 
   async function handleSave() {
     if (!active) return;
-
-    // Persist the active item. If it's a placeholder id (imp_cat_{catId}) we
-    // will save it as-is — saveBlogPost will append it to blogPosts if needed.
     const ok = await saveBlogPost(active);
 
-    // After persisting, ensure the parent is notified with the updated posts
-    // list so the admin panel and other pages reflect the change immediately.
-    const nonImpact = posts.filter((p) => p.section !== "impact");
+    const updatedPosts = posts.filter((p) => p.section !== "impact");
+    const updatedImpactPosts = uiItems
+      .map((item) => {
+        const existingPost = posts.find((p) => p.id === item.id || (p.section === "impact" && p.categoryId === item.categoryId));
+        return existingPost ? { ...existingPost, ...item } : item;
+      })
+      .filter((item) => item.section === "impact");
 
-    // Build the updated impact posts list from UI items / existing posts.
-    // Start with existing authored impact posts (overwritten by any active edits),
-    // then include placeholders that were saved (they now exist in storage via saveBlogPost).
-    const updatedImpact = uiItems.map((ui) => {
-      // If ui.id corresponds to an authored post in `posts`, prefer that record
-      const found = posts.find((p) => p.id === ui.id || (p.section === "impact" && p.categoryId === ui.categoryId));
-      return found ? { ...found, ...ui } : ui;
-    });
-
-    const next = [...nonImpact, ...updatedImpact];
-    onChange(next);
+    onChange([...updatedPosts, ...updatedImpactPosts]);
 
     if (ok) toast.success(`${sectionNoun} saved and published!`);
     else toast.error(`Save failed — changes were NOT stored. Check the console (F12) for details.`);
@@ -182,8 +153,9 @@ export function BlogPostsAdmin({
           {section === "impact" && (
             <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/45 leading-relaxed">
               This is the page visitors see when they hover an "Our Impact" card on the homepage and click "Read Story".
-              There are always exactly 4 of these, matching the 4 homepage cards — they can be edited and updated here,
-              but not added or removed. To keep the cards linked correctly, don't change the category assignment above.
+              Each category gets one editable impact page via this panel — new categories added in the Categories section
+              will automatically appear here as editable slots. Don't change the category assignment above unless you want
+              to move the page to a different impact category.
             </p>
           )}
           <button onClick={handleSave} className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2">

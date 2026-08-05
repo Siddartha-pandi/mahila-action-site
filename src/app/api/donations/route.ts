@@ -41,10 +41,33 @@ export async function POST(req: NextRequest) {
     );
     const id = insertRes.rows[0]?.id;
 
-    // If this donation references a campaign, try to update the campaign's raised amount
+    // If this donation references a campaign, try to update the campaign's raised amount.
     try {
-      if (body.campaign_name) {
-        // Update persisted campaigns file if present
+      const amount = Number(body.amount || 0);
+      const campaignId = body.campaign_id;
+      const campaignName = body.campaign_name;
+
+      if (campaignId) {
+        const updateRes = await queryDb(
+          "UPDATE campaigns SET raised = COALESCE(raised, 0) + $1 WHERE id = $2 RETURNING id",
+          [amount, campaignId]
+        );
+
+        if (updateRes.rowCount === 0 && campaignName) {
+          await queryDb(
+            "UPDATE campaigns SET raised = COALESCE(raised, 0) + $1 WHERE name = $2 RETURNING id",
+            [amount, campaignName]
+          );
+        }
+      } else if (campaignName) {
+        await queryDb(
+          "UPDATE campaigns SET raised = COALESCE(raised, 0) + $1 WHERE id = $2 OR name = $2 RETURNING id",
+          [amount, campaignName]
+        );
+      }
+
+      // Legacy JSON file fallback for deployments still using static campaign data.
+      if (campaignName) {
         const fs = require('fs');
         const path = require('path');
         const DATA_PATH = path.join(process.cwd(), 'src', 'data', 'campaigns.json');
@@ -52,9 +75,9 @@ export async function POST(req: NextRequest) {
           const raw = fs.readFileSync(DATA_PATH, 'utf8');
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
-            const idx = parsed.findIndex((c: any) => String(c.name).trim() === String(body.campaign_name).trim() || c.id === body.campaign_name);
+            const idx = parsed.findIndex((c: any) => String(c.id).trim() === String(campaignId || "").trim() || String(c.name).trim() === String(campaignName).trim());
             if (idx !== -1) {
-              parsed[idx].raised = Number(parsed[idx].raised || 0) + Number(body.amount || 0);
+              parsed[idx].raised = Number(parsed[idx].raised || 0) + amount;
               fs.writeFileSync(DATA_PATH, JSON.stringify(parsed, null, 2), 'utf8');
             }
           }
@@ -62,7 +85,9 @@ export async function POST(req: NextRequest) {
           // ignore file update errors
         }
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Failed to sync campaign raised amount:", err);
+    }
 
     // Anonymous donors are still receipted if they gave an address to send it to.
     if (body.email) {

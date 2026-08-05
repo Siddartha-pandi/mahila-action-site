@@ -374,6 +374,7 @@ export function RolesAdmin({
                   councilors: { view: true, edit: false, delete: false },
                   timeline: { view: true, edit: false, delete: false },
                   contact: { view: true, edit: false, delete: false },
+                  campaigns: { view: true, edit: false, delete: false },
                   roles: { view: false, edit: false, delete: false },
                 },
               });

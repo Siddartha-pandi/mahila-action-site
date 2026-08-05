@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { saveAllContent, type ContentMap } from "@/lib/content";
 import { type SiteData } from "@/lib/data";
@@ -84,6 +84,7 @@ export function AdminPage({
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [draft, setDraft] = useState<ContentMap>({ ...existing });
+  const prevExistingJson = useRef<string>(JSON.stringify(existing));
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("submissions");
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => getCurrentAdminSession());
@@ -105,6 +106,19 @@ export function AdminPage({
   const isDirty = useMemo(() => {
     return JSON.stringify(draft) !== JSON.stringify(existing);
   }, [draft, existing]);
+
+  useEffect(() => {
+    const existingJson = JSON.stringify(existing);
+    if (existingJson !== prevExistingJson.current) {
+      const draftJson = JSON.stringify(draft);
+      const wasDraftSyncedWithPrevExisting = draftJson === prevExistingJson.current;
+      prevExistingJson.current = existingJson;
+
+      if (loggedIn && wasDraftSyncedWithPrevExisting) {
+        setDraft({ ...existing });
+      }
+    }
+  }, [existing, loggedIn, draft]);
 
   useEffect(() => {
     let mounted = true;

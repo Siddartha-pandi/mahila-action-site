@@ -39,7 +39,15 @@ export function DonatePage() {
     "skills-for-tomorrow": imgStory2,
     "community-health-drive": imgStory3,
   };
-  const [selectedCampaignId, setSelectedCampaignId] = useState(featured.id);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(CAMPAIGNS[0].id);
+
+  useEffect(() => {
+    if (campaigns.length === 0) return;
+    if (!campaigns.some((c) => c.id === selectedCampaignId)) {
+      setSelectedCampaignId(campaigns[0].id);
+    }
+  }, [campaigns, selectedCampaignId]);
+
   const progress = Math.min((featured.raised / featured.goal) * 100, 100);
 
   function pickCampaign(id: string) {
@@ -102,6 +110,7 @@ export function DonatePage() {
           {/* Donation form */}
           <div id="donate-form" className="w-full lg:w-[420px] shrink-0">
             <DonationFormCard
+              campaigns={campaigns}
               initialCampaignId={selectedCampaignId}
               initialName={profile?.name}
               initialEmail={profile?.email}
