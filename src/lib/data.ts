@@ -349,12 +349,57 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
       timeline: patch.timeline ?? current.timeline ?? DEFAULT_TIMELINE,
       contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
     };
-    localStorage.setItem(SITE_DATA_KEY, JSON.stringify(updated));
+
+    // Serialize once to avoid multiple JSON.stringify calls and to catch
+    // serialization errors early.
+    let serialized: string | null = null;
+    try {
+      serialized = JSON.stringify(updated);
+    } catch (err) {
+      console.warn('Failed to serialize site data for storage, will attempt trimmed payload', err);
+    }
+
+    // Attempt to persist the serialized data to storage with multiple fallbacks.
+    try {
+      if (serialized !== null) {
+        localStorage.setItem(SITE_DATA_KEY, serialized);
+      } else {
+        // Serialization failed — try trimmed payload first
+        const trimmed = JSON.stringify({ events: updated.events, categories: updated.categories, contact: updated.contact });
+        localStorage.setItem(SITE_DATA_KEY, trimmed);
+      }
+    } catch (err: any) {
+      console.warn('Failed to save site data to localStorage, attempting fallback:', err?.message || err);
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          if (serialized !== null) sessionStorage.setItem(SITE_DATA_KEY, serialized);
+          else sessionStorage.setItem(SITE_DATA_KEY, JSON.stringify({ events: updated.events, categories: updated.categories, contact: updated.contact }));
+          console.info('Saved site data to sessionStorage as fallback.');
+        }
+      } catch (err2) {
+        console.warn('Failed to save to sessionStorage:', err2?.message || err2);
+        // Trim down to smallest useful payload and try storing that to localStorage.
+        try {
+          const trimmed = JSON.stringify({ events: updated.events, categories: updated.categories, contact: updated.contact });
+          localStorage.setItem(SITE_DATA_KEY, trimmed);
+          console.info('Saved trimmed site data to localStorage as fallback.');
+        } catch (err3) {
+          console.error('Failed to save trimmed site data to localStorage:', err3?.message || err3);
+          // As a last resort try to free space by removing the key, but don't propagate errors.
+          try { localStorage.removeItem(SITE_DATA_KEY); console.warn('Removed existing site data to free space'); } catch {}
+        }
+      }
+    }
+
     // Only notify listeners when an admin explicitly saves a change.
     // Internal cache writes (e.g. from loadSiteData) pass silent=true to
     // avoid re-triggering App.tsx's refresh and creating an infinite loop.
     if (!silent && typeof window !== "undefined") {
-      window.dispatchEvent(new Event("mahila_sitedata_changed"));
+      try {
+        window.dispatchEvent(new Event("mahila_sitedata_changed"));
+      } catch (e) {
+        console.warn('Failed to dispatch mahila_sitedata_changed event:', e);
+      }
     }
   } catch (err) {
     console.error("Failed to save local site data:", err);
