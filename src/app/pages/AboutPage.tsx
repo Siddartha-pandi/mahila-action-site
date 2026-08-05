@@ -25,7 +25,8 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
     .sort((a, b) => a.order - b.order)
     .map((c) => ({ img: c.image || imgStory1, role: c.role, name: c.name, story: c.bio }));
 
-  const yearTabOptions = timeline.map((t) => ({ id: t.year, name: t.year }));
+  // Deduplicate years to avoid duplicate chips if timeline contains repeated years
+  const yearTabOptions = Array.from(new Set(timeline.map((t) => t.year))).map((y) => ({ id: y, name: y }));
 
   return (
     <main className="bg-[#f4efe7]">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { queryDb } from "@/lib/db";
+import { queryDb, getPool } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -66,21 +66,46 @@ export async function POST(req: NextRequest) {
         ]
       );
     } else {
-      const res = await queryDb(
-        `INSERT INTO cms_blog_posts (section, category_id, title, excerpt, content, cover_image, gallery, tags)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-        [
-          b.section || "story",
-          categoryId,
-          b.title,
-          b.excerpt || null,
-          b.content || null,
-          coverImage,
-          JSON.stringify(b.gallery || []),
-          JSON.stringify(b.tags || []),
-        ]
-      );
-      finalId = res.rows[0]?.id;
+      // For PostgreSQL ensure the serial sequence is used to generate an id even
+      // if the table was created without a DEFAULT. For SQLite use the usual
+      // AUTOINCREMENT behavior.
+      const pool = await getPool();
+      if ((pool && (pool as any).isSqlite) || typeof (pool as any).isSqlite !== "undefined" && (pool as any).isSqlite) {
+        // SQLite: INSERT without id uses AUTOINCREMENT (schema.sql handles conversion)
+        const res = await queryDb(
+          `INSERT INTO cms_blog_posts (section, category_id, title, excerpt, content, cover_image, gallery, tags)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [
+            b.section || "story",
+            categoryId,
+            b.title,
+            b.excerpt || null,
+            b.content || null,
+            coverImage,
+            JSON.stringify(b.gallery || []),
+            JSON.stringify(b.tags || []),
+          ]
+        );
+        finalId = res.rows[0]?.id;
+      } else {
+        // PostgreSQL: explicitly use nextval to ensure id is populated even if the
+        // SERIAL default wasn't set on the column for some reason.
+        const res = await queryDb(
+          `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
+           VALUES (nextval(pg_get_serial_sequence('cms_blog_posts','id')), $1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [
+            b.section || "story",
+            categoryId,
+            b.title,
+            b.excerpt || null,
+            b.content || null,
+            coverImage,
+            JSON.stringify(b.gallery || []),
+            JSON.stringify(b.tags || []),
+          ]
+        );
+        finalId = res.rows[0]?.id;
+      }
     }
     return NextResponse.json({ ok: true, id: finalId });
   } catch (err: any) {
