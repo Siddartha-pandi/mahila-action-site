@@ -5,8 +5,8 @@ import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clo
 import { toast } from "sonner";
 import {
   getSavedUserSession, saveUserSession, validateUserSession,
-  getUserSubmissions, loadUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequest,
-  savePermVolunteerDeactivateRequest, getUserPermVolunteerDeactivateRequest,
+  getUserSubmissions, loadUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequestFromList,
+  savePermVolunteerDeactivateRequest, getUserPermVolunteerDeactivateRequestFromList,
   getRegisteredRoleKeys, registrationKey, normalizeEventTitle,
   type VolunteerAccountProfile, type SubmissionItem, type RegistrationRole,
 } from "@/lib/backend";
@@ -40,6 +40,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const [requestSent, setRequestSent] = useState(false);
   const [requestLoading, setRequestLoading] = useState(false);
   const [reApplying, setReApplying] = useState(false);
+  const [volunteerCapInfo, setVolunteerCapInfo] = useState<{ count: number; maxVolunteers: number } | null>(null);
 
   useEffect(() => {
     async function syncSession() {
@@ -71,6 +72,17 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       window.removeEventListener("storage", syncSession);
     };
   }, [refreshKey]);
+
+  // When opening the registration modal, fetch volunteer cap status for that event.
+  useEffect(() => {
+    if (!registeringEventId) { setVolunteerCapInfo(null); return; }
+    const ev = siteData.events.find(e => e.id === registeringEventId);
+    if (!ev || !ev.maxVolunteers || ev.maxVolunteers === 0) { setVolunteerCapInfo(null); return; }
+    fetch(`/api/event-volunteer-count?title=${encodeURIComponent(ev.title)}`)
+      .then(r => r.json())
+      .then(d => setVolunteerCapInfo(d))
+      .catch(() => setVolunteerCapInfo(null));
+  }, [registeringEventId, siteData.events]);
 
   function handleSignOut() {
     saveUserSession(null);
@@ -156,12 +168,12 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
   const permRequest = useMemo(() => {
     if (!profile) return null;
-    return getUserPermVolunteerRequest(profile.email, profile.phone) ?? null;
+    return getUserPermVolunteerRequestFromList(userSubmissions, profile.email, profile.phone) ?? null;
   }, [userSubmissions, profile]);
 
   const deactivateRequest = useMemo(() => {
     if (!profile) return null;
-    return getUserPermVolunteerDeactivateRequest(profile.email, profile.phone) ?? null;
+    return getUserPermVolunteerDeactivateRequestFromList(userSubmissions, profile.email, profile.phone) ?? null;
   }, [userSubmissions, profile]);
 
   const isDeactivated = useMemo(() => {
@@ -454,7 +466,17 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {realEvents.filter(e => filter === "all" || e.status === filter).map(ev => (
+                    {realEvents.filter(e => filter === "all" || e.status === filter).map(ev => {
+                      const isAttendee = ev.roles.includes("attendee");
+                      const isVolunteer = ev.roles.includes("volunteer");
+                      // Attendee ↔ volunteer are mutually exclusive. If both are registered (shouldn't
+                      // normally happen), or if one covers the other, there's nothing useful left to offer.
+                      const mutualExclusionCoversAll = isAttendee || isVolunteer;
+                      // Still allow vendor/donor registration even if attendee/volunteer registered
+                      const hasNonMutualRoles = ev.roles.includes("vendor");
+                      const canRegisterMore = !mutualExclusionCoversAll || !hasNonMutualRoles;
+                      const canStillRegister = ev.roles.length === 0 || (!ev.roles.includes("vendor") && !ev.roles.includes("donor") && !mutualExclusionCoversAll) || (ev.roles.includes("donor") && !mutualExclusionCoversAll) || (!ev.roles.includes("vendor") && !mutualExclusionCoversAll);
+                      return (
                       <div
                         key={ev.id}
                         className="rounded-2xl border-2 border-[#1e1e1e]/10 bg-white p-5 transition-all hover:border-[#a65a4a]/40 flex flex-col"
@@ -481,17 +503,40 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                                 <CheckCircle size={11} /> Registered as {ROLE_LABEL[r]}
                               </span>
                             ))}
+                            {/* Mutual exclusion: show why the other role is not needed */}
+                            {isAttendee && !isVolunteer && (
+                              <span className="font-['Inter',sans-serif] text-[11px] font-semibold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                Volunteer spot not needed
+                              </span>
+                            )}
+                            {isVolunteer && !isAttendee && (
+                              <span className="font-['Inter',sans-serif] text-[11px] font-semibold bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                Attendee spot not needed
+                              </span>
+                            )}
                           </div>
                         )}
 
-                        <button
-                          onClick={() => setRegisteringEventId(ev.id)}
-                          className="mt-4 w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[14px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
-                        >
-                          {ev.roles.length > 0 ? "Register in Another Role →" : "Register for This Event →"}
-                        </button>
+                        {/* Only show the register button if there are still useful roles left */}
+                        {!mutualExclusionCoversAll || ev.roles.length === 0 ? (
+                          <button
+                            onClick={() => setRegisteringEventId(ev.id)}
+                            className="mt-4 w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[14px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+                          >
+                            {ev.roles.length > 0 ? "Register in Another Role →" : "Register for This Event →"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setRegisteringEventId(ev.id)}
+                            className="mt-4 w-full border border-[#a65a4a]/30 text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[14px] py-3 rounded-full hover:bg-[#a65a4a]/5 transition-colors cursor-pointer"
+                          >
+                            Vendor / Donor Options →
+                          </button>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
+
                   </div>
 
                   {realEvents.length === 0 && (
@@ -562,14 +607,14 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
-                            if (!confirm("Are you sure you want to request deactivation of your Permanent Volunteer status?")) return;
-                            savePermVolunteerDeactivateRequest({
+                            await savePermVolunteerDeactivateRequest({
                               name: profile.name,
                               email: profile.email,
                               phone: profile.phone,
                               message: "Deactivation requested by user from account portal.",
                             });
-                            setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+                            const subs = await loadUserSubmissions(profile.email, profile.phone);
+                            setUserSubmissions(subs);
                             toast.success("Deactivation request submitted");
                           }}
                         >
@@ -662,14 +707,14 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
-                            setRequestLoading(true);
-                            savePermVolunteerRequest({
+                            await savePermVolunteerRequest({
                               name: profile.name,
                               email: profile.email,
                               phone: profile.phone,
                               message: requestMsg.trim() || undefined,
                             });
-                            setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+                            const subs = await loadUserSubmissions(profile.email, profile.phone);
+                            setUserSubmissions(subs);
                             setRequestSent(true);
                             setReApplying(false);
                             setRequestLoading(false);
@@ -711,9 +756,13 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
           event={registeringEvent.raw}
           profile={profile}
           registeredKeys={registeredKeys}
+          volunteersFull={volunteerCapInfo !== null && volunteerCapInfo.maxVolunteers > 0 && volunteerCapInfo.count >= volunteerCapInfo.maxVolunteers}
+          volunteerCap={volunteerCapInfo?.maxVolunteers ?? 0}
           onClose={() => setRegisteringEventId(null)}
           onRegistered={(role) => {
-            setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+            loadUserSubmissions(profile.email, profile.phone)
+              .then(subs => setUserSubmissions(subs))
+              .catch(() => setUserSubmissions(getUserSubmissions(profile.email, profile.phone)));
             setRefreshKey(k => k + 1);
             toast.success(`You're registered as ${role === "attendee" ? "an attendee" : `a ${role}`} for ${registeringEvent.title}.`);
           }}

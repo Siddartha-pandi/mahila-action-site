@@ -2,7 +2,16 @@ import path from "node:path";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  allowedDevOrigins: ["192.168.1.6"],
+  allowedDevOrigins: [
+    "localhost",
+    "127.0.0.1",
+    "192.168.137.1",
+    "192.168.1.6",
+    "192.168.1.0/24",
+    "192.168.137.0/24",
+    "192.168.0.0/16",
+    "10.0.0.0/8"
+  ],
   reactStrictMode: false,
   serverExternalPackages: ["pg", "bcryptjs"],
   experimental: {

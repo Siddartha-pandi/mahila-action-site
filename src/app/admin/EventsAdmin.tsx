@@ -426,6 +426,19 @@ export function EventsAdmin({
     onChange(events.map((e) => (e.id === active.id ? { ...e, ...patch } : e)));
   }
 
+  /**
+   * Returns today's date as YYYY-MM-DD in the user's LOCAL timezone.
+   * Using toISOString() would give the UTC date which can be one day behind
+   * for timezones ahead of UTC (e.g. IST = UTC+5:30).
+   */
+  function localTodayStr(): string {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   function updateWindow(kind: RegKind, patch: Partial<EventItem["windows"][number]>) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
@@ -452,6 +465,22 @@ export function EventsAdmin({
   async function handleSave() {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to save Events.");
     if (!active) return;
+
+    const todayStr = localTodayStr(); // e.g. "2026-08-05" in local timezone
+
+    // Validate: event date must not be in the past (compare YYYY-MM-DD strings directly
+    // to avoid UTC conversion errors for timezones ahead of UTC like IST).
+    if (active.eventDate && active.eventDate < todayStr) {
+      return toast.error("Event date cannot be in the past. Please choose today or a future date.");
+    }
+
+    // Validate: registration window end dates must not be in the past
+    for (const w of active.windows) {
+      if (w.enabled && w.regEnd && w.regEnd < todayStr) {
+        return toast.error(`Registration closing date for "${KIND_LABEL[w.kind]}" registrations cannot be in the past.`);
+      }
+    }
+
     const ok = await saveEvent(active);
     if (ok) toast.success("Event saved and published!");
     else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
@@ -777,7 +806,22 @@ export function EventsAdmin({
                           <span className="text-[11px] text-gray-400 block">({stats.attendeeCount} bookings)</span>
                         </td>
                         <td className="py-3.5 px-4 text-center">
-                          <span className="font-bold text-emerald-700">{stats.volunteerCount}</span>
+                          {(() => {
+                            const cap = Number(ev.maxVolunteers ?? 0);
+                            const count = stats.volunteerCount;
+                            const isCapped = cap > 0;
+                            const isFull = isCapped && count >= cap;
+                            return (
+                              <div>
+                                <span className={`font-bold ${isFull ? "text-rose-700" : "text-emerald-700"}`}>
+                                  {count}{isCapped ? `/${cap}` : ""}
+                                </span>
+                                {isFull && (
+                                  <span className="text-[10px] font-semibold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full block mt-0.5">Full</span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <span className="font-bold text-purple-700">{stats.vendorCount}</span>
@@ -912,17 +956,41 @@ export function EventsAdmin({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelBase}>Event Date</label>
-                  <input type="date" value={active.eventDate} onChange={(e) => update({ eventDate: e.target.value })} className={inputBase} />
+                  <input
+                    type="date"
+                    value={active.eventDate}
+                    min={localTodayStr()}
+                    onChange={(e) => update({ eventDate: e.target.value })}
+                    className={inputBase}
+                  />
                 </div>
                 <div>
                   <label className={labelBase}>Location</label>
                   <input value={active.location} onChange={(e) => update({ location: e.target.value })} className={inputBase} />
                 </div>
               </div>
-              <div>
-                <label className={labelBase}>Total Seats</label>
-                <input type="number" min={0} value={active.totalSeats} onChange={(e) => update({ totalSeats: Number(e.target.value) })} className={inputBase} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelBase}>Total Seats (Attendees)</label>
+                  <input type="number" min={0} value={active.totalSeats} onChange={(e) => update({ totalSeats: Number(e.target.value) })} className={inputBase} />
+                </div>
+                <div>
+                  <label className={labelBase}>Max Volunteers <span className="text-[#1e1e1e]/40 normal-case font-normal">(0 = unlimited)</span></label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={active.maxVolunteers ?? 0}
+                    onChange={(e) => update({ maxVolunteers: Number(e.target.value) })}
+                    className={inputBase}
+                    placeholder="0 = no limit"
+                  />
+                </div>
               </div>
+              {(active.maxVolunteers ?? 0) > 0 && (
+                <p className="font-['Inter',sans-serif] text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 -mt-2">
+                  Volunteer sign-ups will be capped at <strong>{active.maxVolunteers}</strong>. Once that limit is reached, new volunteer registrations for this event will be blocked.
+                </p>
+              )}
 
               <div className="border-t border-[#a65a4a]/15 pt-5">
                 <p className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#1e1e1e] mb-3">
@@ -941,11 +1009,22 @@ export function EventsAdmin({
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className={labelBase}>Registration Opens</label>
-                            <input type="date" value={w.regStart} onChange={(e) => updateWindow(w.kind, { regStart: e.target.value })} className={inputBase} />
-                          </div>
+                            <input
+                              type="date"
+                              value={w.regStart}
+                              min={localTodayStr()}
+                              onChange={(e) => updateWindow(w.kind, { regStart: e.target.value })}
+                              className={inputBase}
+                            /></div>
                           <div>
                             <label className={labelBase}>Registration Closes</label>
-                            <input type="date" value={w.regEnd} onChange={(e) => updateWindow(w.kind, { regEnd: e.target.value })} className={inputBase} />
+                            <input
+                              type="date"
+                              value={w.regEnd}
+                              min={localTodayStr()}
+                              onChange={(e) => updateWindow(w.kind, { regEnd: e.target.value })}
+                              className={inputBase}
+                            />
                           </div>
                         </div>
                       )}

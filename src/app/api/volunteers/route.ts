@@ -24,16 +24,40 @@ export async function POST(req: NextRequest) {
 
     if (requested.length > 0) {
       const existing = await queryDb(
-        "SELECT event_name FROM event_reservations WHERE LOWER(email) = LOWER($1) AND volunteer_commitment IS NOT NULL AND volunteer_commitment != 'vendor'",
+        "SELECT event_name, volunteer_commitment FROM event_reservations WHERE LOWER(email) = LOWER($1) AND (volunteer_commitment IS NULL OR volunteer_commitment != 'vendor')",
         [String(body.email).trim()]
       );
-      const alreadyRegistered = new Set<string>();
+      const volunteerEvents = new Set<string>();
+      const attendeeEvents = new Set<string>();
+
       for (const row of existing.rows) {
-        if (row.event_name) alreadyRegistered.add(String(row.event_name).trim().toLowerCase());
+        if (row.event_name) {
+          const normName = String(row.event_name).trim().toLowerCase();
+          if (row.volunteer_commitment) {
+            volunteerEvents.add(normName);
+          } else {
+            attendeeEvents.add(normName);
+          }
+        }
       }
 
-      selectedEvents = requested.filter((t) => !alreadyRegistered.has(t.trim().toLowerCase()));
+      const alreadyVol = requested.filter((t) => volunteerEvents.has(t.trim().toLowerCase()));
+      const alreadyAtt = requested.filter((t) => attendeeEvents.has(t.trim().toLowerCase()));
+
+      selectedEvents = requested.filter((t) => !volunteerEvents.has(t.trim().toLowerCase()) && !attendeeEvents.has(t.trim().toLowerCase()));
+
       if (selectedEvents.length === 0) {
+        if (alreadyAtt.length > 0 && alreadyVol.length === 0) {
+          return NextResponse.json(
+            {
+              error:
+                requested.length === 1
+                  ? `You are already registered as an attendee for ${requested[0]} (attendees do not need to register as volunteers).`
+                  : "You are already registered as an attendee for the selected event(s) (attendees do not need to register as volunteers).",
+            },
+            { status: 409 }
+          );
+        }
         return NextResponse.json(
           {
             error:
@@ -51,6 +75,39 @@ export async function POST(req: NextRequest) {
     const eventsToSave = selectedEvents.length > 0 ? selectedEvents : ["General Volunteer"];
 
     for (const evt of eventsToSave) {
+      // ── Volunteer cap check ───────────────────────────────────────────────
+      // Look up max_volunteers for this event in the CMS. If set (> 0), count
+      // current volunteer sign-ups and block if the cap is already reached.
+      const eventRow = await queryDb(
+        "SELECT max_volunteers FROM cms_events WHERE LOWER(title) = LOWER($1) LIMIT 1",
+        [evt.trim()]
+      );
+      const maxVol = Number(eventRow.rows[0]?.max_volunteers ?? 0);
+
+      if (maxVol > 0) {
+        const countRow = await queryDb(
+          `SELECT COUNT(*) AS cnt FROM event_reservations
+           WHERE LOWER(event_name) = LOWER($1)
+             AND volunteer_commitment IS NOT NULL
+             AND volunteer_commitment != ''
+             AND volunteer_commitment != 'none'
+             AND volunteer_commitment != 'attendee'
+             AND volunteer_commitment != 'vendor'`,
+          [evt.trim()]
+        );
+        const currentCount = Number(countRow.rows[0]?.cnt ?? 0);
+
+        if (currentCount >= maxVol) {
+          return NextResponse.json(
+            {
+              error: `Volunteer spots for "${evt}" are full (${maxVol}/${maxVol} filled). Please contact the organizer.`,
+            },
+            { status: 409 }
+          );
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const insertRes = await queryDb(
         `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
          VALUES ($1, $2, $3, $4, 1, $5, $6) RETURNING id`,

@@ -14,15 +14,13 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const result = await queryDb("SELECT * FROM users WHERE email = $1 AND role = 'volunteer'", [normalizedEmail]);
+    const result = await queryDb("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [normalizedEmail]);
     const user = result.rows[0];
 
     // Deliberate product decision: an unknown address is reported back to the
     // caller instead of the usual identical-response-either-way, so visitors are
     // told plainly that they have no account rather than waiting for an email
-    // that will never arrive. The tradeoff is that this endpoint can be used to
-    // test whether a given email is registered — do not add bulk lookups here,
-    // and keep any rate limiting in front of it.
+    // that will never arrive.
     if (!user) {
       return NextResponse.json(
         { error: "No account found for that email address." },
@@ -39,7 +37,9 @@ export async function POST(req: NextRequest) {
       [tokenHash, expires, user.id]
     );
 
-    const origin = req.nextUrl.origin;
+    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
+    const proto = req.headers.get("x-forwarded-proto") || req.nextUrl.protocol.replace(":", "");
+    const origin = `${proto}://${host}`;
     const resetLink = `${origin}/?modal=volunteer&kind=reset&id=${rawToken}`;
 
     try {
@@ -61,3 +61,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+

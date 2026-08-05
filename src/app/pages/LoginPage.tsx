@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { LogIn, LogOut, User, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { LogIn, LogOut, User, CheckCircle, AlertCircle, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer,
+  requestVolunteerPasswordReset, resetVolunteerPassword,
   saveUserSession, getUserSubmissions, type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
@@ -23,7 +24,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     }
   });
 
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "reset">("login");
   const [authBusy, setAuthBusy] = useState(false);
 
   const [email, setEmail] = useState("");
@@ -31,6 +32,25 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
   const [regName, setRegName] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regSkill, setRegSkill] = useState("");
+
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [resetToken, setResetToken] = useState("");
+  const [resetPass, setResetPass] = useState("");
+  const [resetConfirm, setResetConfirm] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const kind = params.get("kind");
+      const modal = params.get("modal");
+      const id = params.get("id") || params.get("token");
+      if (kind === "reset" || modal === "reset" || (id && (kind === "reset" || modal === "volunteer"))) {
+        setMode("reset");
+        if (id) setResetToken(id);
+      }
+    }
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -113,6 +133,39 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     }
   }
 
+  async function handleForgotSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const invalidEmail = validateEmail(email);
+    if (invalidEmail) return toast.error(invalidEmail);
+    setAuthBusy(true);
+    setForgotError(null);
+    const result = await requestVolunteerPasswordReset(email);
+    setAuthBusy(false);
+    if (!result.ok) {
+      const message = result.error || "Something went wrong — please try again.";
+      setForgotError(message);
+      return toast.error(message);
+    }
+    setForgotSent(true);
+  }
+
+  async function handleResetSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetToken) return toast.error("This reset link is missing its token — please request a new one.");
+    const weak = validatePassword(resetPass, "New password");
+    if (weak) return toast.error(weak);
+    if (resetPass !== resetConfirm) return toast.error("Passwords don't match.");
+    setAuthBusy(true);
+    const result = await resetVolunteerPassword(resetToken, resetPass);
+    setAuthBusy(false);
+    if (!result.ok) return toast.error(result.error || "Something went wrong — please try again.");
+    if (result.profile?.email) {
+      setEmail(result.profile.email);
+    }
+    toast.success("Password updated successfully! You can now sign in with your new password.");
+    setMode("login");
+  }
+
   return (
     <main className="bg-[#f4efe7] min-h-screen">
       <PageBanner img={imgHeroCard} title="User Login" />
@@ -144,10 +197,10 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
             <div className="max-w-[480px] w-full mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-[#a65a4a]/20 overflow-hidden">
               <div className="bg-[#a65a4a] px-8 py-6 text-center">
                 <h2 className="font-['Fraunces',serif] text-[#f4efe7] text-[26px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-                  {mode === "login" ? "Account Sign In" : "Create Account"}
+                  {mode === "login" ? "Account Sign In" : mode === "register" ? "Create Account" : mode === "forgot" ? "Reset Password" : "Choose New Password"}
                 </h2>
                 <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[13px] mt-1">
-                  {mode === "login" ? "Access your registered events & contributions" : "Register to participate in community initiatives"}
+                  {mode === "login" ? "Access your registered events & contributions" : mode === "register" ? "Register to participate in community initiatives" : mode === "forgot" ? "Enter your registered email address" : "Choose a strong new password"}
                 </p>
               </div>
 
@@ -159,7 +212,16 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                       <input type="text" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com or superadmin" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required />
                     </div>
                     <div>
-                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Password</label>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block">Password</label>
+                        <button
+                          type="button"
+                          onClick={() => { setForgotSent(false); setForgotError(null); setMode("forgot"); }}
+                          className="font-['Inter',sans-serif] text-[12px] text-[#a65a4a] font-semibold cursor-pointer hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
                       <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required />
                     </div>
                     <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60 flex items-center justify-center gap-2">
@@ -189,7 +251,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                     </div>
                     <div>
                       <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Password *</label>
-                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min. 6 characters" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required />
+                      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min. 8 characters" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required />
                     </div>
                     <div>
                       <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Primary Skill / Interest</label>
@@ -212,6 +274,90 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                     </p>
                   </form>
                 )}
+
+                {mode === "forgot" && (
+                  forgotSent ? (
+                    <div className="flex flex-col items-center text-center gap-4 py-4">
+                      <div className="size-16 bg-[#587735]/10 rounded-full flex items-center justify-center">
+                        <CheckCircle size={32} className="text-[#587735]" />
+                      </div>
+                      <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[20px] font-semibold">Check your email</h4>
+                      <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
+                        We've sent a link to reset your password to <span className="font-semibold text-[#1e1e1e]">{email}</span>. It can take a few minutes to arrive — remember to check your spam folder.
+                      </p>
+                      <button type="button" onClick={() => { setForgotSent(false); setMode("login"); }} className="mt-2 font-['Inter',sans-serif] text-[13px] text-[#a65a4a] font-semibold cursor-pointer hover:underline">
+                        ← Back to sign in
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleForgotSubmit} className="flex flex-col gap-4">
+                      <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed">
+                        Enter your registered email address below and we'll send you a secure link to reset your password.
+                      </p>
+                      <div>
+                        <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Email Address</label>
+                        <input type="email" value={email} onChange={e => { setEmail(e.target.value); setForgotError(null); }} placeholder="you@email.com" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required autoFocus />
+                      </div>
+
+                      {forgotError && (
+                        <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
+                          <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
+                          <p className="font-['Inter',sans-serif] text-[#993925] text-[13px] leading-relaxed">
+                            {forgotError}
+                            <br />
+                            <button type="button" onClick={() => { setForgotError(null); setMode("register"); }} className="font-semibold underline cursor-pointer mt-0.5">
+                              Create an account instead
+                            </button>
+                          </p>
+                        </div>
+                      )}
+
+                      <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                        {authBusy ? "Sending…" : "Send Reset Link"}
+                      </button>
+                      <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">
+                        <button type="button" onClick={() => setMode("login")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">← Back to sign in</button>
+                      </p>
+                    </form>
+                  )
+                )}
+
+                {mode === "reset" && (
+                  <form onSubmit={handleResetSubmit} className="flex flex-col gap-4">
+                    {!resetToken ? (
+                      <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
+                        <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
+                        <p className="font-['Inter',sans-serif] text-[#993925] text-[13px] leading-relaxed">
+                          This reset link is missing its token.{" "}
+                          <button type="button" onClick={() => { setForgotSent(false); setForgotError(null); setMode("forgot"); }} className="font-semibold underline cursor-pointer">
+                            Request a new one
+                          </button>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed">
+                        Choose a new password for your account. It must be at least 8 characters long.
+                      </p>
+                    )}
+                    <div>
+                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">New Password</label>
+                      <input type="password" value={resetPass} onChange={e => setResetPass(e.target.value)} placeholder="••••••••" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required autoFocus />
+                    </div>
+                    <div>
+                      <label className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider block mb-1.5">Confirm New Password</label>
+                      <input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} placeholder="••••••••" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required />
+                    </div>
+                    {resetConfirm.length > 0 && resetPass !== resetConfirm && (
+                      <p className="font-['Inter',sans-serif] text-[#993925] text-[12px] -mt-1">Passwords don't match.</p>
+                    )}
+                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                      {authBusy ? "Saving…" : "Save New Password"}
+                    </button>
+                    <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">
+                      <button type="button" onClick={() => setMode("login")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">← Back to sign in</button>
+                    </p>
+                  </form>
+                )}
               </div>
             </div>
           )}
@@ -220,3 +366,4 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     </main>
   );
 }
+

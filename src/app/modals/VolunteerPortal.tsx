@@ -10,7 +10,7 @@ import {
 import {
   saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer,
   requestVolunteerPasswordReset, resetVolunteerPassword,
-  getUserSubmissions, getSavedUserSession, saveUserSession,
+  getUserSubmissions, loadUserSubmissions, getSavedUserSession, saveUserSession,
   type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { isEventOpen, type EventItem } from "@/lib/data";
@@ -102,9 +102,11 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
 
   useEffect(() => {
-    if (profile?.email || profile?.phone) {
-      setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
-    }
+    if (!profile?.email && !profile?.phone) return;
+    // Fetch from server so we catch registrations from other devices/browsers.
+    loadUserSubmissions(profile.email, profile.phone)
+      .then(subs => setUserSubmissions(subs))
+      .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
   }, [profile, step, confirmed]);
 
   function handleSignOut() {
@@ -229,17 +231,24 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   async function handleResetSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!resetToken) return toast.error("This reset link is missing its token — please request a new one.");
-    if (resetPass.length < 6) return toast.error("Password must be at least 6 characters");
-    if (resetPass !== resetConfirm) return toast.error("Passwords don't match");
+    const weak = validatePassword(resetPass, "New password");
+    if (weak) return toast.error(weak);
+    if (resetPass !== resetConfirm) return toast.error("Passwords don't match.");
     setAuthBusy(true);
     const result = await resetVolunteerPassword(resetToken, resetPass);
     setAuthBusy(false);
     if (!result.ok) return toast.error(result.error || "Something went wrong — please try again.");
-    toast.success("Password updated! You can now sign in.");
+    if (result.profile?.email) {
+      setLoginEmail(result.profile.email);
+    }
+    toast.success("Password updated successfully! You can now sign in with your new password.");
     setStep("login");
   }
 
   function toggleEvent(id: string) {
+    // Prevent selecting disabled events (already volunteer or attendee)
+    const ev = realEvents.find(e => e.id === id);
+    if (ev?.disabled) return;
     setSelectedEvents(prev =>
       prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
     );
@@ -258,27 +267,68 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
     setConfirmed(true);
     if (profile?.email || profile?.phone) {
-      setUserSubmissions(getUserSubmissions(profile.email, profile.phone));
+      loadUserSubmissions(profile.email, profile.phone)
+        .then(subs => setUserSubmissions(subs))
+        .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
     }
   }
 
   const now = new Date();
+
+  // Build sets of event titles the user is already signed up for (by role)
+  const registeredAsVolunteerTitles = useMemo(() => {
+    const s = new Set<string>();
+    userSubmissions.forEach(sub => {
+      if (sub.type === "volunteer") {
+        const evts: string[] = Array.isArray(sub.data?.selected_events)
+          ? sub.data.selected_events
+          : sub.data?.event_name ? [sub.data.event_name] : [];
+        evts.forEach(t => s.add(String(t).trim().toLowerCase()));
+      } else if (sub.type === "reservation" && sub.data?.volunteer_commitment) {
+        if (sub.data.event_name) s.add(String(sub.data.event_name).trim().toLowerCase());
+      }
+    });
+    return s;
+  }, [userSubmissions]);
+
+  const registeredAsAttendeeTitles = useMemo(() => {
+    const s = new Set<string>();
+    userSubmissions.forEach(sub => {
+      if (sub.type === "reservation" && !sub.data?.volunteer_commitment) {
+        if (sub.data?.event_name) s.add(String(sub.data.event_name).trim().toLowerCase());
+      }
+    });
+    return s;
+  }, [userSubmissions]);
+
   const realEvents = events
     .filter((ev) => {
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
       if (windows.length === 0) return true;
       return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
     })
-    .map((ev) => ({
-      id: ev.id,
-      status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
-      title: ev.title,
-      date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
-      location: ev.location || "Online / TBD",
-      category: "",
-      slots: ev.totalSeats || 0,
-      desc: ev.description || "",
-    }));
+    .map((ev) => {
+      const normTitle = ev.title.trim().toLowerCase();
+      const alreadyVolunteer = registeredAsVolunteerTitles.has(normTitle);
+      const alreadyAttendee = registeredAsAttendeeTitles.has(normTitle);
+      return {
+        id: ev.id,
+        status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
+        title: ev.title,
+        date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
+        location: ev.location || "Online / TBD",
+        category: "",
+        slots: ev.totalSeats || 0,
+        desc: ev.description || "",
+        // Mutual exclusion: attendees don't need to volunteer, volunteers don't need to attend
+        disabled: alreadyVolunteer || alreadyAttendee,
+        disabledReason: alreadyVolunteer
+          ? "Already a volunteer"
+          : alreadyAttendee
+          ? "Already an attendee"
+          : null,
+      };
+    });
   const filtered = realEvents.filter(e => filter === "all" || e.status === filter);
   const categoryColors: Record<string, string> = {
     "Women & Leadership": "bg-rose-100 text-rose-700",
@@ -775,18 +825,42 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
                         {filtered.map(ev => {
                           const selected = selectedEvents.includes(ev.id);
+                          const isDisabled = ev.disabled;
                           return (
                             <button
                               key={ev.id}
                               onClick={() => toggleEvent(ev.id)}
-                              className={`text-left rounded-2xl border-2 p-4 sm:p-5 transition-all cursor-pointer ${selected ? "border-[#a65a4a] bg-[#a65a4a]/5" : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40"}`}
+                              disabled={isDisabled}
+                              title={isDisabled ? (ev.disabledReason === "Already an attendee" ? "You're already registered as an attendee — attendees don't need to sign up as volunteers" : "You're already registered as a volunteer for this event") : undefined}
+                              className={`text-left rounded-2xl border-2 p-4 sm:p-5 transition-all ${
+                                isDisabled
+                                  ? "border-[#1e1e1e]/8 bg-[#1e1e1e]/4 opacity-60 cursor-not-allowed"
+                                  : selected
+                                  ? "border-[#a65a4a] bg-[#a65a4a]/5 cursor-pointer"
+                                  : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40 cursor-pointer"
+                              }`}
                             >
                               <div className="flex items-start justify-between gap-2 mb-3">
-                                <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full ${categoryColors[ev.category] ?? "bg-gray-100 text-gray-600"}`}>
-                                  {ev.category || "Community Event"}
-                                </span>
-                                <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${selected ? "border-[#a65a4a] bg-[#a65a4a]" : "border-[#1e1e1e]/25"}`}>
-                                  {selected && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
+                                <div className="flex flex-wrap gap-1.5">
+                                  <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full ${categoryColors[ev.category] ?? "bg-gray-100 text-gray-600"}`}>
+                                    {ev.category || "Community Event"}
+                                  </span>
+                                  {isDisabled && ev.disabledReason && (
+                                    <span className="font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">
+                                      <CheckCircle size={10} />
+                                      {ev.disabledReason}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                  isDisabled
+                                    ? "border-[#1e1e1e]/20 bg-[#1e1e1e]/10"
+                                    : selected
+                                    ? "border-[#a65a4a] bg-[#a65a4a]"
+                                    : "border-[#1e1e1e]/25"
+                                }`}>
+                                  {selected && !isDisabled && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
+                                  {isDisabled && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3 text-[#1e1e1e]/40"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
                                 </div>
                               </div>
                               <p className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e] leading-snug">{ev.title}</p>

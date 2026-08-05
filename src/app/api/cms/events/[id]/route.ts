@@ -18,6 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ...r,
       eventDate: r.event_date || r.eventDate || "",
       totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
+      maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
       categoryId: r.category_id || r.categoryId || null,
       createdAt: r.created_at || r.createdAt || "",
       windows: typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : r.windows || [],
@@ -41,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const eventDate = b.eventDate || b.event_date;
     const location = b.location;
     const totalSeats = b.totalSeats !== undefined || b.total_seats !== undefined ? Number(b.totalSeats ?? b.total_seats) : undefined;
+    const maxVolunteers = b.maxVolunteers !== undefined || b.max_volunteers !== undefined ? Number(b.maxVolunteers ?? b.max_volunteers) : undefined;
     const windows = b.windows ? JSON.stringify(b.windows) : undefined;
     const categoryId = b.categoryId !== undefined || b.category_id !== undefined ? (b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null) : undefined;
 
@@ -52,10 +54,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
          event_date = COALESCE($4, event_date),
          location = COALESCE($5, location),
          total_seats = COALESCE($6, total_seats),
-         windows = COALESCE($7, windows),
-         category_id = COALESCE($8, category_id)
-       WHERE id = $9 RETURNING *`,
-      [title || null, description || null, image || null, eventDate || null, location || null, totalSeats ?? null, windows || null, categoryId ?? null, id]
+         max_volunteers = COALESCE($7, max_volunteers),
+         windows = COALESCE($8, windows),
+         category_id = COALESCE($9, category_id)
+       WHERE id = $10 RETURNING *`,
+      [title || null, description || null, image || null, eventDate || null, location || null, totalSeats ?? null, maxVolunteers ?? null, windows || null, categoryId ?? null, id]
     );
 
     if (res.rows.length === 0) {

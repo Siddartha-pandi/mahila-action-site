@@ -87,6 +87,7 @@ export function SubmissionsAdmin() {
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterEvent, setFilterEvent] = useState<string>("all");
+  const [filterDonorType, setFilterDonorType] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState<SubmissionItem | null>(null);
 
@@ -206,6 +207,8 @@ export function SubmissionsAdmin() {
   const contactList = list.filter(i => categoryOf(i) === "contact");
   const permVolList = list.filter(i => categoryOf(i) === "perm_volunteer_request");
   const permDeactivateList = list.filter(i => categoryOf(i) === "perm_volunteer_deactivate");
+  const namedDonationList = donationList.filter(i => !(i.data?.anonymous === true || i.data?.anonymous === 1 || i.data?.anonymous === "1" || i.data?.anonymous === "true" || !i.data?.name || String(i.data.name).trim().toLowerCase() === "anonymous"));
+  const anonDonationList = donationList.filter(i => (i.data?.anonymous === true || i.data?.anonymous === 1 || i.data?.anonymous === "1" || i.data?.anonymous === "true" || !i.data?.name || String(i.data.name).trim().toLowerCase() === "anonymous"));
 
   const totalDonated = donationList.reduce((acc, curr) => acc + (Number(curr.data?.amount) || 0), 0);
   const totalSeats = reservationList.reduce((acc, curr) => acc + (Number(curr.data?.seats) || 1), 0);
@@ -225,6 +228,18 @@ export function SubmissionsAdmin() {
     if (!item || !item.id) return false;
     if (filterType !== "all" && categoryOf(item) !== filterType) return false;
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
+    if (filterDonorType !== "all" && categoryOf(item) === "donation") {
+      const isAnon =
+        item.data?.anonymous === true ||
+        item.data?.anonymous === 1 ||
+        item.data?.anonymous === "1" ||
+        item.data?.anonymous === "true" ||
+        !item.data?.name ||
+        String(item.data.name).trim().toLowerCase() === "anonymous";
+
+      if (filterDonorType === "anonymous" && !isAnon) return false;
+      if (filterDonorType === "named" && isAnon) return false;
+    }
     if (filterEvent !== "all") {
       const d = item.data || {};
       const evName = String(d.event_name || d.eventTitle || "").trim().toLowerCase();
@@ -423,7 +438,7 @@ export function SubmissionsAdmin() {
             <DollarSign className="size-4 shrink-0" />
           </div>
           <p className="text-[20px] sm:text-[22px] font-bold text-[#a65a4a] mt-1">₹{totalDonated.toLocaleString()}</p>
-          <p className="text-[11px] text-gray-500 truncate">{donationList.length} contributions</p>
+          <p className="text-[11px] text-gray-500 truncate">{namedDonationList.length} users • {anonDonationList.length} anon</p>
         </div>
 
         <div
@@ -557,6 +572,18 @@ export function SubmissionsAdmin() {
             <option value="Contacted">Contacted</option>
             <option value="Completed">Completed</option>
           </select>
+
+          {(filterType === "donation" || filterType === "all") && (
+            <select
+              value={filterDonorType}
+              onChange={e => setFilterDonorType(e.target.value)}
+              className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
+            >
+              <option value="all">All Donors (Users & Anonymous)</option>
+              <option value="named">👤 Named Users ({namedDonationList.length})</option>
+              <option value="anonymous">🕵️ Anonymous Donors ({anonDonationList.length})</option>
+            </select>
+          )}
         </div>
       </div>
 
@@ -583,8 +610,17 @@ export function SubmissionsAdmin() {
                 <tbody className="divide-y divide-[#a65a4a]/10">
                   {paginatedItems.map(item => {
                     const isSel = selectedItem?.id === item.id && selectedItem?.type === item.type;
-                    const name = item.data.name || item.data.contact_name || "Anonymous";
-                    const email = item.data.email || "No email";
+                    const isAnon =
+                      categoryOf(item) === "donation" &&
+                      (item.data?.anonymous === true ||
+                        item.data?.anonymous === 1 ||
+                        item.data?.anonymous === "1" ||
+                        item.data?.anonymous === "true" ||
+                        !item.data?.name ||
+                        String(item.data.name).trim().toLowerCase() === "anonymous");
+
+                    const name = isAnon ? "Anonymous Donor 🕵️" : item.data.name || item.data.contact_name || "Anonymous";
+                    const email = isAnon ? (item.data.email ? `${item.data.email} (Hidden)` : "Hidden") : item.data.email || "No email";
 
                     return (
                       <tr
@@ -596,6 +632,11 @@ export function SubmissionsAdmin() {
                           <div className="flex items-center gap-2">
                             {getTypeIcon(categoryOf(item))}
                             <span className="font-semibold text-[#1e1e1e]">{CATEGORY_LABEL[categoryOf(item)]}</span>
+                            {categoryOf(item) === "donation" && (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isAnon ? "bg-purple-100 text-purple-800" : "bg-emerald-100 text-emerald-800"}`}>
+                                {isAnon ? "Anonymous" : "User / Named"}
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3.5 px-4">

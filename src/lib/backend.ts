@@ -268,21 +268,79 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
 export async function loadUserSubmissions(email?: string, phone?: string): Promise<SubmissionItem[]> {
   if (!email && !phone) return [];
   try {
-    const all = await loadSubmissions();
-    const normEmail = email ? email.trim().toLowerCase() : "";
-    const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
+    // Use the user-scoped endpoint so we don't need admin auth.
+    // This fetches only THIS user's own registrations straight from the DB.
+    const params = new URLSearchParams();
+    if (email) params.set("email", email.trim());
+    if (phone) params.set("phone", phone.trim());
 
-    return all.filter(item => {
-      const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-      const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
-      if (normEmail && itemEmail === normEmail) return true;
-      if (normPhone && itemPhone === normPhone) return true;
-      return false;
-    });
-  } catch {
-    return getUserSubmissions(email, phone);
+    const res = await api.get<any[]>(`/api/my-registrations?${params.toString()}`);
+
+    if (res.ok && Array.isArray(res.data)) {
+      // Map DB rows → SubmissionItem shape
+      const serverItems: SubmissionItem[] = res.data.map((row: any) => {
+        if (row.item_source === "perm_volunteer_request" || row.request_type) {
+          const isDeactivate = row.request_type === "deactivate";
+          return {
+            id: String(row.id),
+            type: isDeactivate ? ("perm_volunteer_deactivate" as const) : ("perm_volunteer_request" as const),
+            data: {
+              name: row.name,
+              email: row.email,
+              phone: row.phone,
+              request_type: row.request_type,
+              message: row.message,
+            },
+            createdAt: row.created_at || new Date().toISOString(),
+            status: (row.status as SubmissionItem["status"]) || "New",
+          };
+        }
+
+        return {
+          id: String(row.id),
+          type: row.volunteer_commitment &&
+            row.volunteer_commitment !== "" &&
+            row.volunteer_commitment !== "none" &&
+            row.volunteer_commitment !== "attendee" &&
+            row.volunteer_commitment !== "vendor"
+            ? ("volunteer" as const)
+            : row.volunteer_commitment === "vendor"
+            ? ("vendor" as const)
+            : ("reservation" as const),
+          data: {
+            event_name: row.event_name,
+            name: row.name,
+            email: row.email,
+            phone: row.phone,
+            seats: row.seats,
+            volunteer_commitment: row.volunteer_commitment,
+            companions: (() => {
+              try { return JSON.parse(row.companions || "[]"); } catch { return []; }
+            })(),
+          },
+          createdAt: row.created_at || new Date().toISOString(),
+          status: (row.status as SubmissionItem["status"]) || "New",
+        };
+      });
+
+      // Merge with any un-synced local requests
+      const serverIds = new Set(serverItems.map((s) => String(s.id)));
+      const local = getUserSubmissions(email, phone).filter(
+        (s) => (s.type === "perm_volunteer_request" || s.type === "perm_volunteer_deactivate") && !serverIds.has(String(s.id))
+      );
+
+      return [...serverItems, ...local].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+  } catch (err) {
+    console.warn("loadUserSubmissions server fetch failed, falling back to localStorage:", err);
   }
+
+  // Fallback: read from localStorage if the server is unreachable
+  return getUserSubmissions(email, phone);
 }
+
 
 export function getUserSubmissions(email?: string, phone?: string): SubmissionItem[] {
   const all = getSubmissions();
