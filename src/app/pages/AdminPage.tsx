@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   Lock,
   Trash2,
+  Heart,
 } from "lucide-react";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
@@ -40,6 +41,7 @@ import { CategoriesAdmin } from "@/app/admin/CategoriesAdmin";
 import { CouncilorsAdmin } from "@/app/admin/CouncilorsAdmin";
 import { TimelineAdmin } from "@/app/admin/TimelineAdmin";
 import { ContactAdmin } from "@/app/admin/ContactAdmin";
+import { CampaignsAdmin } from "@/app/admin/CampaignsAdmin";
 import { RolesAdmin } from "@/app/admin/RolesAdmin";
 import { RecycleBinAdmin } from "@/app/admin/RecycleBinAdmin";
 import { getTrashItems } from "@/lib/recycleBin";
@@ -58,6 +60,7 @@ const CUSTOM_TABS = [
   { id: "councilors", label: "Councilors", icon: UserCheck },
   { id: "timeline", label: "Timeline", icon: History },
   { id: "contact", label: "Contact Info", icon: PhoneCall },
+  { id: "campaigns", label: "Campaigns", icon: Heart },
   { id: "trash", label: "Recycle Bin", icon: Trash2 },
   { id: "roles", label: "User & Role Management", icon: ShieldCheck },
   { id: "contentTypeBuilder", label: "Content-Type Builder", icon: Wrench, isSuperAdminOnly: true },
@@ -399,6 +402,9 @@ export function AdminPage({
               )}
               {activeSection === "contact" && (
                 <ContactAdmin contact={siteData.contact} onChange={(contact) => updateSiteData({ contact })} />
+              )}
+              {activeSection === "campaigns" && (
+                <CampaignsAdmin />
               )}
               {activeSection === "trash" && (
                 <RecycleBinAdmin />

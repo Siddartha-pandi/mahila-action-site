@@ -70,6 +70,7 @@ export function DonationFormCard({
       phone: donorPhone,
       anonymous,
       event_name: eventName,
+      campaign_id: selectedCampaign.id,
       campaign_name: selectedCampaign.name,
     });
     if (!res.ok) {
@@ -216,7 +217,11 @@ export function DonationFormCard({
         <div className="flex flex-col gap-3">
           <label className="flex items-center gap-3 cursor-pointer">
             <div
-              onClick={() => setShowDetails(!showDetails)}
+              onClick={() => {
+                // Mutually exclusive: showing details means not anonymous
+                setShowDetails(true);
+                if (anonymous) setAnonymous(false);
+              }}
               className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-colors ${showDetails ? "bg-[#a65a4a] border-[#a65a4a]" : "bg-[#f4efe7] border-[#a65a4a]"}`}
             >
               {showDetails && <CheckCircle size={14} className="text-[#f4efe7]" strokeWidth={3} />}
@@ -228,11 +233,11 @@ export function DonationFormCard({
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => {
-                setAnonymous(!anonymous);
-                if (!anonymous) {
-                  setDonorName("");
-                  setDonorEmail("");
-                }
+                // Mutually exclusive: anonymous means hide details
+                setAnonymous(true);
+                if (showDetails) setShowDetails(false);
+                setDonorName("");
+                setDonorEmail("");
               }}
               className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-colors ${anonymous ? "bg-[#a65a4a] border-[#a65a4a]" : "bg-[#f4efe7] border-[#a65a4a]"}`}
             >

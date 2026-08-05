@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
 import { imgDonateBanner, imgTakeAction, imgStory1, imgStory2, imgStory3 } from "../constants/images";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
@@ -11,8 +11,29 @@ import { useUserProfile } from "../hooks/useUserProfile";
 
 export function DonatePage() {
   const profile = useUserProfile();
-  const featured = CAMPAIGNS[0];
-  const otherCampaigns = CAMPAIGNS.slice(1);
+  const [campaigns, setCampaigns] = useState(CAMPAIGNS);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      setLoadingCampaigns(true);
+      try {
+        const res = await fetch('/api/campaigns');
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        if (!mounted) return;
+        if (Array.isArray(data) && data.length > 0) setCampaigns(data);
+      } catch (err) {
+        // keep fallback CAMPAIGNS
+      } finally { setLoadingCampaigns(false); }
+    }
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  const featured = campaigns[0] ?? CAMPAIGNS[0];
+  const otherCampaigns = campaigns.slice(1);
   const campaignImages: Record<string, string> = {
     "women-leadership-fund": imgStory1,
     "skills-for-tomorrow": imgStory2,
@@ -24,6 +45,15 @@ export function DonatePage() {
   function pickCampaign(id: string) {
     setSelectedCampaignId(id);
     document.getElementById("donate-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function refreshCampaigns() {
+    try {
+      const res = await fetch('/api/campaigns');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setCampaigns(data);
+    } catch {}
   }
 
   return (
@@ -76,6 +106,7 @@ export function DonatePage() {
               initialName={profile?.name}
               initialEmail={profile?.email}
               initialPhone={profile?.phone}
+              onSaved={refreshCampaigns}
             />
           </div>
         </div>
