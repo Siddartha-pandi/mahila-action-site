@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { DEFAULTS, loadContent, type ContentMap } from "@/lib/content";
@@ -32,7 +32,8 @@ import { EventsPage } from "./pages/EventsPage";
 import { DonatePage } from "./pages/DonatePage";
 import { ContactPage } from "./pages/ContactPage";
 import { AccountPage } from "./pages/AccountPage";
-import { AdminPage } from "./pages/AdminPage";
+
+const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 
 export default function App() {
   const location = useLocation();
@@ -88,12 +89,20 @@ export default function App() {
           <Seo meta={getRouteMeta("/admin")} />
           <Toaster position="top-center" richColors />
           <ComingSoonModal />
-          <AdminPage
-            onExit={() => setPage("home")}
-            onContentSaved={(updated) => setContent(updated)}
-            siteData={siteData}
-            onSiteDataChange={setSiteData}
-          />
+          <Suspense
+            fallback={
+              <div className="min-h-screen bg-[#f4efe7] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8b263e]"></div>
+              </div>
+            }
+          >
+            <AdminPage
+              onExit={() => setPage("home")}
+              onContentSaved={(updated) => setContent(updated)}
+              siteData={siteData}
+              onSiteDataChange={setSiteData}
+            />
+          </Suspense>
         </SiteDataContext.Provider>
       </ContentContext.Provider>
     );

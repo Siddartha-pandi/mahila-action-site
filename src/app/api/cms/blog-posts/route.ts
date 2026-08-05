@@ -20,7 +20,12 @@ export async function GET(req: NextRequest) {
         createdAt: r.created_at || r.createdAt || "",
         gallery: typeof r.gallery === "string" ? JSON.parse(r.gallery || "[]") : r.gallery || [],
         tags: typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : r.tags || [],
-      }))
+      })),
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+        },
+      }
     );
   } catch (err: any) {
     console.error("GET /api/cms/blog-posts error:", err);
@@ -29,7 +34,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {

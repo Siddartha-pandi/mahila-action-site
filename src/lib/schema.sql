@@ -172,3 +172,11 @@ CREATE TABLE IF NOT EXISTS recycle_bin (
 -- One trash entry per source row: re-deleting the same item overwrites its entry.
 CREATE UNIQUE INDEX IF NOT EXISTS recycle_bin_item_unique ON recycle_bin (item_type, item_id);
 CREATE INDEX IF NOT EXISTS recycle_bin_deleted_at_idx ON recycle_bin (deleted_at);
+
+-- 15. Performance Indexes for Low-Latency Lookups
+CREATE INDEX IF NOT EXISTS users_role_status_idx ON users (role, status);
+CREATE INDEX IF NOT EXISTS cms_blog_posts_section_cat_idx ON cms_blog_posts (section, category_id, created_at);
+CREATE INDEX IF NOT EXISTS cms_events_date_cat_idx ON cms_events (event_date, category_id);
+CREATE INDEX IF NOT EXISTS donations_status_created_idx ON donations (status, created_at);
+CREATE INDEX IF NOT EXISTS event_reservations_status_created_idx ON event_reservations (status, created_at);
+

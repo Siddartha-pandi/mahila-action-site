@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminFromRequest } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (admin) {
     return NextResponse.json({ loggedIn: true, email: admin.email });
   }

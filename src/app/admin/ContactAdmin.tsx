@@ -14,7 +14,7 @@ export function ContactAdmin({ contact, onChange }: { contact: ContactInfo; onCh
   }
 
   return (
-    <div className="flex flex-col gap-8 max-w-[640px]">
+    <div className="flex flex-col gap-8 w-full max-w-4xl font-['Inter',sans-serif]">
       <div className="border border-[#a65a4a]/20 rounded-xl p-5">
         <p className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#1e1e1e] mb-3">Email Us</p>
         <div className="flex flex-col gap-3">

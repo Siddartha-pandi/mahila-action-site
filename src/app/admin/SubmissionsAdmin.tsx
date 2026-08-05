@@ -28,6 +28,8 @@ import {
 } from "../../lib/backend";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { addToTrash } from "../../lib/recycleBin";
+import { Pagination } from "../components/ui/Pagination";
+import { usePagination } from "../hooks/usePagination";
 import { toast } from "sonner";
 
 type SubmissionCategory = SubmissionItem["type"];
@@ -46,21 +48,33 @@ export function categoryOf(item: SubmissionItem): SubmissionCategory {
   if (item.type === "perm_volunteer_request") return "perm_volunteer_request";
   if (item.type === "perm_volunteer_deactivate") return "perm_volunteer_deactivate";
 
-  if (item.type === "reservation") {
-    if (item.data?.volunteer_commitment === "vendor") return "vendor";
-    if (item.data?.volunteer_commitment && item.data.volunteer_commitment !== "") return "volunteer";
-    return "reservation";
-  }
+  const commitment = String(item.data?.volunteer_commitment || "").trim().toLowerCase();
 
-  // Legacy rows: account signups were filed as "volunteer" before members had
-  // their own category. A genuine volunteer application names events or skills.
-  if (item.type === "volunteer") {
-    const events = item.data?.selected_events;
-    const hasEvents = (Array.isArray(events) && events.length > 0) || Boolean(item.data?.event_name);
-    const hasSkills = Boolean(item.data?.skills);
-    if (!hasEvents && !hasSkills) return "member";
+  // Vendor check
+  if (item.type === "vendor" || commitment === "vendor") return "vendor";
+
+  // Check for genuine volunteer commitment ("event_only", "ongoing", or explicit volunteer type with events/skills)
+  const isVolunteerCommitment =
+    commitment !== "" &&
+    commitment !== "none" &&
+    commitment !== "attendee" &&
+    commitment !== "false" &&
+    commitment !== "0";
+
+  if (item.type === "volunteer" || (item.type === "reservation" && isVolunteerCommitment)) {
+    if (item.type === "volunteer") {
+      const events = item.data?.selected_events;
+      const hasEvents = (Array.isArray(events) && events.length > 0) || Boolean(item.data?.event_name);
+      const hasSkills = Boolean(item.data?.skills);
+      if (!hasEvents && !hasSkills) return "member";
+    }
     return "volunteer";
   }
+
+  if (item.type === "reservation") return "reservation";
+  if (item.type === "member") return "member";
+  if (item.type === "donation") return "donation";
+  if (item.type === "contact") return "contact";
 
   return item.type;
 }
@@ -149,8 +163,8 @@ export function SubmissionsAdmin() {
     const res = await updateSubmissionStatusRemote(item, status);
     if (!res.ok) return toast.error(res.error || "Could not update the status — please try again.");
 
-    setSubmissions(prev => prev.map(s => (s.id === item.id ? { ...s, status } : s)));
-    if (selectedItem?.id === item.id) {
+    setSubmissions(prev => prev.map(s => (s.id === item.id && s.type === item.type ? { ...s, status } : s)));
+    if (selectedItem?.id === item.id && selectedItem?.type === item.type) {
       setSelectedItem(prev => (prev ? { ...prev, status } : null));
     }
     toast.success(`Status updated to ${status}`);
@@ -168,6 +182,7 @@ export function SubmissionsAdmin() {
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
 
+<<<<<<< HEAD
     // The submission is genuinely gone now — best-effort file a recoverable
     // copy into Trash, but a failure here shouldn't make it look like the
     // delete itself failed (it didn't), just that Recycle Bin recovery won't
@@ -187,6 +202,11 @@ export function SubmissionsAdmin() {
 
     setSubmissions(prev => prev.filter(s => s.id !== item.id));
     if (selectedItem?.id === item.id) setSelectedItem(null);
+=======
+    setSubmissions(prev => prev.filter(s => !(s.id === item.id && s.type === item.type)));
+    if (selectedItem?.id === item.id && selectedItem?.type === item.type) setSelectedItem(null);
+    toast.success("Submission moved to Recycle Bin");
+>>>>>>> 971f88b0dedb379489c4583cbf7be93dd7157245
   }
 
   const list = Array.isArray(submissions) ? submissions : [];
@@ -240,6 +260,16 @@ export function SubmissionsAdmin() {
     }
     return true;
   });
+
+  const {
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems,
+    setPage,
+    setPageSize,
+  } = usePagination(filtered, { initialPageSize: 10 });
 
   function exportCSV() {
     if (!filtered.length) {
@@ -304,11 +334,11 @@ export function SubmissionsAdmin() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1100px] font-['Inter',sans-serif]">
+    <div className="flex flex-col gap-6 w-full font-['Inter',sans-serif]">
       {/* Top Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm">
         <div>
-          <h3 className="font-['Fraunces',serif] text-[20px] font-semibold text-[#1e1e1e]">
+          <h3 className="font-['Fraunces',serif] text-[18px] sm:text-[20px] font-semibold text-[#1e1e1e]">
             {filterType === "volunteer" && "🙋‍♀️ Volunteer Registrations & Applications"}
             {filterType === "member" && "🧡 Member Accounts"}
             {filterType === "vendor" && "🛍️ Vendor & Stall Applications"}
@@ -330,18 +360,18 @@ export function SubmissionsAdmin() {
             </p>
           )}
         </div>
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex flex-wrap sm:flex-nowrap items-center gap-2">
           {/* Submissions are shared now, so another admin's changes appear on refresh. */}
           <button
             onClick={() => reload(false)}
             disabled={loading}
-            className="inline-flex items-center gap-2 border border-[#a65a4a]/30 text-[#a65a4a] font-medium text-[13px] px-4 py-2.5 rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 border border-[#a65a4a]/30 text-[#a65a4a] font-medium text-[13px] px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Refresh
           </button>
           <button
             onClick={exportCSV}
-            className="inline-flex items-center gap-2 bg-[#a65a4a] text-[#f4efe7] font-medium text-[13px] px-4 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 bg-[#a65a4a] text-[#f4efe7] font-medium text-[13px] px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
           >
             <Download size={15} /> Export {filterType.toUpperCase()} CSV
           </button>
@@ -349,140 +379,140 @@ export function SubmissionsAdmin() {
       </div>
 
       {/* Metric Summary Cards */}
-      <div className="flex overflow-x-auto pb-2 gap-3 xl:grid xl:grid-cols-7 snap-x scrollbar-thin">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <div
           onClick={() => setFilterType("volunteer")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "volunteer" ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30" : "bg-white border-gray-200 hover:border-emerald-300"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-50 border-emerald-300 ring-2 ring-emerald-400/30" : "bg-white border-gray-200 hover:border-emerald-300"}`}
         >
           <div className="flex items-center justify-between text-emerald-700">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Volunteers</span>
-            <Users className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Volunteers</span>
+            <Users className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-gray-900 mt-1">{volunteerList.length}</p>
-          <p className="text-[11px] text-gray-500">{volunteerList.filter(v => v.status === "New").length} new signups</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-gray-900 mt-1">{volunteerList.length}</p>
+          <p className="text-[11px] text-gray-500 truncate">{volunteerList.filter(v => v.status === "New").length} new signups</p>
         </div>
 
         <div
           onClick={() => setFilterType("member")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "member" ? "bg-teal-50 border-teal-300 ring-2 ring-teal-400/30" : "bg-white border-gray-200 hover:border-teal-300"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "member" ? "bg-teal-50 border-teal-300 ring-2 ring-teal-400/30" : "bg-white border-gray-200 hover:border-teal-300"}`}
         >
           <div className="flex items-center justify-between text-teal-700">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Members</span>
-            <UserPlus className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Members</span>
+            <UserPlus className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-gray-900 mt-1">{memberList.length}</p>
-          <p className="text-[11px] text-gray-500">Account signups</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-gray-900 mt-1">{memberList.length}</p>
+          <p className="text-[11px] text-gray-500 truncate">Account signups</p>
         </div>
 
         <div
           onClick={() => setFilterType("vendor")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "vendor" ? "bg-purple-50 border-purple-300 ring-2 ring-purple-400/30" : "bg-white border-gray-200 hover:border-purple-300"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "vendor" ? "bg-purple-50 border-purple-300 ring-2 ring-purple-400/30" : "bg-white border-gray-200 hover:border-purple-300"}`}
         >
           <div className="flex items-center justify-between text-purple-700">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Vendors</span>
-            <Briefcase className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Vendors</span>
+            <Briefcase className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-gray-900 mt-1">{vendorList.length}</p>
-          <p className="text-[11px] text-gray-500">Stall applicants</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-gray-900 mt-1">{vendorList.length}</p>
+          <p className="text-[11px] text-gray-500 truncate">Stall applicants</p>
         </div>
 
         <div
           onClick={() => setFilterType("reservation")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "reservation" ? "bg-amber-50 border-amber-300 ring-2 ring-amber-400/30" : "bg-white border-gray-200 hover:border-amber-300"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "reservation" ? "bg-amber-50 border-amber-300 ring-2 ring-amber-400/30" : "bg-white border-gray-200 hover:border-amber-300"}`}
         >
           <div className="flex items-center justify-between text-amber-700">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Attendees</span>
-            <Calendar className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Attendees</span>
+            <Calendar className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-gray-900 mt-1">{totalSeats}</p>
-          <p className="text-[11px] text-gray-500">{reservationList.length} total bookings</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-gray-900 mt-1">{totalSeats}</p>
+          <p className="text-[11px] text-gray-500 truncate">{reservationList.length} total bookings</p>
         </div>
 
         <div
           onClick={() => setFilterType("donation")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "donation" ? "bg-rose-50 border-rose-300 ring-2 ring-rose-400/30" : "bg-white border-gray-200 hover:border-rose-300"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "donation" ? "bg-rose-50 border-rose-300 ring-2 ring-rose-400/30" : "bg-white border-gray-200 hover:border-rose-300"}`}
         >
           <div className="flex items-center justify-between text-rose-700">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Donors</span>
-            <DollarSign className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Donors</span>
+            <DollarSign className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-[#a65a4a] mt-1">₹{totalDonated.toLocaleString()}</p>
-          <p className="text-[11px] text-gray-500">{donationList.length} contributions</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-[#a65a4a] mt-1">₹{totalDonated.toLocaleString()}</p>
+          <p className="text-[11px] text-gray-500 truncate">{donationList.length} contributions</p>
         </div>
 
         <div
           onClick={() => setFilterType("perm_volunteer_request")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a]/10 border-[#a65a4a]/40 ring-2 ring-[#a65a4a]/20" : "bg-white border-gray-200 hover:border-[#a65a4a]/40"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a]/10 border-[#a65a4a]/40 ring-2 ring-[#a65a4a]/20" : "bg-white border-gray-200 hover:border-[#a65a4a]/40"}`}
         >
           <div className="flex items-center justify-between text-[#a65a4a]">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Perm Volunteers</span>
-            <UserCheck className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Perm Vol</span>
+            <UserCheck className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-gray-900 mt-1">{permVolList.length}</p>
-          <p className="text-[11px] text-gray-500">{permVolList.filter(v => v.status === "New").length} pending review</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-gray-900 mt-1">{permVolList.length}</p>
+          <p className="text-[11px] text-gray-500 truncate">{permVolList.filter(v => v.status === "New").length} pending review</p>
         </div>
 
         <div
           onClick={() => setFilterType("perm_volunteer_deactivate")}
-          className={`shrink-0 w-[140px] sm:w-[150px] xl:w-auto p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer snap-start ${filterType === "perm_volunteer_deactivate" ? "bg-rose-50 border-rose-200 ring-2 ring-rose-400/20" : "bg-white border-gray-200 hover:border-rose-400/40"}`}
+          className={`p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-50 border-rose-200 ring-2 ring-rose-400/20" : "bg-white border-gray-200 hover:border-rose-400/40"}`}
         >
           <div className="flex items-center justify-between text-rose-700">
-            <span className="text-[12px] font-semibold uppercase tracking-wider">Deactivations</span>
-            <UserMinus className="size-4" />
+            <span className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-wider truncate">Deactivations</span>
+            <UserMinus className="size-4 shrink-0" />
           </div>
-          <p className="text-[22px] font-bold text-gray-900 mt-1">{permDeactivateList.length}</p>
-          <p className="text-[11px] text-gray-500">{permDeactivateList.filter(v => v.status === "New").length} pending review</p>
+          <p className="text-[20px] sm:text-[22px] font-bold text-gray-900 mt-1">{permDeactivateList.length}</p>
+          <p className="text-[11px] text-gray-500 truncate">{permDeactivateList.filter(v => v.status === "New").length} pending review</p>
         </div>
       </div>
 
       {/* Page Tab Selector Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-[#a65a4a]/15 shadow-sm">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-[#a65a4a]/15 shadow-sm">
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setFilterType("all")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "all" ? "bg-[#a65a4a] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "all" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             All Submissions ({list.length})
           </button>
           <button
             onClick={() => setFilterType("volunteer")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🙋‍♀️ Volunteers ({volunteerList.length})
           </button>
           <button
             onClick={() => setFilterType("member")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white" : "bg-teal-50 text-teal-800 hover:bg-teal-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white shadow-sm ring-2 ring-teal-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🧡 Members ({memberList.length})
           </button>
           <button
             onClick={() => setFilterType("vendor")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "vendor" ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-800 hover:bg-purple-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "vendor" ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🛍️ Vendors ({vendorList.length})
           </button>
           <button
             onClick={() => setFilterType("reservation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "reservation" ? "bg-amber-600 text-white" : "bg-amber-50 text-amber-800 hover:bg-amber-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "reservation" ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             🎟️ Event Attendees ({reservationList.length})
           </button>
           <button
             onClick={() => setFilterType("donation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "donation" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-800 hover:bg-rose-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "donation" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             💖 Donors ({donationList.length})
           </button>
           <button
             onClick={() => setFilterType("contact")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-800 hover:bg-blue-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             ✉️ Contact ({contactList.length})
           </button>
           <button
             onClick={() => setFilterType("perm_volunteer_request")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white" : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/20"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             ⭐ Perm Volunteers ({permVolList.length})
             {permVolList.filter(v => v.status === "New").length > 0 && (
@@ -493,7 +523,7 @@ export function SubmissionsAdmin() {
           </button>
           <button
             onClick={() => setFilterType("perm_volunteer_deactivate")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-800 hover:bg-rose-100"}`}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
           >
             ❌ Deactivations ({permDeactivateList.length})
             {permDeactivateList.filter(v => v.status === "New").length > 0 && (
@@ -565,14 +595,14 @@ export function SubmissionsAdmin() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#a65a4a]/10">
-                  {filtered.map(item => {
-                    const isSel = selectedItem?.id === item.id;
+                  {paginatedItems.map(item => {
+                    const isSel = selectedItem?.id === item.id && selectedItem?.type === item.type;
                     const name = item.data.name || item.data.contact_name || "Anonymous";
                     const email = item.data.email || "No email";
 
                     return (
                       <tr
-                        key={item.id}
+                        key={`${item.type}_${item.id}`}
                         onClick={() => setSelectedItem(item)}
                         className={`hover:bg-[#a65a4a]/5 cursor-pointer transition-colors ${isSel ? "bg-[#a65a4a]/10" : ""}`}
                       >
@@ -605,13 +635,23 @@ export function SubmissionsAdmin() {
                   })}
                 </tbody>
               </table>
+              <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
+              </div>
             </div>
           )}
         </div>
 
         {/* Selected Item Drawer */}
         {selectedItem && (
-          <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm p-6 flex flex-col gap-4 font-['Inter',sans-serif]">
+          <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm p-5 sm:p-6 flex flex-col gap-4 font-['Inter',sans-serif] lg:sticky lg:top-4 h-fit">
             <div className="flex items-center justify-between pb-3 border-b border-[#a65a4a]/15">
               <div className="flex items-center gap-2">
                 {getTypeIcon(categoryOf(selectedItem))}

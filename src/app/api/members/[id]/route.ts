@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  if (params.id === "superadmin_env") {
+  const { id } = await params;
+  if (id === "superadmin_env") {
     const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
     return NextResponse.json({
       id: "superadmin_env",
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    const res = await queryDb("SELECT id, name, email, phone, role, kind, skills, permissions, status, created_at FROM users WHERE id = $1", [params.id]);
+    const res = await queryDb("SELECT id, name, email, phone, role, kind, skills, permissions, status, created_at FROM users WHERE id = $1", [id]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -34,11 +35,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const body = await req.json();
     const { role, kind, sub_role, status, name, email, phone, skills, permissions } = body || {};
 
@@ -89,7 +91,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "No fields to update." }, { status: 400 });
     }
 
-    values.push(params.id);
+    values.push(id);
     await queryDb(`UPDATE users SET ${updates.join(", ")} WHERE id = $${idx}`, values);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
@@ -98,20 +100,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return PATCH(req, ctx);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const checkRes = await queryDb("SELECT role FROM users WHERE id = $1", [params.id]);
+    const { id } = await params;
+    const checkRes = await queryDb("SELECT role FROM users WHERE id = $1", [id]);
     if (checkRes.rows[0]?.role === "superadmin") {
       return NextResponse.json({ error: "Superadmin account cannot be deleted." }, { status: 403 });
     }
-    await queryDb("DELETE FROM users WHERE id = $1", [params.id]);
+    await queryDb("DELETE FROM users WHERE id = $1", [id]);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("DELETE /api/members/[id] error:", err);

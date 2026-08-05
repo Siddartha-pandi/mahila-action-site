@@ -6,9 +6,10 @@ export function generateStaticParams() {
   return [];
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const res = await queryDb("SELECT * FROM cms_councilors WHERE id = $1", [params.id]);
+    const { id } = await params;
+    const res = await queryDb("SELECT * FROM cms_councilors WHERE id = $1", [id]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Councilor not found" }, { status: 404 });
     }
@@ -23,11 +24,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const b = await req.json();
     const name = b.name;
     const role = b.role;
@@ -43,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
          image = COALESCE($4, image),
          order_index = COALESCE($5, order_index)
        WHERE id = $6 RETURNING *`,
-      [name || null, role || null, bio || null, image || null, orderIndex ?? null, params.id]
+      [name || null, role || null, bio || null, image || null, orderIndex ?? null, id]
     );
 
     if (res.rows.length === 0) {
@@ -57,20 +59,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return PATCH(req, ctx);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const res = await queryDb("DELETE FROM cms_councilors WHERE id = $1 RETURNING id", [params.id]);
+    const { id } = await params;
+    const res = await queryDb("DELETE FROM cms_councilors WHERE id = $1 RETURNING id", [id]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Councilor not found" }, { status: 404 });
     }
-    return NextResponse.json({ ok: true, id: params.id });
+    return NextResponse.json({ ok: true, id });
   } catch (err: any) {
     console.error("DELETE /api/cms/councilors/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

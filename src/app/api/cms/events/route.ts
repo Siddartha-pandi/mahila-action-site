@@ -14,7 +14,12 @@ export async function GET() {
         categoryId: r.category_id || r.categoryId || null,
         createdAt: r.created_at || r.createdAt || "",
         windows: typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : r.windows || [],
-      }))
+      })),
+      {
+        headers: {
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+        },
+      }
     );
   } catch (err: any) {
     console.error("GET /api/cms/events error:", err);
@@ -23,7 +28,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {

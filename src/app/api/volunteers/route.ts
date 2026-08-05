@@ -84,12 +84,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
     const result = await queryDb(
-      "SELECT id, name, email, phone, event_name, volunteer_commitment, companions, status, created_at FROM event_reservations WHERE volunteer_commitment IS NOT NULL AND volunteer_commitment != 'vendor' ORDER BY created_at DESC"
+      "SELECT id, name, email, phone, event_name, volunteer_commitment, companions, status, created_at FROM event_reservations WHERE volunteer_commitment IS NOT NULL AND volunteer_commitment != '' AND volunteer_commitment != 'vendor' AND volunteer_commitment != 'none' AND volunteer_commitment != 'attendee' ORDER BY created_at DESC"
     );
     const mappedRows = result.rows.map((row: any) => ({
       id: row.id,

@@ -33,6 +33,10 @@ function createSqlitePool() {
   const dbPath = process.env.DB_PATH || path.join(dataDir, "mahila.db");
   const sqliteDb = new Database(dbPath);
   sqliteDb.pragma("journal_mode = WAL");
+  sqliteDb.pragma("synchronous = NORMAL");
+  sqliteDb.pragma("cache_size = -64000");
+  sqliteDb.pragma("mmap_size = 268435456");
+  sqliteDb.pragma("temp_store = MEMORY");
 
   return {
     query: async (text: string, params: any[] = []) => {
@@ -85,9 +89,12 @@ export async function getPool() {
         connectionString: cleanUrl,
         ssl: useSsl ? { rejectUnauthorized: false } : false,
         max: 20,
+        min: 4, // Keep warm connections active to eliminate connection setup latency
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 3000, // 3s probe timeout
         keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
+        statement_timeout: 10000,
       });
 
       pgPool.on("error", (err: any) => {

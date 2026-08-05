@@ -232,6 +232,8 @@ export function saveStoredContentTypes(models: ContentTypeModel[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(models));
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+    window.dispatchEvent(new CustomEvent("mahila_content_types_updated", { detail: models }));
   } catch (err) {
     console.error("Failed to save content types:", err);
   }

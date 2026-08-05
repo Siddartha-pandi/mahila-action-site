@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { BrowserRouter } from "react-router";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 export default function ClientApp() {
   const [mounted, setMounted] = useState(false);
@@ -20,8 +21,10 @@ export default function ClientApp() {
   }
 
   return (
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

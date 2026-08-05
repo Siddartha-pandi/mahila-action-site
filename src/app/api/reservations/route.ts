@@ -89,12 +89,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = getAdminFromRequest(req);
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
     const result = await queryDb(
-      "SELECT * FROM event_reservations WHERE volunteer_commitment IS NULL OR volunteer_commitment = '' ORDER BY created_at DESC"
+      "SELECT * FROM event_reservations WHERE volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee' ORDER BY created_at DESC"
     );
     return NextResponse.json(result.rows);
   } catch (err: any) {

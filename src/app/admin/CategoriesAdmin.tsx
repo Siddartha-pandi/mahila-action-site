@@ -84,7 +84,7 @@ export function CategoriesAdmin({
   }
 
   return (
-    <div className="max-w-[720px]">
+    <div className="w-full font-['Inter',sans-serif]">
       <button
         onClick={handleAdd}
         className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-lg hover:bg-[#993925] transition-colors cursor-pointer mb-5"

@@ -5,6 +5,8 @@ import { EventItem, RegKind, Category, isEventOpen, newEvent, saveEvent, deleteE
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { getSubmissions, loadSubmissions, SubmissionItem } from "../../lib/backend";
 import { categoryOf } from "./SubmissionsAdmin";
+import { Pagination } from "../components/ui/Pagination";
+import { usePagination } from "../hooks/usePagination";
 import {
   Users,
   Calendar,
@@ -140,6 +142,240 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
     percentUsed,
     isFull,
   };
+}
+
+function EventDetailRegistrationsView({
+  active,
+  submissions,
+  categories,
+  exportEventCSV,
+}: {
+  active: EventItem;
+  submissions: SubmissionItem[];
+  categories: Category[];
+  exportEventCSV: (ev: EventItem) => void;
+}) {
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberRoleFilter, setMemberRoleFilter] = useState("all");
+  const [memberStatusFilter, setMemberStatusFilter] = useState("all");
+
+  const expStats = getEventStats(active, submissions);
+  const isOpen = isEventOpen(active);
+  const catName = categories.find((c) => c.id === active.categoryId)?.name;
+
+  const filteredMembers = expStats.registeredPeople.filter((p) => {
+    if (memberRoleFilter !== "all" && p.role.toLowerCase() !== memberRoleFilter.toLowerCase()) return false;
+    if (memberStatusFilter !== "all" && p.status !== memberStatusFilter) return false;
+    if (memberSearch.trim()) {
+      const q = memberSearch.toLowerCase();
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.email.toLowerCase().includes(q) ||
+        p.phone.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  const {
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems,
+    setPage,
+    setPageSize,
+  } = usePagination(filteredMembers, { initialPageSize: 10 });
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Event Details Card */}
+      <div className="bg-white p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="flex items-start gap-4">
+          {active.image ? (
+            <img src={active.image} alt="" className="size-16 rounded-xl object-cover border border-[#a65a4a]/20 shrink-0" />
+          ) : (
+            <div className="size-16 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
+              <Calendar size={24} />
+            </div>
+          )}
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">{active.title}</h3>
+              {expStats.isFull ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+                  <AlertCircle size={12} /> Sold Out
+                </span>
+              ) : isOpen ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <CheckCircle size={12} /> Open for Registration
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                  <Clock size={12} /> Closed
+                </span>
+              )}
+            </div>
+            <p className="text-[13px] text-[#1e1e1e]/60 mt-1">
+              📅 {active.eventDate || "Date TBD"} {active.location && `• 📍 ${active.location}`} {catName && `• 🏷️ ${catName}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t md:border-t-0 md:border-l border-[#a65a4a]/15 pt-3 md:pt-0 md:pl-5 shrink-0">
+          <div className="bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl text-center">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">Attendee Seats</span>
+            <span className="text-[18px] font-bold text-amber-900">{expStats.attendeeSeats}</span>
+            <span className="text-[10px] text-amber-700 block">({expStats.attendeeCount} bookings)</span>
+          </div>
+          <div className="bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl text-center">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Volunteers</span>
+            <span className="text-[18px] font-bold text-emerald-900">{expStats.volunteerCount}</span>
+          </div>
+          <div className="bg-purple-50 border border-purple-200 px-3.5 py-2 rounded-xl text-center">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">Vendors</span>
+            <span className="text-[18px] font-bold text-purple-900">{expStats.vendorCount}</span>
+          </div>
+          <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-4 py-2 rounded-xl text-center">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#a65a4a] block">Total Registered</span>
+            <span className="text-[18px] font-bold text-[#a65a4a]">{expStats.totalMembers}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Members Search, Filters & Export Header */}
+      <div className="bg-white p-4 rounded-xl border border-[#a65a4a]/15 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-3 top-2.5 size-4 text-[#1e1e1e]/40" />
+            <input
+              type="text"
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder="Search members by name, email, or phone…"
+              className="w-full pl-9 pr-3 py-1.5 text-[13px] border border-[#a65a4a]/25 rounded-lg focus:outline-none focus:border-[#a65a4a]"
+            />
+          </div>
+
+          <select
+            value={memberRoleFilter}
+            onChange={(e) => setMemberRoleFilter(e.target.value)}
+            className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
+          >
+            <option value="all">All Roles ({expStats.totalMembers})</option>
+            <option value="attendee">🎟️ Attendees ({expStats.attendeeCount})</option>
+            <option value="volunteer">🙋‍♀️ Volunteers ({expStats.volunteerCount})</option>
+            <option value="vendor">🛍️ Vendors ({expStats.vendorCount})</option>
+          </select>
+
+          <select
+            value={memberStatusFilter}
+            onChange={(e) => setMemberStatusFilter(e.target.value)}
+            className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
+          >
+            <option value="all">All Statuses</option>
+            <option value="New">New</option>
+            <option value="Contacted">Contacted</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => exportEventCSV(active)}
+            className="inline-flex items-center gap-1.5 bg-[#a65a4a] text-white text-[12px] font-semibold px-4 py-2 rounded-xl hover:bg-[#993925] transition-colors cursor-pointer"
+          >
+            <Download size={15} /> Export Event Registrations CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Members Registration Table */}
+      <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
+        {!filteredMembers.length ? (
+          <div className="p-12 text-center">
+            <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/50">
+              No registered members found matching your search or filters.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
+              <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
+                <tr>
+                  <th className="py-3.5 px-4">Member Name</th>
+                  <th className="py-3.5 px-4">Contact Details</th>
+                  <th className="py-3.5 px-4">Role</th>
+                  <th className="py-3.5 px-4 text-center">Seats Reserved</th>
+                  <th className="py-3.5 px-4">Registration Date</th>
+                  <th className="py-3.5 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#a65a4a]/10">
+                {paginatedItems.map((p) => (
+                  <tr key={p.id} className="hover:bg-[#a65a4a]/5 transition-colors">
+                    <td className="py-3.5 px-4 font-semibold text-[#1e1e1e]">{p.name}</td>
+                    <td className="py-3.5 px-4">
+                      <p className="font-medium text-[#1e1e1e]">{p.email}</p>
+                      {p.phone && <p className="text-[12px] text-[#1e1e1e]/50">{p.phone}</p>}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
+                          p.role === "Attendee"
+                            ? "bg-amber-100 text-amber-800 border border-amber-200"
+                            : p.role === "Volunteer"
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : "bg-purple-100 text-purple-800 border border-purple-200"
+                        }`}
+                      >
+                        {p.role === "Attendee" && "🎟️"}
+                        {p.role === "Volunteer" && "🙋‍♀️"}
+                        {p.role === "Vendor" && "🛍️"}
+                        {p.role}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-center font-bold text-gray-900">{p.seats}</td>
+                    <td className="py-3.5 px-4 text-[#1e1e1e]/60 whitespace-nowrap">
+                      {new Date(p.date).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
+                          p.status === "Completed"
+                            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            : p.status === "Contacted"
+                            ? "bg-blue-100 text-blue-800 border border-blue-200"
+                            : "bg-amber-100 text-amber-800 border border-amber-200"
+                        }`}
+                      >
+                        {p.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function EventsAdmin({
@@ -295,8 +531,18 @@ export function EventsAdmin({
     return true;
   });
 
+  const {
+    page: eventPage,
+    pageSize: eventPageSize,
+    totalPages: eventTotalPages,
+    totalItems: eventTotalItems,
+    paginatedItems: paginatedEvents,
+    setPage: setEventPage,
+    setPageSize: setEventPageSize,
+  } = usePagination(filteredEvents, { initialPageSize: 10 });
+
   return (
-    <div className="flex flex-col gap-6 max-w-[1150px] font-['Inter',sans-serif]">
+    <div className="flex flex-col gap-6 w-full font-['Inter',sans-serif]">
       {/* Top Mode Switcher Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm">
         {viewMode === "event_detail" ? (
@@ -359,206 +605,12 @@ export function EventsAdmin({
       </div>
 
       {viewMode === "event_detail" && active ? (
-        /* Dedicated Single Event Registrations View with Back Button */
-        (() => {
-          const expStats = getEventStats(active, submissions);
-          const isOpen = isEventOpen(active);
-          const catName = categories.find((c) => c.id === active.categoryId)?.name;
-
-          const filteredMembers = expStats.registeredPeople.filter((p) => {
-            if (memberRoleFilter !== "all" && p.role.toLowerCase() !== memberRoleFilter.toLowerCase()) return false;
-            if (memberStatusFilter !== "all" && p.status !== memberStatusFilter) return false;
-            if (memberSearch.trim()) {
-              const q = memberSearch.toLowerCase();
-              return (
-                p.name.toLowerCase().includes(q) ||
-                p.email.toLowerCase().includes(q) ||
-                p.phone.toLowerCase().includes(q)
-              );
-            }
-            return true;
-          });
-
-          return (
-            <div className="flex flex-col gap-6">
-              {/* Event Details Card */}
-              <div className="bg-white p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
-                <div className="flex items-start gap-4">
-                  {active.image ? (
-                    <img src={active.image} alt="" className="size-16 rounded-xl object-cover border border-[#a65a4a]/20 shrink-0" />
-                  ) : (
-                    <div className="size-16 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
-                      <Calendar size={24} />
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">{active.title}</h3>
-                      {expStats.isFull ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
-                          <AlertCircle size={12} /> Sold Out
-                        </span>
-                      ) : isOpen ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <CheckCircle size={12} /> Open for Registration
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-                          <Clock size={12} /> Closed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[13px] text-[#1e1e1e]/60 mt-1">
-                      📅 {active.eventDate || "Date TBD"} {active.location && `• 📍 ${active.location}`} {catName && `• 🏷️ ${catName}`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 border-t md:border-t-0 md:border-l border-[#a65a4a]/15 pt-3 md:pt-0 md:pl-5 shrink-0">
-                  <div className="bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">Attendee Seats</span>
-                    <span className="text-[18px] font-bold text-amber-900">{expStats.attendeeSeats}</span>
-                    <span className="text-[10px] text-amber-700 block">({expStats.attendeeCount} bookings)</span>
-                  </div>
-                  <div className="bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Volunteers</span>
-                    <span className="text-[18px] font-bold text-emerald-900">{expStats.volunteerCount}</span>
-                  </div>
-                  <div className="bg-purple-50 border border-purple-200 px-3.5 py-2 rounded-xl text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">Vendors</span>
-                    <span className="text-[18px] font-bold text-purple-900">{expStats.vendorCount}</span>
-                  </div>
-                  <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-4 py-2 rounded-xl text-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#a65a4a] block">Total Registered</span>
-                    <span className="text-[18px] font-bold text-[#a65a4a]">{expStats.totalMembers}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Members Search, Filters & Export Header */}
-              <div className="bg-white p-4 rounded-xl border border-[#a65a4a]/15 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2 flex-1">
-                  <div className="relative flex-1 min-w-[200px] max-w-xs">
-                    <Search className="absolute left-3 top-2.5 size-4 text-[#1e1e1e]/40" />
-                    <input
-                      type="text"
-                      value={memberSearch}
-                      onChange={(e) => setMemberSearch(e.target.value)}
-                      placeholder="Search members by name, email, or phone…"
-                      className="w-full pl-9 pr-3 py-1.5 text-[13px] border border-[#a65a4a]/25 rounded-lg focus:outline-none focus:border-[#a65a4a]"
-                    />
-                  </div>
-
-                  <select
-                    value={memberRoleFilter}
-                    onChange={(e) => setMemberRoleFilter(e.target.value)}
-                    className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
-                  >
-                    <option value="all">All Roles ({expStats.totalMembers})</option>
-                    <option value="attendee">🎟️ Attendees ({expStats.attendeeCount})</option>
-                    <option value="volunteer">🙋‍♀️ Volunteers ({expStats.volunteerCount})</option>
-                    <option value="vendor">🛍️ Vendors ({expStats.vendorCount})</option>
-                  </select>
-
-                  <select
-                    value={memberStatusFilter}
-                    onChange={(e) => setMemberStatusFilter(e.target.value)}
-                    className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="New">New</option>
-                    <option value="Contacted">Contacted</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => exportEventCSV(active)}
-                    className="inline-flex items-center gap-1.5 bg-[#a65a4a] text-white text-[12px] font-semibold px-4 py-2 rounded-xl hover:bg-[#993925] transition-colors cursor-pointer"
-                  >
-                    <Download size={15} /> Export Event Registrations CSV
-                  </button>
-                </div>
-              </div>
-
-              {/* Members Registration Table */}
-              <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
-                {!filteredMembers.length ? (
-                  <div className="p-12 text-center">
-                    <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/50">
-                      No registered members found matching your search or filters.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
-                      <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
-                        <tr>
-                          <th className="py-3.5 px-4">Member Name</th>
-                          <th className="py-3.5 px-4">Contact Details</th>
-                          <th className="py-3.5 px-4">Role</th>
-                          <th className="py-3.5 px-4 text-center">Seats Reserved</th>
-                          <th className="py-3.5 px-4">Registration Date</th>
-                          <th className="py-3.5 px-4">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#a65a4a]/10">
-                        {filteredMembers.map((p) => (
-                          <tr key={p.id} className="hover:bg-[#a65a4a]/5 transition-colors">
-                            <td className="py-3.5 px-4 font-semibold text-[#1e1e1e]">{p.name}</td>
-                            <td className="py-3.5 px-4">
-                              <p className="font-medium text-[#1e1e1e]">{p.email}</p>
-                              {p.phone && <p className="text-[12px] text-[#1e1e1e]/50">{p.phone}</p>}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span
-                                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
-                                  p.role === "Attendee"
-                                    ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                    : p.role === "Volunteer"
-                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                    : "bg-purple-100 text-purple-800 border border-purple-200"
-                                }`}
-                              >
-                                {p.role === "Attendee" && "🎟️"}
-                                {p.role === "Volunteer" && "🙋‍♀️"}
-                                {p.role === "Vendor" && "🛍️"}
-                                {p.role}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-4 text-center font-bold text-gray-900">{p.seats}</td>
-                            <td className="py-3.5 px-4 text-[#1e1e1e]/60 whitespace-nowrap">
-                              {new Date(p.date).toLocaleString("en-US", {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </td>
-                            <td className="py-3.5 px-4">
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
-                                  p.status === "Completed"
-                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                    : p.status === "Contacted"
-                                    ? "bg-blue-100 text-blue-800 border border-blue-200"
-                                    : "bg-amber-100 text-amber-800 border border-amber-200"
-                                }`}
-                              >
-                                {p.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })()
+        <EventDetailRegistrationsView
+          active={active}
+          submissions={submissions}
+          categories={categories}
+          exportEventCSV={exportEventCSV}
+        />
       ) : viewMode === "overview" ? (
         <div className="flex flex-col gap-6">
           {/* Top Metric Cards */}
@@ -676,7 +728,7 @@ export function EventsAdmin({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#a65a4a]/10">
-                  {filteredEvents.map((ev) => {
+                  {paginatedEvents.map((ev) => {
                     const stats = getEventStats(ev, submissions);
                     const isOpen = isEventOpen(ev);
                     const catName = categories.find((c) => c.id === ev.categoryId)?.name;
@@ -792,6 +844,16 @@ export function EventsAdmin({
                   })}
                 </tbody>
               </table>
+              <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+                <Pagination
+                  currentPage={eventPage}
+                  totalPages={eventTotalPages}
+                  totalItems={eventTotalItems}
+                  pageSize={eventPageSize}
+                  onPageChange={setEventPage}
+                  onPageSizeChange={setEventPageSize}
+                />
+              </div>
             </div>
           </div>
         </div>

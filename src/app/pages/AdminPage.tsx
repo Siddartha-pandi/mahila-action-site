@@ -46,6 +46,8 @@ import { getTrashItems } from "@/lib/recycleBin";
 import { useContent } from "../context/ContentContext";
 import { LogoMark } from "../components/LogoMark";
 
+import { AdminSidebar } from "@/app/admin/AdminSidebar";
+
 const CUSTOM_TABS = [
   { id: "submissions", label: "Form Submissions & Applications", icon: Inbox },
   { id: "events", label: "Upcoming Events", icon: Calendar },
@@ -251,9 +253,9 @@ export function AdminPage({
   }
 
   return (
-    <main className="min-h-screen bg-[#f0ebe3] flex flex-col">
+    <main className="h-full w-full overflow-hidden bg-[#f0ebe3] flex flex-col">
       {/* Admin Header Bar */}
-      <div className="bg-[#a65a4a] px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-10 shadow-md">
+      <div className="bg-[#a65a4a] px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between z-10 shadow-md shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <LogoMark invert />
           <div className="hidden xs:block">
@@ -297,44 +299,16 @@ export function AdminPage({
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar Nav */}
-        <nav className="w-[250px] shrink-0 bg-white border-r border-[#a65a4a]/15 py-4 hidden md:block overflow-y-auto">
-          <p className="px-5 pb-3 font-['Inter',sans-serif] text-[10px] font-bold text-[#1e1e1e]/40 uppercase tracking-wider">Manage Content &amp; Access</p>
-          {visibleTabs.map((t) => {
-            const IconComp = t.icon;
-            const isActive = activeSection === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveSection(t.id)}
-                className={`w-full flex items-center gap-3 px-5 py-3 font-['Inter',sans-serif] text-[13px] font-medium transition-all cursor-pointer ${
-                  isActive
-                    ? "bg-[#a65a4a]/10 text-[#a65a4a] border-r-3 border-[#a65a4a] font-semibold"
-                    : "text-[#1e1e1e]/70 hover:text-[#a65a4a] hover:bg-[#a65a4a]/5"
-                }`}
-              >
-                <IconComp className={`w-4 h-4 shrink-0 ${isActive ? "text-[#a65a4a]" : "text-[#1e1e1e]/45"}`} />
-                <span className="truncate flex-1">{t.label}</span>
-                {t.id === "trash" && trashCount > 0 && (
-                  <span className="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-                    {trashCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Mobile Dropdown Nav */}
-        <div className="md:hidden w-full px-4 pt-4">
-          <select value={activeSection} onChange={e => setActiveSection(e.target.value)} className={`${inputBase} mb-4`}>
-            {visibleTabs.map((t) => <option key={t.id} value={t.id}>{t.label} {t.id === "trash" && trashCount > 0 ? `(${trashCount})` : ""}</option>)}
-          </select>
-        </div>
+      <div className="flex flex-1 min-h-0 h-full overflow-hidden">
+        <AdminSidebar
+          visibleTabs={visibleTabs}
+          activeSection={activeSection}
+          onSelectSection={setActiveSection}
+          trashCount={trashCount}
+        />
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8">
+        <div className="flex-1 h-full min-h-0 overflow-y-auto p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             {customTab?.icon && (
               <div className="w-10 h-10 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center shadow-xs">

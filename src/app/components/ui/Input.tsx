@@ -1,49 +1,62 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/app/components/ui/utils";
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;
-  helperText?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  error?: string;
 }
 
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, helperText, leftIcon, rightIcon, className = "", id, ...props }, ref) => {
-    const generatedId = React.useId();
-    const inputId = id || generatedId;
-
-    return (
-      <div className="w-full flex flex-col gap-1.5">
-        {label && (
-          <label
-            htmlFor={inputId}
-            className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/60 uppercase tracking-wider block"
-          >
-            {label}
-          </label>
-        )}
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type = "text", leftIcon, rightIcon, error, ...props }, ref) => {
+    if (leftIcon || rightIcon) {
+      return (
         <div className="relative flex items-center w-full">
-          {leftIcon && <div className="absolute left-3 text-[#1e1e1e]/40 shrink-0">{leftIcon}</div>}
+          {leftIcon && (
+            <div className="absolute left-3 text-muted-foreground pointer-events-none flex items-center justify-center">
+              {leftIcon}
+            </div>
+          )}
           <input
+            type={type}
             ref={ref}
-            id={inputId}
-            className={`w-full border border-[#a65a4a]/30 rounded-lg px-3.5 py-2.5 text-[14px] text-[#1e1e1e] placeholder:text-[#1e1e1e]/40 focus:outline-none focus:border-[#a65a4a] focus:ring-1 focus:ring-[#a65a4a] font-['Inter',sans-serif] bg-white transition-colors disabled:opacity-50 disabled:bg-gray-50 ${
-              leftIcon ? "pl-10" : ""
-            } ${rightIcon ? "pr-10" : ""} ${error ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""} ${className}`}
+            data-slot="input"
+            className={cn(
+              "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+              leftIcon && "pl-9",
+              rightIcon && "pr-9",
+              error && "border-destructive focus-visible:ring-destructive/20",
+              className
+            )}
             {...props}
           />
-          {rightIcon && <div className="absolute right-3 text-[#1e1e1e]/40 shrink-0">{rightIcon}</div>}
+          {rightIcon && (
+            <div className="absolute right-3 text-muted-foreground flex items-center justify-center">
+              {rightIcon}
+            </div>
+          )}
         </div>
-        {error && <span className="font-['Inter',sans-serif] text-[12px] text-red-600">{error}</span>}
-        {helperText && !error && (
-          <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/50">{helperText}</span>
+      );
+    }
+
+    return (
+      <input
+        type={type}
+        ref={ref}
+        data-slot="input"
+        className={cn(
+          "h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          error && "border-destructive focus-visible:ring-destructive/20",
+          className
         )}
-      </div>
+        {...props}
+      />
     );
   }
 );
 
 Input.displayName = "Input";
+
+export { Input };

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   getStoredContentTypes,
+  saveStoredContentTypes,
   addFieldToContentType,
   deleteFieldFromContentType,
   createCustomContentType,
@@ -18,7 +19,7 @@ import {
   ColSpanType,
 } from "../../lib/contentTypeRegistry";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Save, Search, X } from "lucide-react";
 
 
 const FIELD_TYPES: { type: FieldType; label: string; icon: string; desc: string }[] = [
@@ -39,7 +40,16 @@ export function ContentTypeBuilderAdmin() {
   const [selectedUid, setSelectedUid] = useState<string>("api::blog-post.blog-post");
   const [activeTab, setActiveTab] = useState<"canvas" | "fields" | "preview" | "api">("canvas");
 
-  // Drag & Drop State
+  // Drag & Drop State (field canvas)
+  const [draggedFieldName, setDraggedFieldName] = useState<string | null>(null);
+  const [dragOverRowId, setDragOverRowId] = useState<number | null>(null);
+  const [dragOverNewRow, setDragOverNewRow] = useState(false);
+
+  // Row-level drag state
+  const [draggedRowId, setDraggedRowId] = useState<number | null>(null);
+  const [dragOverRowHandle, setDragOverRowHandle] = useState<number | null>(null);
+
+  // Legacy index-based state (used by fields table reorder)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -97,6 +107,7 @@ export function ContentTypeBuilderAdmin() {
     return Array.from(map.entries()).map(([rowId, fields]) => ({ rowId, fields }));
   }, [fieldsWithRowId]);
 
+<<<<<<< HEAD
   // If there's genuinely no content type to show (e.g. corrupted or emptied
   // storage), stop here with a clear message instead of crashing the whole
   // admin panel on the very next line that assumes currentModel exists.
@@ -108,6 +119,27 @@ export function ContentTypeBuilderAdmin() {
         </p>
       </div>
     );
+=======
+  // Sync content types across tabs/components in real time
+  useEffect(() => {
+    function handleUpdate(e: any) {
+      if (e?.detail) setModels(e.detail);
+      else setModels(getStoredContentTypes());
+    }
+    window.addEventListener("mahila_content_types_updated", handleUpdate);
+    return () => window.removeEventListener("mahila_content_types_updated", handleUpdate);
+  }, []);
+
+  function handleSaveAll() {
+    try {
+      const updated = saveAllFieldsForContentType(currentModel.uid, fieldsWithRowId);
+      saveStoredContentTypes(updated);
+      setModels(updated);
+      toast.success(`Saved layout & schema for '${currentModel.displayName}'. Automatically reflected across output pages!`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save layout");
+    }
+>>>>>>> 971f88b0dedb379489c4583cbf7be93dd7157245
   }
 
   function handleSelectModel(uid: string) {
@@ -213,6 +245,71 @@ export function ContentTypeBuilderAdmin() {
       setDraggedIndex(null);
       setDragOverIndex(null);
     }
+  }
+
+  // ── Canvas Drag & Drop (field → row, row reorder) ──────────────────
+
+  function handleCanvasFieldDragStart(e: React.DragEvent, fieldName: string) {
+    setDraggedFieldName(fieldName);
+    setDraggedRowId(null);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleCanvasRowDragStart(e: React.DragEvent, rowId: number) {
+    setDraggedRowId(rowId);
+    setDraggedFieldName(null);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function clearCanvasDragState() {
+    setDraggedFieldName(null);
+    setDraggedRowId(null);
+    setDragOverRowId(null);
+    setDragOverNewRow(false);
+    setDragOverRowHandle(null);
+  }
+
+  function handleCanvasRowDrop(e: React.DragEvent, targetRowId: number) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (draggedFieldName) {
+      // Move field into this row
+      const sourceField = fieldsWithRowId.find(f => f.name === draggedFieldName);
+      if (sourceField && sourceField.rowId !== targetRowId) {
+        handleMoveFieldToRow(draggedFieldName, targetRowId);
+      }
+    } else if (draggedRowId !== null && draggedRowId !== targetRowId) {
+      // Reorder rows: swap all fields in draggedRowId to appear before/after targetRowId
+      try {
+        const draggedGroup = rowGroups.find(g => g.rowId === draggedRowId);
+        const targetGroup = rowGroups.find(g => g.rowId === targetRowId);
+        if (!draggedGroup || !targetGroup) return;
+
+        // Re-assign rowIds so that dragged row takes target's position
+        const allFields = [...fieldsWithRowId];
+        // Build new rowId ordering: swap the two rowIds
+        const updatedFields = allFields.map(f => {
+          if (f.rowId === draggedRowId) return { ...f, rowId: targetRowId };
+          if (f.rowId === targetRowId) return { ...f, rowId: draggedRowId };
+          return f;
+        });
+        const updated = saveAllFieldsForContentType(currentModel.uid, updatedFields);
+        setModels(updated);
+        toast.success(`Swapped rows ${draggedRowId} ↔ ${targetRowId}.`);
+      } catch (err: any) {
+        alert(err?.message || "Row reorder failed");
+      }
+    }
+    clearCanvasDragState();
+  }
+
+  function handleCanvasNewRowDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (draggedFieldName) {
+      handleSeparateToNewRow(draggedFieldName);
+    }
+    clearCanvasDragState();
   }
 
   function handleSetColSpan(fName: string, span: ColSpanType) {
@@ -347,8 +444,16 @@ export function ContentTypeBuilderAdmin() {
     }
   }
 
-  const collectionTypes = models.filter(m => m.kind === "collectionType");
-  const singleTypes = models.filter(m => m.kind === "singleType");
+  const [modelSearch, setModelSearch] = useState("");
+
+  const filteredModels = models.filter((m) => {
+    if (!modelSearch.trim()) return true;
+    const q = modelSearch.toLowerCase();
+    return m.displayName.toLowerCase().includes(q) || m.description.toLowerCase().includes(q);
+  });
+
+  const collectionTypes = filteredModels.filter(m => m.kind === "collectionType");
+  const singleTypes = filteredModels.filter(m => m.kind === "singleType");
 
   return (
     <div className="bg-white rounded-2xl border border-[#a65a4a]/20 shadow-sm overflow-hidden flex flex-col md:flex-row min-h-[620px]">
@@ -367,6 +472,28 @@ export function ContentTypeBuilderAdmin() {
             >
               <Plus className="w-3 h-3 stroke-[2.5]" /> Create
             </button>
+          </div>
+
+          {/* Model Search Input */}
+          <div className="relative mb-3">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#1e1e1e]/40 pointer-events-none" />
+            <input
+              type="text"
+              value={modelSearch}
+              onChange={(e) => setModelSearch(e.target.value)}
+              placeholder="Search content types…"
+              className="w-full bg-white border border-[#a65a4a]/25 rounded-lg pl-7 pr-6 py-1 text-[11.5px] text-[#1e1e1e] placeholder-[#1e1e1e]/40 focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif]"
+            />
+            {modelSearch && (
+              <button
+                type="button"
+                onClick={() => setModelSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-[#1e1e1e]/40 hover:text-[#a65a4a] cursor-pointer"
+                title="Clear search"
+              >
+                <X size={11} />
+              </button>
+            )}
           </div>
 
           {/* Collection Types */}
@@ -444,6 +571,13 @@ export function ContentTypeBuilderAdmin() {
 
             <div className="flex items-center gap-2">
               <button
+                onClick={handleSaveAll}
+                className="bg-emerald-600 text-white text-[11.5px] font-semibold px-3.5 py-1.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm flex items-center gap-1.5"
+                title="Save current layout and field schema across output pages"
+              >
+                <Save className="w-3.5 h-3.5" /> Save Changes
+              </button>
+              <button
                 onClick={handleOpenEditModel}
                 className="bg-[#faf8f5] border border-[#a65a4a]/30 text-[#1e1e1e] hover:bg-[#a65a4a]/10 text-[11.5px] font-semibold px-3 py-1.5 rounded-full transition-colors cursor-pointer flex items-center gap-1"
                 title="Edit content type display title and description"
@@ -479,14 +613,6 @@ export function ContentTypeBuilderAdmin() {
               <span>🎨 Drag & Drop Builder</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("fields")}
-              className={`pb-2 font-['Inter',sans-serif] text-[12.5px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
-                activeTab === "fields" ? "border-[#a65a4a] text-[#a65a4a]" : "border-transparent text-[#1e1e1e]/50 hover:text-[#1e1e1e]"
-              }`}
-            >
-              <span>📋 Schema & Table ({currentModel.fields.length})</span>
-            </button>
 
             <button
               onClick={() => setActiveTab("preview")}
@@ -552,284 +678,127 @@ export function ContentTypeBuilderAdmin() {
                   <h4 className="font-['Fraunces',serif] text-[15px] font-semibold text-[#1e1e1e]">
                     Form Layout Canvas
                   </h4>
-                  <button
-                    onClick={handleOpenAddField}
-                    className="bg-[#a65a4a] text-[#f4efe7] text-[11.5px] font-semibold px-3 py-1.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer shadow-sm flex items-center gap-1"
-                  >
-                    <span>+ Add Field</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSaveAll}
+                      className="bg-emerald-600 text-white text-[11.5px] font-semibold px-3.5 py-1.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+                      title="Save layout arrangement"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Save Layout
+                    </button>
+                    <button
+                      onClick={handleOpenAddField}
+                      className="bg-[#a65a4a] text-[#f4efe7] text-[11.5px] font-semibold px-3 py-1.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer shadow-sm flex items-center gap-1"
+                    >
+                      <span>+ Add Field</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hint bar */}
+                <div className="mb-3 flex items-center gap-1.5 text-[10.5px] text-[#1e1e1e]/45 font-['Inter',sans-serif]">
+                  <span>⠿</span>
+                  <span>Drag field cards to move between rows · Drag row handles to reorder rows · Drop on "new row" zone to split</span>
                 </div>
 
                 {/* Row Drop Zone Containers */}
-                <div className="flex flex-col gap-2.5 min-h-[350px]">
-                  {rowGroups.map((group, rIdx) => (
-                    <div
-                      key={group.rowId}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (draggedIndex !== null) {
-                          const draggedField = currentModel.fields[draggedIndex];
-                          if (draggedField) {
-                            handleMoveFieldToRow(draggedField.name, group.rowId);
-                            setDraggedIndex(null);
-                          }
-                        }
-                      }}
-                      className="flex items-center gap-2 w-full group/row"
-                    >
-                      {/* Left Row Drag Handle Icon */}
-                      <div
-                        className="text-[#1e1e1e]/40 hover:text-[#a65a4a] font-bold text-[14px] px-0.5 cursor-grab shrink-0 transition-colors"
-                        title={`Row #${rIdx + 1}`}
-                      >
-                        ⊟
-                      </div>
-
-                      {/* Flex Auto-Fit Field Cards Container */}
-                      <div className="flex-1 flex flex-col sm:flex-row items-center gap-2 w-full">
-                        {group.fields.map((f) => {
-                          const globalIdx = currentModel.fields.findIndex(item => item.name === f.name);
-                          const icon = FIELD_TYPES.find(t => t.type === f.type)?.icon || "𝌀";
-
-                          return (
-                            <div
-                              key={f.name}
-                              draggable={true}
-                              onDragStart={() => handleDragStart(globalIdx)}
-                              className="flex-1 w-full sm:w-auto min-w-[150px] bg-white border border-[#a65a4a]/20 hover:border-[#a65a4a]/50 rounded-xl px-3 py-2 shadow-2xs hover:shadow-sm transition-all cursor-move flex items-center justify-between group/card"
-                            >
-                              <div className="flex items-center gap-2 truncate pr-1.5">
-                                <span className="text-[13px] text-[#1e1e1e]/70">{icon}</span>
-                                <span className="font-['Inter',sans-serif] text-[12px] font-semibold text-[#1e1e1e] truncate">
-                                  {f.name}
-                                </span>
-                                {f.required && (
-                                  <span className="text-[8.5px] font-bold text-red-600 bg-red-50 border border-red-200 px-1 py-0.2 rounded-full shrink-0">
-                                    Req
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-1 shrink-0 text-[#1e1e1e]/60">
-                                {group.fields.length > 1 && (
-                                  <button
-                                    onClick={() => handleSeparateToNewRow(f.name)}
-                                    className="p-0.5 hover:text-[#a65a4a] rounded text-[11px] cursor-pointer transition-colors"
-                                    title="Separate to New Row"
-                                  >
-                                    ↩
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleOpenEditField(f)}
-                                  className="p-0.5 hover:text-[#a65a4a] rounded text-[11.5px] cursor-pointer transition-colors"
-                                  title="Edit Field"
-                                >
-                                  ✏️
-                                </button>
-                                {!["id"].includes(f.name.toLowerCase()) && (
-                                  <button
-                                    onClick={() => handleDeleteField(f.name)}
-                                    className="p-0.5 hover:text-red-600 rounded text-[11.5px] cursor-pointer transition-colors"
-                                    title="Delete Field"
-                                  >
-                                    🗑️
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Far Right (+) Button to add field to this row */}
-                      <button
-                        onClick={() => {
-                          setEditingFieldName(null);
-                          setFieldName("");
-                          setFieldType("string");
-                          setFieldDesc("");
-                          setFieldReq(false);
-                          setFieldUnique(false);
-                          setFieldDefault("");
-                          setFieldEnumOptions("");
-                          setShowAddFieldModal(true);
-                        }}
-                        className="w-7 h-7 rounded-full bg-white border border-[#a65a4a]/20 hover:border-[#a65a4a] text-[#1e1e1e] hover:text-[#a65a4a] hover:bg-[#faf8f5] flex items-center justify-center font-bold text-[14px] transition-all cursor-pointer shadow-2xs shrink-0"
-                        title="Add field into this row"
-                      >
-                        +
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 1: Fields Table */}
-          {activeTab === "fields" && (
-            <>
-              <div className="overflow-x-auto border border-[#a65a4a]/15 rounded-2xl shadow-xs">
-              <table className="w-full text-left font-['Inter',sans-serif]">
-                <thead className="bg-[#faf8f5] text-[11px] uppercase tracking-wider text-[#1e1e1e]/55 font-bold border-b border-[#a65a4a]/15">
-                  <tr>
-                    <th className="px-4 py-3.5 w-16 text-center">Row</th>
-                    <th className="px-5 py-3.5">Field Name</th>
-                    <th className="px-5 py-3.5">Data Type</th>
-                    <th className="px-5 py-3.5">Validation & Constraints</th>
-                    <th className="px-5 py-3.5">Layout Width</th>
-                    <th className="px-5 py-3.5">Description</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#a65a4a]/10 text-[13px] text-[#1e1e1e]">
-                  {currentModel.fields.map((f, idx) => {
-                    const icon = FIELD_TYPES.find(t => t.type === f.type)?.icon || "📌";
+                <div
+                  className="flex flex-col gap-2.5 min-h-[350px]"
+                  onDragEnd={clearCanvasDragState}
+                >
+                  {rowGroups.map((group, rIdx) => {
+                    const isRowDragging = draggedRowId === group.rowId;
+                    const isRowDragOver = dragOverRowId === group.rowId && draggedFieldName !== null;
+                    const isRowSwapTarget = dragOverRowHandle === group.rowId && draggedRowId !== null && draggedRowId !== group.rowId;
                     return (
-                      <tr key={f.name} className="hover:bg-[#f4efe7]/40 transition-colors">
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => handleReorderField(idx, "up")}
-                              disabled={idx === 0}
-                              className="p-1 hover:bg-[#a65a4a]/10 rounded disabled:opacity-20 text-[12px] cursor-pointer"
-                              title="Move row up"
-                            >
-                              ▲
-                            </button>
-                            <button
-                              onClick={() => handleReorderField(idx, "down")}
-                              disabled={idx === currentModel.fields.length - 1}
-                              className="p-1 hover:bg-[#a65a4a]/10 rounded disabled:opacity-20 text-[12px] cursor-pointer"
-                              title="Move row down"
-                            >
-                              ▼
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4 font-mono font-semibold text-[#a65a4a]">
-                          {f.name}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] text-[11px] font-medium capitalize">
-                            <span>{icon}</span>
-                            <span>{f.type}</span>
-                          </span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex flex-wrap gap-1.5">
-                            {f.required && (
-                              <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-red-100 text-red-700">
-                                Required
-                              </span>
-                            )}
-                            {f.unique && (
-                              <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-purple-100 text-purple-700">
-                                Unique
-                              </span>
-                            )}
-                            {f.defaultValue !== undefined && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-100 text-blue-800">
-                                default: {String(f.defaultValue)}
-                              </span>
-                            )}
-                            {f.enumOptions && f.enumOptions.length > 0 && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-100 text-emerald-800">
-                                [{f.enumOptions.join(", ")}]
-                              </span>
-                            )}
-                            {f.targetModel && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-100 text-amber-900">
-                                → {f.targetModel}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <button
-                            onClick={() => handleToggleGridWidth(f.name)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors cursor-pointer border ${
-                              f.gridWidth === "half"
-                                ? "bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100"
-                                : "bg-blue-50 border-blue-300 text-blue-900 hover:bg-blue-100"
-                            }`}
-                            title="Click to toggle layout column span"
-                          >
-                            <span>{f.gridWidth === "half" ? "🟧 2 Columns (Auto Fit)" : "🟦 1 Row (Full Width)"}</span>
-                          </button>
-                        </td>
-                        <td className="px-5 py-4 text-[#1e1e1e]/65 text-[12px]">
-                          {f.description || "—"}
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <button
-                              onClick={() => handleOpenEditField(f)}
-                              className="text-[#a65a4a] hover:text-[#993925] text-[12px] font-semibold cursor-pointer hover:underline"
-                            >
-                              Edit
-                            </button>
-                            {["id"].includes(f.name.toLowerCase()) ? (
-                              <span className="text-[11px] text-[#1e1e1e]/35 italic">Primary Key</span>
-                            ) : (
-                              <button
-                                onClick={() => handleDeleteField(f.name)}
-                                className="text-red-600 hover:text-red-800 text-[12px] font-semibold cursor-pointer hover:underline"
+                      <div
+                        key={group.rowId}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (draggedFieldName !== null) setDragOverRowId(group.rowId);
+                          if (draggedRowId !== null && draggedRowId !== group.rowId) setDragOverRowHandle(group.rowId);
+                        }}
+                        onDragLeave={() => { setDragOverRowId(null); setDragOverRowHandle(null); }}
+                        onDrop={(e) => handleCanvasRowDrop(e, group.rowId)}
+                        style={{ transition: "all 0.18s ease" }}
+                        className={[
+                          "flex items-center gap-2 w-full group/row rounded-xl px-1 py-0.5",
+                          isRowDragging ? "opacity-40 scale-[0.98]" : "",
+                          isRowDragOver ? "ring-2 ring-blue-400 bg-blue-50/60" : isRowSwapTarget ? "ring-2 ring-amber-400 bg-amber-50/50" : "",
+                        ].join(" ")}
+                      >
+                        {/* Row Drag Handle */}
+                        <div
+                          draggable={true}
+                          onDragStart={(e) => handleCanvasRowDragStart(e, group.rowId)}
+                          className="text-[#1e1e1e]/30 hover:text-[#a65a4a] font-bold text-[16px] px-0.5 cursor-grab active:cursor-grabbing shrink-0 transition-colors select-none"
+                          title={`Drag to reorder Row #${rIdx + 1}`}
+                        >⠿</div>
+                        <span className="text-[9px] font-bold text-[#1e1e1e]/30 shrink-0 w-4 text-center select-none">{rIdx + 1}</span>
+                        {/* Field Cards */}
+                        <div className="flex-1 flex flex-col sm:flex-row items-stretch gap-2 w-full">
+                          {group.fields.map((f) => {
+                            const icon = FIELD_TYPES.find(t => t.type === f.type)?.icon || "𝌀";
+                            const isThisFieldDragging = draggedFieldName === f.name;
+                            return (
+                              <div
+                                key={f.name}
+                                draggable={true}
+                                onDragStart={(e) => handleCanvasFieldDragStart(e, f.name)}
+                                onDragEnd={clearCanvasDragState}
+                                style={{ transition: "opacity 0.15s, box-shadow 0.15s" }}
+                                className={["flex-1 w-full sm:w-auto min-w-[150px] bg-white border rounded-xl px-3 py-2 shadow-2xs transition-all cursor-move flex items-center justify-between group/card", isThisFieldDragging ? "opacity-40 border-[#a65a4a] shadow-inner" : "border-[#a65a4a]/20 hover:border-[#a65a4a]/50 hover:shadow-sm"].join(" ")}
                               >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                                <div className="flex items-center gap-2 truncate pr-1.5">
+                                  <span className="text-[#1e1e1e]/25 text-[11px] select-none">⠿</span>
+                                  <span className="text-[13px] text-[#1e1e1e]/70">{icon}</span>
+                                  <span className="font-['Inter',sans-serif] text-[12px] font-semibold text-[#1e1e1e] truncate">{f.name}</span>
+                                  {f.required && <span className="text-[8.5px] font-bold text-red-600 bg-red-50 border border-red-200 px-1 py-0.2 rounded-full shrink-0">Req</span>}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0 text-[#1e1e1e]/60">
+                                  {group.fields.length > 1 && (
+                                    <button onClick={() => handleSeparateToNewRow(f.name)} className="p-0.5 hover:text-[#a65a4a] rounded text-[11px] cursor-pointer transition-colors" title="Separate to New Row">↩</button>
+                                  )}
+                                  <button onClick={() => handleOpenEditField(f)} className="p-0.5 hover:text-[#a65a4a] rounded text-[11.5px] cursor-pointer transition-colors" title="Edit Field">✏️</button>
+                                  {!["id"].includes(f.name.toLowerCase()) && (
+                                    <button onClick={() => handleDeleteField(f.name)} className="p-0.5 hover:text-red-600 rounded text-[11.5px] cursor-pointer transition-colors" title="Delete Field">🗑️</button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {(isRowDragOver || isRowSwapTarget) && (
+                          <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full shrink-0 ${isRowDragOver ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-800"}`}>
+                            {isRowDragOver ? "↓ Drop here" : "⇄ Swap"}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => { setEditingFieldName(null); setFieldName(""); setFieldType("string"); setFieldDesc(""); setFieldReq(false); setFieldUnique(false); setFieldDefault(""); setFieldEnumOptions(""); setShowAddFieldModal(true); }}
+                          className="w-7 h-7 rounded-full bg-white border border-[#a65a4a]/20 hover:border-[#a65a4a] text-[#1e1e1e] hover:text-[#a65a4a] hover:bg-[#faf8f5] flex items-center justify-center font-bold text-[14px] transition-all cursor-pointer shadow-2xs shrink-0"
+                          title="Add field into this row"
+                        >+</button>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-
-              {/* Form Layout & Column Span Preview */}
-              <div className="mt-8 p-5 bg-[#faf8f5] rounded-2xl border border-[#a65a4a]/15">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="font-['Fraunces',serif] text-[16px] font-semibold text-[#1e1e1e]">
-                      📱 Entry Form Grid & Column Layout Preview
-                    </h4>
-                    <p className="font-['Inter',sans-serif] text-[11px] text-[#1e1e1e]/55 mt-0.5">
-                      Visual layout sequence for CMS editor entry forms based on row order & column span settings
-                    </p>
-                  </div>
-                  <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-[#a65a4a]/10 text-[#a65a4a] font-bold">
-                    {currentModel.fields.length} Fields
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-white rounded-xl border border-[#a65a4a]/10">
-                  {currentModel.fields.map((f) => (
+                  {/* Drop to New Row */}
+                  {draggedFieldName !== null && (
                     <div
-                      key={f.name}
-                      className={`p-3 rounded-xl border transition-all ${
-                        f.gridWidth === "half"
-                          ? "col-span-1 border-amber-300 bg-amber-50/40"
-                          : "col-span-1 md:col-span-2 border-blue-300 bg-blue-50/40"
-                      }`}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverNewRow(true); }}
+                      onDragLeave={() => setDragOverNewRow(false)}
+                      onDrop={handleCanvasNewRowDrop}
+                      style={{ transition: "all 0.18s ease" }}
+                      className={["w-full rounded-xl border-2 border-dashed flex items-center justify-center py-3 text-[12px] font-semibold cursor-pointer select-none", dragOverNewRow ? "border-[#a65a4a] bg-[#a65a4a]/10 text-[#a65a4a]" : "border-[#a65a4a]/30 text-[#1e1e1e]/35"].join(" ")}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-semibold text-[13px] text-[#1e1e1e]">{f.name}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white text-[#1e1e1e]/70 border shadow-2xs">
-                          {f.gridWidth === "half" ? "🟧 2 Columns (Auto)" : "🟦 1 Row (Full)"}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-8 bg-white rounded-lg border border-gray-200 px-3 flex items-center text-[12px] text-gray-400">
-                        {f.description || `Input component for '${f.name}' (${f.type})`}
-                      </div>
+                      {dragOverNewRow ? "⬇ Release to create new row" : "+ Drop here to create a new row"}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
-            </>
+            </div>
           )}
+
+
 
           {/* TAB 2: Live Form Preview */}
           {activeTab === "preview" && (

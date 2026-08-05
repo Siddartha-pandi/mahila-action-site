@@ -32,6 +32,8 @@ import {
 
 import { api } from "../../lib/api";
 import { toast } from "sonner";
+import { Pagination } from "../components/ui/Pagination";
+import { usePagination } from "../hooks/usePagination";
 
 export function RolesAdmin({
   onSessionChange,
@@ -275,6 +277,16 @@ export function RolesAdmin({
     return true;
   });
 
+  const {
+    page: userPage,
+    pageSize: userPageSize,
+    totalPages: userTotalPages,
+    totalItems: userTotalItems,
+    paginatedItems: paginatedUsers,
+    setPage: setUserPage,
+    setPageSize: setUserPageSize,
+  } = usePagination(filteredUsers, { initialPageSize: 10 });
+
   const inputBase = "w-full border border-[#a65a4a]/30 rounded-lg px-3 py-2 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif] bg-white";
 
   return (
@@ -452,7 +464,7 @@ export function RolesAdmin({
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map((u) => (
+                    paginatedUsers.map((u) => (
                       <tr key={u.id} className="hover:bg-gray-50/70 transition-colors">
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
@@ -544,6 +556,16 @@ export function RolesAdmin({
                   )}
                 </tbody>
               </table>
+              <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+                <Pagination
+                  currentPage={userPage}
+                  totalPages={userTotalPages}
+                  totalItems={userTotalItems}
+                  pageSize={userPageSize}
+                  onPageChange={setUserPage}
+                  onPageSizeChange={setUserPageSize}
+                />
+              </div>
             </div>
           </div>
         </div>

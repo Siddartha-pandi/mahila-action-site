@@ -6,9 +6,10 @@ export function generateStaticParams() {
   return [];
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const result = await queryDb("SELECT * FROM cms_blog_posts WHERE id = $1", [params.id]);
+    const { id } = await params;
+    const result = await queryDb("SELECT * FROM cms_blog_posts WHERE id = $1", [id]);
     const r = result.rows[0];
     if (!r) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({
@@ -25,11 +26,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
+    const { id } = await params;
     const b = await req.json();
     const section = b.section;
     const title = b.title;
@@ -54,7 +56,7 @@ const categoryId = rawCategoryId === undefined
          gallery = COALESCE($7, gallery),
          tags = COALESCE($8, tags)
        WHERE id = $9 RETURNING *`,
-      [section || null, categoryId ?? null, title || null, excerpt || null, content || null, coverImage || null, gallery || null, tags || null, params.id]
+      [section || null, categoryId ?? null, title || null, excerpt || null, content || null, coverImage || null, gallery || null, tags || null, id]
     );
 
     if (res.rows.length === 0) {
@@ -68,20 +70,21 @@ const categoryId = rawCategoryId === undefined
   }
 }
 
-export async function PUT(req: NextRequest, ctx: { params: { id: string } }) {
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return PATCH(req, ctx);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const admin = getAdminFromRequest(req);
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const admin = await getAdminFromRequest(req);
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const res = await queryDb("DELETE FROM cms_blog_posts WHERE id = $1 RETURNING id", [params.id]);
+    const { id } = await params;
+    const res = await queryDb("DELETE FROM cms_blog_posts WHERE id = $1 RETURNING id", [id]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
-    return NextResponse.json({ ok: true, id: params.id });
+    return NextResponse.json({ ok: true, id });
   } catch (err: any) {
     console.error("DELETE /api/cms/blog-posts/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

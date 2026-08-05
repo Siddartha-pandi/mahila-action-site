@@ -1,44 +1,29 @@
 "use client";
 
 import * as React from "react";
+import { cn } from "@/app/components/ui/utils";
 
-export interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label?: string;
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string;
-  helperText?: string;
 }
 
-export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(
-  ({ label, error, helperText, className = "", id, rows = 3, ...props }, ref) => {
-    const generatedId = React.useId();
-    const textareaId = id || generatedId;
-
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ className, error, ...props }, ref) => {
     return (
-      <div className="w-full flex flex-col gap-1.5">
-        {label && (
-          <label
-            htmlFor={textareaId}
-            className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/60 uppercase tracking-wider block"
-          >
-            {label}
-          </label>
+      <textarea
+        ref={ref}
+        data-slot="textarea"
+        className={cn(
+          "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+          error && "border-destructive focus-visible:ring-destructive/20",
+          className
         )}
-        <textarea
-          ref={ref}
-          id={textareaId}
-          rows={rows}
-          className={`w-full border border-[#a65a4a]/30 rounded-lg px-3.5 py-2.5 text-[14px] text-[#1e1e1e] placeholder:text-[#1e1e1e]/40 focus:outline-none focus:border-[#a65a4a] focus:ring-1 focus:ring-[#a65a4a] font-['Inter',sans-serif] bg-white transition-colors resize-y disabled:opacity-50 disabled:bg-gray-50 ${
-            error ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""
-          } ${className}`}
-          {...props}
-        />
-        {error && <span className="font-['Inter',sans-serif] text-[12px] text-red-600">{error}</span>}
-        {helperText && !error && (
-          <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/50">{helperText}</span>
-        )}
-      </div>
+        {...props}
+      />
     );
   }
 );
 
-TextArea.displayName = "TextArea";
+Textarea.displayName = "Textarea";
+
+export { Textarea, Textarea as TextArea };

@@ -20,6 +20,8 @@ import {
   TrashItem,
 } from "../../lib/recycleBin";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
+import { Pagination } from "../components/ui/Pagination";
+import { usePagination } from "../hooks/usePagination";
 
 export function RecycleBinAdmin() {
   const [items, setItems] = useState<TrashItem[]>(() => getTrashItems());
@@ -113,6 +115,16 @@ function handleEmptyTrash() {
     return true;
   });
 
+  const {
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    paginatedItems,
+    setPage,
+    setPageSize,
+  } = usePagination(filtered, { initialPageSize: 10 });
+
   const getTypeIcon = (type: TrashItem["type"]) => {
     switch (type) {
       case "event":
@@ -140,7 +152,7 @@ function handleEmptyTrash() {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1150px] font-['Inter',sans-serif]">
+    <div className="flex flex-col gap-6 w-full font-['Inter',sans-serif]">
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm">
         <div>
@@ -270,7 +282,7 @@ function handleEmptyTrash() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#a65a4a]/10">
-                {filtered.map((item) => (
+                {paginatedItems.map((item) => (
                   <tr key={`${item.type}_${item.id}`} className="hover:bg-[#a65a4a]/5 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
@@ -316,6 +328,16 @@ function handleEmptyTrash() {
                 ))}
               </tbody>
             </table>
+            <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
+            </div>
           </div>
         )}
       </div>
