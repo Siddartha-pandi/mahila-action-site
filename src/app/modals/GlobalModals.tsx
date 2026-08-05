@@ -89,10 +89,34 @@ export function GlobalModals() {
         ? impactPosts.find(p => p.id === modalId) ?? impactPosts.find(p => p.categoryId === IMPACT_CARD_CATEGORY[modalId])
         : siteData.blogPosts.find(p => p.id === modalId);
 
-    // If there's no authored post, construct a fallback page from static content
-    // so the impact card always opens a meaningful modal instead of showing an
-    // error. This uses dynamic content when available, falling back to DEFAULTS.
+    // If there's no authored post, allow a fallback modal. First check if the
+    // modal id matches a category id — this enables new categories to show a
+    // meaningful editable impact modal even before an authored post exists.
     if (!post) {
+      // If modalId matches a category id, build a fallback from that category.
+      const category = siteData.categories.find((c) => String(c.id) === String(modalId));
+      if (category) {
+        const fallbackText = {
+          id: modalId,
+          section: "impact",
+          categoryId: category.id,
+          title: category.name,
+          excerpt: "",
+          content: "",
+        } as any;
+
+        const fb = IMPACT_FALLBACK_IMAGES[modalId as string] ?? Object.values(IMPACT_FALLBACK_IMAGES)[0] ?? { banner: "", gallery: [] };
+        const enrichedPost = {
+          ...fallbackText,
+          coverImage: fb.banner || "",
+          gallery: fb.gallery || [],
+        };
+        const categoryLabel = category.name || "Our Impacts";
+        return <BlogDetailModal post={enrichedPost} categoryLabel={categoryLabel} onClose={closeModal} />;
+      }
+
+      // Legacy fallback for the four hard-coded card ids — keep existing behaviour
+      // for older layout keys.
       const content = useContent();
       const keyMap: Record<string, number> = {
         "women-leadership": 1,

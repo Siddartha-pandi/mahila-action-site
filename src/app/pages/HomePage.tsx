@@ -32,12 +32,36 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
     openModal("story", { id });
   }
 
-  const impactCards = [
-    { id: "women-leadership", img: content["img_impact1"] || imgImpact1, icon: <Users size={20} strokeWidth={1.5} />, title: content["impact_card1_title"], desc: content["impact_card1_desc"] },
-    { id: "education", img: content["img_impact2"] || imgImpact2, icon: <BookOpen size={20} strokeWidth={1.5} />, title: content["impact_card2_title"], desc: content["impact_card2_desc"] },
-    { id: "livelihood", img: content["img_impact3"] || imgImpact3, icon: <Briefcase size={20} strokeWidth={1.5} />, title: content["impact_card3_title"], desc: content["impact_card3_desc"] },
-    { id: "wellbeing", img: content["img_impact4"] || imgImpact4, icon: <Heart size={20} strokeWidth={1.5} />, title: content["impact_card4_title"], desc: content["impact_card4_desc"] },
-  ];
+  // Build impact cards dynamically from site categories so newly added categories
+  // automatically appear on the homepage. If a category has an authored impact
+  // post we use that post; otherwise fall back to the category name and a
+  // sensible default image.
+  function fallbackImageForCategory(catId: string) {
+    switch (catId) {
+      case "cat_women":
+        return imgImpact1;
+      case "cat_education":
+        return imgImpact2;
+      case "cat_livelihood":
+        return imgImpact3;
+      case "cat_wellbeing":
+        return imgImpact4;
+      default:
+        return imgImpact1;
+    }
+  }
+
+  const impactCards = siteData.categories.map((cat) => {
+    const post = siteData.blogPosts.find((p) => p.section === "impact" && p.categoryId === cat.id);
+    return {
+      id: post ? post.id : cat.id,
+      img: post?.coverImage || fallbackImageForCategory(cat.id),
+      icon: <Users size={20} strokeWidth={1.5} />,
+      title: post?.title || cat.name,
+      desc: post?.excerpt || "",
+      categoryId: cat.id,
+    };
+  });
 
   const storyPosts = [...siteData.blogPosts]
     .filter(p => p.section === "story")

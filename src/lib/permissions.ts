@@ -9,6 +9,7 @@ export type AdminModule =
   | "councilors"
   | "timeline"
   | "contact"
+  | "campaigns"
   | "roles";
 
 export type PermissionAction = "view" | "edit" | "delete";
@@ -54,6 +55,7 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
   councilors: "Councilors",
   timeline: "Timeline Entries",
   contact: "Contact Information",
+  campaigns: "Campaigns",
   roles: "User & Role Management",
 };
 
@@ -70,6 +72,7 @@ const FULL_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: true, delete: true },
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
+  campaigns: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
 };
 
@@ -84,6 +87,7 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: true, delete: true },
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
+  campaigns: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
 };
 
@@ -98,6 +102,7 @@ const STAFF_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: false, delete: false },
   timeline: { view: true, edit: false, delete: false },
   contact: { view: true, edit: false, delete: false },
+  campaigns: { view: true, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
 };
 
@@ -112,6 +117,7 @@ const USER_PERMISSIONS: PermissionMatrix = {
   councilors: { view: false, edit: false, delete: false },
   timeline: { view: false, edit: false, delete: false },
   contact: { view: false, edit: false, delete: false },
+  campaigns: { view: false, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
 };
 
