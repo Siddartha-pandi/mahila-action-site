@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { queryDb } from "@/lib/db";
+import { queryDb, getPool } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
 export async function GET() {
@@ -42,8 +42,19 @@ export async function POST(req: NextRequest) {
       if (existing.rowCount > 0) {
         finalId = existing.rows[0].id;
       } else {
-        const res = await queryDb(`INSERT INTO cms_categories (name) VALUES ($1) RETURNING id`, [b.name]);
-        finalId = res.rows[0]?.id;
+        // Handle Postgres vs SQLite like other routes: ensure id is generated even if
+        // the column default is missing in Postgres by using nextval(pg_get_serial_sequence(...)).
+        const pool = await getPool();
+        if ((pool && (pool as any).isSqlite) || (typeof (pool as any).isSqlite !== "undefined" && (pool as any).isSqlite)) {
+          const res = await queryDb(`INSERT INTO cms_categories (name) VALUES ($1) RETURNING id`, [b.name]);
+          finalId = res.rows[0]?.id;
+        } else {
+          const res = await queryDb(
+            `INSERT INTO cms_categories (id, name) VALUES (nextval(pg_get_serial_sequence('cms_categories','id')), $1) RETURNING id`,
+            [b.name]
+          );
+          finalId = res.rows[0]?.id;
+        }
       }
     }
 
