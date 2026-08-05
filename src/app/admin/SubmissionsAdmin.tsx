@@ -182,7 +182,6 @@ export function SubmissionsAdmin() {
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
 
-<<<<<<< HEAD
     // The submission is genuinely gone now — best-effort file a recoverable
     // copy into Trash, but a failure here shouldn't make it look like the
     // delete itself failed (it didn't), just that Recycle Bin recovery won't
@@ -200,13 +199,9 @@ export function SubmissionsAdmin() {
       toast.success("Submission deleted (couldn't file a recoverable copy in the Recycle Bin).");
     }
 
-    setSubmissions(prev => prev.filter(s => s.id !== item.id));
-    if (selectedItem?.id === item.id) setSelectedItem(null);
-=======
     setSubmissions(prev => prev.filter(s => !(s.id === item.id && s.type === item.type)));
     if (selectedItem?.id === item.id && selectedItem?.type === item.type) setSelectedItem(null);
-    toast.success("Submission moved to Recycle Bin");
->>>>>>> 971f88b0dedb379489c4583cbf7be93dd7157245
+
   }
 
   const list = Array.isArray(submissions) ? submissions : [];

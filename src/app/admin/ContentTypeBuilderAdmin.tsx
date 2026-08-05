@@ -140,26 +140,6 @@ export function ContentTypeBuilderAdmin() {
       toast.error(err?.message || "Failed to save layout");
     }
   }
-  // Sync content types across tabs/components in real time
-  useEffect(() => {
-    function handleUpdate(e: any) {
-      if (e?.detail) setModels(e.detail);
-      else setModels(getStoredContentTypes());
-    }
-    window.addEventListener("mahila_content_types_updated", handleUpdate);
-    return () => window.removeEventListener("mahila_content_types_updated", handleUpdate);
-  }, []);
-
-  function handleSaveAll() {
-    try {
-      const updated = saveAllFieldsForContentType(currentModel.uid, fieldsWithRowId);
-      saveStoredContentTypes(updated);
-      setModels(updated);
-      toast.success(`Saved layout & schema for '${currentModel.displayName}'. Automatically reflected across output pages!`);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to save layout");
-    }
-  }
 
   function handleSelectModel(uid: string) {
     setSelectedUid(uid);
