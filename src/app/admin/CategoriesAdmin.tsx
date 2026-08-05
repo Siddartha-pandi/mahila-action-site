@@ -34,7 +34,8 @@ export function CategoriesAdmin({
 
   async function handleAdd() {
     const cat = newCategory();
-    await saveCategory(cat);
+    const ok = await saveCategory(cat);
+    if (!ok) return toast.error("Couldn't create the category — please try again.");
     onCategoriesChange([...categories, cat]);
     toast.success("Category created!");
   }
@@ -43,7 +44,8 @@ export function CategoriesAdmin({
     const name = (nameDraft[c.id] ?? c.name).trim();
     if (!name) return toast.error("Category name can't be empty");
     const updated = { ...c, name };
-    await saveCategory(updated);
+    const ok = await saveCategory(updated);
+    if (!ok) return toast.error("Couldn't save the category — please try again.");
     onCategoriesChange(categories.map((x) => (x.id === c.id ? updated : x)));
     toast.success("Category updated");
   }

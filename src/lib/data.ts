@@ -5,13 +5,14 @@ import { comingSoon } from "./comingSoon";
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type RegKind = "volunteer" | "vendor" | "donor";
+export type RegKind = "attendee" | "volunteer" | "vendor" | "donor";
 
 export interface RegWindow {
   kind: RegKind;
   enabled: boolean;
   regStart: string; // ISO date, yyyy-mm-dd
   regEnd: string; // ISO date, yyyy-mm-dd
+  maxRegistrations?: number;
 }
 
 export interface EventItem {
@@ -149,8 +150,9 @@ export const DEFAULT_EVENTS: EventItem[] = [
     location: "Hyderabad",
     totalSeats: 45,
     windows: [
-      { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14) },
-      { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18) },
+      { kind: "attendee", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(20), maxRegistrations: 45 },
+      { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14), maxRegistrations: 0 },
+      { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18), maxRegistrations: 0 },
       { kind: "donor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(10) },
     ],
     categoryId: "cat_women",
@@ -482,8 +484,9 @@ export function newEvent(): EventItem {
     id: uid("evt"), title: "New Event", description: "", image: "",
     eventDate: daysFromNow(30), location: "", totalSeats: 30,
     windows: [
-      { kind: "volunteer", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
-      { kind: "vendor", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
+      { kind: "attendee", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 30 },
+      { kind: "volunteer", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 0 },
+      { kind: "vendor", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 0 },
       { kind: "donor", enabled: false, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
     ],
     categoryId: null,
@@ -500,7 +503,7 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.events, ev);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -579,7 +582,7 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.blogPosts, p);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -610,7 +613,7 @@ export async function deleteBlogPost(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -633,7 +636,7 @@ export async function saveCategory(c: Category): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.categories, c);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -646,7 +649,7 @@ export async function deleteCategory(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -685,7 +688,7 @@ export async function saveCouncilor(c: Councilor): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.councilors, c);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -716,7 +719,7 @@ export async function deleteCouncilor(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -739,7 +742,7 @@ export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.timeline, t);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }
@@ -770,7 +773,7 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return res.ok;
   } catch {
     return true;
   }

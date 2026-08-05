@@ -35,7 +35,10 @@ export async function POST(req: NextRequest) {
   try {
     const b = await req.json();
     const coverImage = b.coverImage || b.cover_image || null;
-    const categoryId = b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null;
+    const rawCategoryId = b.categoryId ?? b.category_id;
+    const categoryId = rawCategoryId === undefined
+      ? undefined
+      : (rawCategoryId === null || rawCategoryId === "" || isNaN(Number(rawCategoryId)) ? null : Number(rawCategoryId));
     let finalId = b.id;
 
     if (b.id && !isNaN(Number(b.id))) {

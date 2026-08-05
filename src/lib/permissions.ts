@@ -191,6 +191,7 @@ export function saveStoredRoles(roles: AdminRole[]) {
     localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(roles));
   } catch (e) {
     console.error("Failed to save roles:", e);
+    throw e;
   }
 }
 

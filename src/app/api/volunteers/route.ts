@@ -52,9 +52,10 @@ export async function POST(req: NextRequest) {
 
     for (const evt of eventsToSave) {
       const insertRes = await queryDb(
-        `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
-         VALUES ($1, $2, $3, $4, 1, $5, $6) RETURNING id`,
+        `INSERT INTO event_reservations (id, event_name, name, email, phone, seats, volunteer_commitment, companions)
+         VALUES ($1, $2, $3, $4, $5, 1, $6, $7) RETURNING id`,
         [
+          nanoid(),
           evt,
           body.name.trim(),
           String(body.email).trim(),

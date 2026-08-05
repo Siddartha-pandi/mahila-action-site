@@ -90,6 +90,17 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   const [profile, setProfile] = useState<VolunteerProfile | null>(null);
   const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
 
+  // Restore a signed-in session on mount, unless the caller explicitly
+  // routed here to a specific auth step (e.g. a password reset link).
+  useEffect(() => {
+    if (initialStep) return;
+    const saved = getSavedUserSession();
+    if (saved) {
+      setProfile(saved);
+      setStep("dashboard");
+    }
+  }, []);
+
   useEffect(() => {
     if (initialStep) setStep(initialStep);
   }, [initialStep]);
@@ -157,6 +168,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     if (!identifier) return toast.error("Enter your email address or username");
     if (!loginPass.trim()) return toast.error("Enter your password");
     const lowerId = identifier.toLowerCase();
+    setAuthBusy(true);
 
     const adminRes = await signInAdmin(identifier, loginPass);
     if (adminRes.ok) {
@@ -263,22 +275,24 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   }
 
   const now = new Date();
-  const realEvents = events
-    .filter((ev) => {
-      const windows = Array.isArray(ev.windows) ? ev.windows : [];
-      if (windows.length === 0) return true;
-      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
-    })
-    .map((ev) => ({
-      id: ev.id,
-      status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
-      title: ev.title,
-      date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
-      location: ev.location || "Online / TBD",
-      category: "",
-      slots: ev.totalSeats || 0,
-      desc: ev.description || "",
-    }));
+  const realEvents = events.length > 0
+    ? events
+        .filter((ev) => {
+          const windows = Array.isArray(ev.windows) ? ev.windows : [];
+          if (windows.length === 0) return true;
+          return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
+        })
+        .map((ev) => ({
+          id: String(ev.id),
+          status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
+          title: ev.title,
+          date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
+          location: ev.location || "Online / TBD",
+          category: "",
+          slots: ev.totalSeats || 0,
+          desc: ev.description || "",
+        }))
+    : VOLUNTEER_EVENTS.map((ev) => ({ ...ev, id: String(ev.id) }));
   const filtered = realEvents.filter(e => filter === "all" || e.status === filter);
   const categoryColors: Record<string, string> = {
     "Women & Leadership": "bg-rose-100 text-rose-700",

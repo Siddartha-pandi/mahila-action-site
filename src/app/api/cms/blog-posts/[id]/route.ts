@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
   } catch (err: any) {
     console.error("GET /api/cms/blog-posts/[id] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }
 
@@ -36,7 +36,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const excerpt = b.excerpt;
     const content = b.content;
     const coverImage = b.coverImage || b.cover_image;
-    const categoryId = b.categoryId !== undefined || b.category_id !== undefined ? (b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null) : undefined;
+    const rawCategoryId = b.categoryId ?? b.category_id;
+const categoryId = rawCategoryId === undefined
+  ? undefined
+  : (rawCategoryId === null || rawCategoryId === "" || isNaN(Number(rawCategoryId)) ? null : Number(rawCategoryId));
     const gallery = b.gallery ? JSON.stringify(b.gallery) : undefined;
     const tags = b.tags ? JSON.stringify(b.tags) : undefined;
 
@@ -61,7 +64,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ ok: true, post: res.rows[0] });
   } catch (err: any) {
     console.error("PATCH /api/cms/blog-posts/[id] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }
 
@@ -84,3 +87,4 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+/**/

@@ -57,8 +57,21 @@ export function GlobalModals() {
   if (modal === "closed") return <ClosedEventNoticeModal events={siteData.events} onClose={closeModal} />;
 
   if (modal === "reserve" && modalId) {
-    const event = siteData.events.find(e => String(e.id) === String(modalId));
-    if (!event) return null;
+    const event = siteData.events.find(e => e.id === modalId);
+    if (!event) {
+      return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[420px] p-7 text-center shadow-2xl">
+            <p className="font-['Inter',sans-serif] text-[#1e1e1e]/70 text-[14px] mb-5">
+              This event couldn't be found — it may have been removed, or the link may be out of date.
+            </p>
+            <button onClick={closeModal} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <ReserveSeatModal
         event={event}
@@ -73,9 +86,22 @@ export function GlobalModals() {
     const impactPosts = siteData.blogPosts.filter(p => p.section === "impact");
     const post =
       modal === "impact"
-        ? impactPosts.find(p => String(p.id) === String(modalId)) ?? impactPosts.find(p => String(p.categoryId) === String(IMPACT_CARD_CATEGORY[modalId]) || String(p.categoryId) === String(modalId))
-        : siteData.blogPosts.find(p => String(p.id) === String(modalId));
-    if (!post) return null;
+        ? impactPosts.find(p => p.id === modalId) ?? impactPosts.find(p => p.categoryId === IMPACT_CARD_CATEGORY[modalId])
+        : siteData.blogPosts.find(p => p.id === modalId);
+    if (!post) {
+      return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[420px] p-7 text-center shadow-2xl">
+            <p className="font-['Inter',sans-serif] text-[#1e1e1e]/70 text-[14px] mb-5">
+              This {modal === "impact" ? "page" : "story"} couldn't be found — it may have been removed, or the link may be out of date.
+            </p>
+            <button onClick={closeModal} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     const fb =
       modal === "impact"

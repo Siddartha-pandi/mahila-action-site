@@ -179,7 +179,11 @@ export function RolesAdmin({
       permissions: updatedPermissions,
     };
 
-    saveRole(updatedRole);
+    try {
+      saveRole(updatedRole);
+    } catch (err: any) {
+      return toast.error(err.message || "Failed to save this permission change.");
+    }
     toast.success(`Updated ${targetRole.name} → ${MODULE_LABELS[module]} [${action.toUpperCase()}]`);
     refreshData();
   }

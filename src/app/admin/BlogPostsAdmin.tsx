@@ -33,7 +33,8 @@ export function BlogPostsAdmin({
   }
 
   async function handleDelete(id: string) {
-    await deleteBlogPost(id);
+    const ok = await deleteBlogPost(id);
+    if (!ok) return toast.error(`Couldn't delete this ${sectionNoun.toLowerCase()} — please try again.`);
     const next = posts.filter((p) => p.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next.filter((p) => p.section === section)[0]?.id ?? null);
@@ -42,8 +43,9 @@ export function BlogPostsAdmin({
 
   async function handleSave() {
     if (!active) return;
-    await saveBlogPost(active);
-    toast.success(`${sectionNoun} saved and published!`);
+    const ok = await saveBlogPost(active);
+    if (ok) toast.success(`${sectionNoun} saved and published!`);
+    else toast.error(`Save failed — changes were NOT stored. Check the console (F12) for details.`);
   }
 
   return (

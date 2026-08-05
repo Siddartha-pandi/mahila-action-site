@@ -40,8 +40,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const location = b.location;
     const totalSeats = b.totalSeats !== undefined || b.total_seats !== undefined ? Number(b.totalSeats ?? b.total_seats) : undefined;
     const windows = b.windows ? JSON.stringify(b.windows) : undefined;
-    const categoryId = b.categoryId !== undefined || b.category_id !== undefined ? (b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null) : undefined;
-
+const rawCategoryId = b.categoryId ?? b.category_id;
+const categoryId = rawCategoryId === undefined
+  ? undefined
+  : (rawCategoryId === null || rawCategoryId === "" || isNaN(Number(rawCategoryId)) ? null : Number(rawCategoryId));
     const res = await queryDb(
       `UPDATE cms_events SET
          title = COALESCE($1, title),

@@ -508,7 +508,7 @@ export function ReserveSeatModal({
 }) {
   const siteData = useSiteData();
   const openKinds = (Array.isArray(event.windows) ? event.windows : []).filter(w => isWindowOpen(w));
-  const kinds: ReserveUIKind[] = [...openKinds.map(w => w.kind), "attendee"];
+  const kinds: ReserveUIKind[] = openKinds.map(w => w.kind);
   const [kind, setKindState] = useState<ReserveUIKind>(
     initialKind && kinds.includes(initialKind) ? initialKind : kinds[0] ?? "attendee"
   );
@@ -555,15 +555,25 @@ export function ReserveSeatModal({
             </div>
           )}
 
-          {kind === "volunteer" && <VolunteerReserveForm event={event} onClose={onClose} />}
-          {kind === "donor" && <DonationFormCard eventName={event.title} />}
-          {kind === "vendor" && <VendorReserveForm event={event} onClose={onClose} />}
-          {kind === "attendee" && (
-            <AttendEventForm
-              events={attendEvents.length ? attendEvents : [event]}
-              defaultEventId={event.id}
-              onClose={onClose}
-            />
+          {kinds.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60">
+                Registration isn't open for this event right now — please check back later.
+              </p>
+            </div>
+          ) : (
+            <>
+              {kind === "volunteer" && <VolunteerReserveForm event={event} onClose={onClose} />}
+              {kind === "donor" && <DonationFormCard eventName={event.title} />}
+              {kind === "vendor" && <VendorReserveForm event={event} onClose={onClose} />}
+              {kind === "attendee" && (
+                <AttendEventForm
+                  events={attendEvents.length ? attendEvents : [event]}
+                  defaultEventId={event.id}
+                  onClose={onClose}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
