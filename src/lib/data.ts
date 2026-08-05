@@ -1,5 +1,6 @@
 import { api, BASE_URL } from "./api";
 import { comingSoon } from "./comingSoon";
+import { saveFullSiteData } from "./indexedDb";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -350,11 +351,47 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
       contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
     };
 
+    // Prepare a size-safe version of the payload by stripping large binary blobs
+    // (base64 data URIs) and gallery arrays which can be huge. This avoids quota
+    // problems while keeping the most useful fields for offline use.
+    function stripLargeMedia(item: any) {
+      if (!item || typeof item !== 'object') return item;
+      const copy: any = { ...item };
+      if (typeof copy.image === 'string' && copy.image.startsWith('data:')) copy.image = '';
+      if (typeof copy.coverImage === 'string' && copy.coverImage.startsWith('data:')) copy.coverImage = '';
+      if (typeof copy.cover_image === 'string' && copy.cover_image.startsWith('data:')) copy.cover_image = '';
+      if (Array.isArray(copy.gallery)) copy.gallery = [];
+      return copy;
+    }
+
+    const safeUpdated: any = {
+      events: (updated.events || []).map((e: any) => stripLargeMedia(e)),
+      categories: updated.categories || [],
+      blogPosts: (updated.blogPosts || []).map((p: any) => {
+        const copy = stripLargeMedia(p);
+        // Keep only small textual fields for blog posts; drop large `content` and media
+        return {
+          id: copy.id,
+          section: copy.section,
+          categoryId: copy.categoryId ?? copy.category_id ?? null,
+          title: copy.title,
+          excerpt: copy.excerpt || '',
+          coverImage: copy.coverImage || copy.cover_image || '',
+          gallery: [],
+          tags: Array.isArray(copy.tags) ? copy.tags : [],
+          createdAt: copy.createdAt || copy.created_at || new Date().toISOString(),
+        };
+      }),
+      councilors: (updated.councilors || []).map((c: any) => stripLargeMedia(c)),
+      timeline: (updated.timeline || []).map((t: any) => stripLargeMedia(t)),
+      contact: updated.contact || {},
+    };
+
     // Serialize once to avoid multiple JSON.stringify calls and to catch
     // serialization errors early.
     let serialized: string | null = null;
     try {
-      serialized = JSON.stringify(updated);
+      serialized = JSON.stringify(safeUpdated);
     } catch (err) {
       console.warn('Failed to serialize site data for storage, will attempt trimmed payload', err);
     }
@@ -365,7 +402,7 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
         localStorage.setItem(SITE_DATA_KEY, serialized);
       } else {
         // Serialization failed — try trimmed payload first
-        const trimmed = JSON.stringify({ events: updated.events, categories: updated.categories, contact: updated.contact });
+        const trimmed = JSON.stringify({ events: safeUpdated.events, categories: safeUpdated.categories, contact: safeUpdated.contact });
         localStorage.setItem(SITE_DATA_KEY, trimmed);
       }
     } catch (err: any) {
@@ -373,14 +410,14 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
       try {
         if (typeof sessionStorage !== 'undefined') {
           if (serialized !== null) sessionStorage.setItem(SITE_DATA_KEY, serialized);
-          else sessionStorage.setItem(SITE_DATA_KEY, JSON.stringify({ events: updated.events, categories: updated.categories, contact: updated.contact }));
+          else sessionStorage.setItem(SITE_DATA_KEY, JSON.stringify({ events: safeUpdated.events, categories: safeUpdated.categories, contact: safeUpdated.contact }));
           console.info('Saved site data to sessionStorage as fallback.');
         }
       } catch (err2) {
         console.warn('Failed to save to sessionStorage:', err2?.message || err2);
         // Trim down to smallest useful payload and try storing that to localStorage.
         try {
-          const trimmed = JSON.stringify({ events: updated.events, categories: updated.categories, contact: updated.contact });
+          const trimmed = JSON.stringify({ events: safeUpdated.events, categories: safeUpdated.categories, contact: safeUpdated.contact });
           localStorage.setItem(SITE_DATA_KEY, trimmed);
           console.info('Saved trimmed site data to localStorage as fallback.');
         } catch (err3) {
@@ -389,6 +426,18 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
           try { localStorage.removeItem(SITE_DATA_KEY); console.warn('Removed existing site data to free space'); } catch {}
         }
       }
+    }
+
+    // Attempt to persist the full (unsanitized) payload to IndexedDB for
+    // larger-capacity offline storage. This runs in the background — failures
+    // are logged but do not affect the primary localStorage/sessionStorage flow.
+    try {
+      // Fire-and-forget; if it fails, we still have the trimmed safeUpdated in storage.
+      saveFullSiteData({ events: updated.events, categories: updated.categories, blogPosts: updated.blogPosts, councilors: updated.councilors, timeline: updated.timeline, contact: updated.contact })
+        .then(() => console.info('Saved full site data to IndexedDB'))
+        .catch((err) => console.warn('Failed to save full site data to IndexedDB:', err));
+    } catch (err) {
+      console.warn('IndexedDB unavailable or saveFullSiteData threw:', err);
     }
 
     // Only notify listeners when an admin explicitly saves a change.
