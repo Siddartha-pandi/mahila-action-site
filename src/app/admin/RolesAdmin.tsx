@@ -181,7 +181,11 @@ export function RolesAdmin({
       permissions: updatedPermissions,
     };
 
-    saveRole(updatedRole);
+    try {
+      saveRole(updatedRole);
+    } catch (err: any) {
+      return toast.error(err.message || "Failed to save this permission change.");
+    }
     toast.success(`Updated ${targetRole.name} → ${MODULE_LABELS[module]} [${action.toUpperCase()}]`);
     refreshData();
   }
@@ -370,6 +374,7 @@ export function RolesAdmin({
                   councilors: { view: true, edit: false, delete: false },
                   timeline: { view: true, edit: false, delete: false },
                   contact: { view: true, edit: false, delete: false },
+                  campaigns: { view: true, edit: false, delete: false },
                   roles: { view: false, edit: false, delete: false },
                 },
               });

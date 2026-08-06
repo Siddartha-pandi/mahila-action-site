@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json(res.rows[0]);
   } catch (err: any) {
     console.error("GET /api/contact/[id] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }
 

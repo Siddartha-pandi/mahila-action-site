@@ -185,14 +185,23 @@ function rowPlaceholders(rowCount: number, columnCount: number): string {
 
 export async function seedAllData(dbPool: any): Promise<void> {
   // 1. Categories (IDs: 1, 2, 3, 4)
-  await dbPool.query(`
-    INSERT INTO cms_categories (id, name) VALUES 
-      (1, 'Women & Leadership'),
-      (2, 'Education & Learning'),
-      (3, 'Livelihood & Skills'),
-      (4, 'Community Wellbeing')
-    ON CONFLICT (id) DO NOTHING
-  `);
+  const defaultCategories = [
+    { id: 1, name: "Women & Leadership" },
+    { id: 2, name: "Education & Learning" },
+    { id: 3, name: "Livelihood & Skills" },
+    { id: 4, name: "Community Wellbeing" },
+  ];
+
+  for (const cat of defaultCategories) {
+    try {
+      await dbPool.query(
+        `INSERT INTO cms_categories (id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [cat.id, cat.name]
+      );
+    } catch (err: any) {
+      // Ignore duplicate key or constraint violation on existing category names
+    }
+  }
 
   // Map category code strings to integer IDs
   const catMap: Record<string, number> = {
@@ -212,22 +221,24 @@ export async function seedAllData(dbPool: any): Promise<void> {
     { kind: "vendor", enabled: true, regStart: "2026-07-01", regEnd: "2026-08-18" },
     { kind: "donor", enabled: true, regStart: "2026-07-01", regEnd: "2026-08-10" },
   ];
-  await dbPool.query(
-    `INSERT INTO cms_events (id, title, description, image, event_date, location, total_seats, windows, category_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (id) DO NOTHING`,
-    [
-      1,
-      "Community Leadership Workshop",
-      "A hands-on workshop building confidence, public speaking, and civic leadership skills for women in the community.",
-      "",
-      "2026-08-21",
-      "Hyderabad",
-      45,
-      JSON.stringify(defaultWindows),
-      1,
-    ]
-  );
+  try {
+    await dbPool.query(
+      `INSERT INTO cms_events (id, title, description, image, event_date, location, total_seats, windows, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT DO NOTHING`,
+      [
+        1,
+        "Community Leadership Workshop",
+        "A hands-on workshop building confidence, public speaking, and civic leadership skills for women in the community.",
+        "",
+        "2026-08-21",
+        "Hyderabad",
+        45,
+        JSON.stringify(defaultWindows),
+        1,
+      ]
+    );
+  } catch {}
 
   // 4. Default Blog Posts & Impact Stories (IDs: 1..10)
   const blogPosts = [
@@ -283,23 +294,24 @@ export async function seedAllData(dbPool: any): Promise<void> {
     },
   ];
 
-  // One multi-row insert rather than one round trip per post.
-  await dbPool.query(
-    `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
-     VALUES ${rowPlaceholders(blogPosts.length, 9)}
-     ON CONFLICT (id) DO NOTHING`,
-    blogPosts.flatMap((post) => [
-      post.id,
-      post.section,
-      post.categoryId,
-      post.title,
-      post.excerpt,
-      post.content,
-      post.coverImage,
-      JSON.stringify(post.gallery),
-      JSON.stringify(post.tags),
-    ])
-  );
+  try {
+    await dbPool.query(
+      `INSERT INTO cms_blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
+       VALUES ${rowPlaceholders(blogPosts.length, 9)}
+       ON CONFLICT DO NOTHING`,
+      blogPosts.flatMap((post) => [
+        post.id,
+        post.section,
+        post.categoryId,
+        post.title,
+        post.excerpt,
+        post.content,
+        post.coverImage,
+        JSON.stringify(post.gallery),
+        JSON.stringify(post.tags),
+      ])
+    );
+  } catch {}
 
   // 5. Default Councilors (IDs: 1, 2, 3)
   const councilors = [
@@ -307,12 +319,14 @@ export async function seedAllData(dbPool: any): Promise<void> {
     { id: 2, name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order_index: 1 },
     { id: 3, name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order_index: 2 },
   ];
-  await dbPool.query(
-    `INSERT INTO cms_councilors (id, name, role, bio, image, order_index)
-     VALUES ${rowPlaceholders(councilors.length, 6)}
-     ON CONFLICT (id) DO NOTHING`,
-    councilors.flatMap((c) => [c.id, c.name, c.role, c.bio, c.image, c.order_index])
-  );
+  try {
+    await dbPool.query(
+      `INSERT INTO cms_councilors (id, name, role, bio, image, order_index)
+       VALUES ${rowPlaceholders(councilors.length, 6)}
+       ON CONFLICT DO NOTHING`,
+      councilors.flatMap((c) => [c.id, c.name, c.role, c.bio, c.image, c.order_index])
+    );
+  } catch {}
 
   // 6. Default Timeline (IDs: 1..6)
   const timeline = [
@@ -323,19 +337,23 @@ export async function seedAllData(dbPool: any): Promise<void> {
     { id: 5, year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order_index: 4 },
     { id: 6, year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order_index: 5 },
   ];
-  await dbPool.query(
-    `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
-     VALUES ${rowPlaceholders(timeline.length, 6)}
-     ON CONFLICT (id) DO NOTHING`,
-    timeline.flatMap((t) => [t.id, t.year, t.title, t.description, t.image, t.order_index])
-  );
+  try {
+    await dbPool.query(
+      `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
+       VALUES ${rowPlaceholders(timeline.length, 6)}
+       ON CONFLICT DO NOTHING`,
+      timeline.flatMap((t) => [t.id, t.year, t.title, t.description, t.image, t.order_index])
+    );
+  } catch {}
 
   // 7. Default Contact Info (ID: 1)
-  await dbPool.query(
-    `INSERT INTO cms_contact (id, email, email_note, phone, phone_note, address, address_note, hours, hours_note)
-     VALUES (1, 'contact@mahilaction.org', 'We reply within 24 hours', '+91 XXXXXXXXXX', 'Mon – Sat, 9 AM – 6 PM IST', 'Hyderabad, Telangana', 'India – 500 001', 'Mon – Friday', '9:00 AM – 5:30 PM IST')
-     ON CONFLICT (id) DO NOTHING`
-  );
+  try {
+    await dbPool.query(
+      `INSERT INTO cms_contact (id, email, email_note, phone, phone_note, address, address_note, hours, hours_note)
+       VALUES (1, 'contact@mahilaction.org', 'We reply within 24 hours', '+91 XXXXXXXXXX', 'Mon – Sat, 9 AM – 6 PM IST', 'Hyderabad, Telangana', 'India – 500 001', 'Mon – Friday', '9:00 AM – 5:30 PM IST')
+       ON CONFLICT DO NOTHING`
+    );
+  } catch {}
 
   // Synchronize PostgreSQL SERIAL sequences past manually seeded IDs
   if (!dbPool.isSqlite) {
@@ -532,8 +550,12 @@ export async function initDb(): Promise<void> {
         }
       }
 
-      // Seed all default data into database
-      await seedAllData(currentPool);
+      // Seed default data into database (catch non-fatal seeding warnings)
+      try {
+        await seedAllData(currentPool);
+      } catch (seedErr: any) {
+        console.warn("⚠️ Non-fatal warning during database seeding:", seedErr?.message || seedErr);
+      }
       await recordSchemaVersion(currentPool, schemaVersion).catch((err) =>
         console.warn("Could not record schema version marker:", err?.message || err)
       );

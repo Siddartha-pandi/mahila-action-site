@@ -8,7 +8,6 @@ import { imgImpact1, imgImpact2, imgImpact3, imgImpact4, imgEvent, imgHeroCard, 
 import { useContent } from "../context/ContentContext";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
-import { Carousel } from "../components/Carousel";
 import { EventCard } from "../components/EventCard";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
@@ -33,18 +32,44 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
     openModal("story", { id });
   }
 
-  const impactCards = [
-    { id: "women-leadership", img: content["img_impact1"] || imgImpact1, icon: <Users size={20} strokeWidth={1.5} />, title: content["impact_card1_title"], desc: content["impact_card1_desc"] },
-    { id: "education", img: content["img_impact2"] || imgImpact2, icon: <BookOpen size={20} strokeWidth={1.5} />, title: content["impact_card2_title"], desc: content["impact_card2_desc"] },
-    { id: "livelihood", img: content["img_impact3"] || imgImpact3, icon: <Briefcase size={20} strokeWidth={1.5} />, title: content["impact_card3_title"], desc: content["impact_card3_desc"] },
-    { id: "wellbeing", img: content["img_impact4"] || imgImpact4, icon: <Heart size={20} strokeWidth={1.5} />, title: content["impact_card4_title"], desc: content["impact_card4_desc"] },
-  ];
+  // Build impact cards dynamically from site categories so newly added categories
+  // automatically appear on the homepage. If a category has an authored impact
+  // post we use that post; otherwise fall back to the category name and a
+  // sensible default image.
+  function fallbackImageForCategory(catId: string) {
+    switch (catId) {
+      case "cat_women":
+        return imgImpact1;
+      case "cat_education":
+        return imgImpact2;
+      case "cat_livelihood":
+        return imgImpact3;
+      case "cat_wellbeing":
+        return imgImpact4;
+      default:
+        return imgImpact1;
+    }
+  }
+
+  const impactCards = siteData.categories.map((cat) => {
+    const post = siteData.blogPosts.find((p) => p.section === "impact" && p.categoryId === cat.id);
+    return {
+      id: post ? post.id : cat.id,
+      img: post?.coverImage || fallbackImageForCategory(cat.id),
+      icon: <Users size={20} strokeWidth={1.5} />,
+      title: post?.title || cat.name,
+      desc: post?.excerpt || "",
+      categoryId: cat.id,
+    };
+  });
 
   const storyPosts = [...siteData.blogPosts]
     .filter(p => p.section === "story")
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, MAX_RAIL_ITEMS);
-  const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || STORY_FALLBACK_IMAGES[p.id]?.banner || imgEvent, title: p.title, excerpt: p.excerpt }));
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Community Stories: show 3 latest stories on the homepage (no carousel)
+  const communityStories = storyPosts.slice(0, 3);
+  const stories = communityStories.map(p => ({ id: p.id, img: p.coverImage || STORY_FALLBACK_IMAGES[p.id]?.banner || imgEvent, title: p.title, excerpt: p.excerpt }));
 
   const upcoming = upcomingOrOpenEvents(siteData.events);
   const railEvents = (upcoming.length > 0 ? upcoming : siteData.events).slice(0, MAX_RAIL_ITEMS);
@@ -267,11 +292,11 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
         </div>
       </section>
 
-      {/* ── Upcoming Events ── */}
+      {/* ── Event Registrations ── */}
       <section className="py-20 px-6 bg-white/30">
         <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row items-center gap-12">
           <div className="flex-1">
-            <SectionLabel text="Upcoming Events" />
+            <SectionLabel text="Event Registrations" />
             <SectionTitle text="Join The Movement" />
             <p className={`${inter()} text-[#1e1e1e]/75 text-[18px] leading-relaxed mt-4 max-w-[440px]`}>
               Real change starts with participation. Volunteer your time, share your skills, or join a community event near you.
@@ -282,7 +307,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                 disabled={!featuredEvent}
                 className={`${inter()} bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold px-10 py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                {eventOpen ? "Reserve Your Seat" : "See Upcoming Events"}
+                {eventOpen ? "Reserve Your Seat" : "See Events"}
               </button>
               <button
                 onClick={() => goToPage("eventsBlog")}
@@ -292,14 +317,12 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               </button>
             </div>
           </div>
-          {railEvents.length > 0 ? (
+          {featuredEvent ? (
             <div className="w-full lg:flex-1 min-w-0">
-              <Carousel
-                ariaLabel="Upcoming events"
-                onSelect={handleEventSelect}
-                slides={railEvents.map((ev) => (
-                  <EventCard key={ev.id} event={ev} categoryName={categoryName(ev.categoryId)} />
-                ))}
+              <EventCard
+                event={featuredEvent}
+                categoryName={categoryName(featuredEvent.categoryId)}
+                onReserve={() => handleReserveClick()}
               />
             </div>
           ) : (
@@ -322,12 +345,8 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
           </div>
           {stories.length > 0 && (
             <>
-              <Carousel
-                ariaLabel="Community stories"
-                controls="below"
-                gap={24}
-                slideClassName="basis-full sm:basis-1/2 lg:basis-1/3"
-                slides={stories.map((s) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {stories.map((s) => (
                   <div key={s.id} className="rounded-2xl overflow-hidden group cursor-pointer flex flex-col h-full">
                     <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl">
                       <img loading="lazy" decoding="async" src={s.img} alt={s.title} className="size-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -341,7 +360,8 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                     </div>
                   </div>
                 ))}
-              />
+              </div>
+
               <div className="flex justify-center mt-10">
                 <button
                   onClick={() => goToPage("stories")}

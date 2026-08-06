@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { AdminListEditor, ImageField, inputBase, labelBase } from "../adminWidgets";
 import { TimelineEntry, newTimelineEntry, saveTimelineEntry, deleteTimelineEntry } from "../../lib/data";
@@ -6,6 +6,13 @@ import { TimelineEntry, newTimelineEntry, saveTimelineEntry, deleteTimelineEntry
 export function TimelineAdmin({ timeline, onChange }: { timeline: TimelineEntry[]; onChange: (next: TimelineEntry[]) => void }) {
   const [activeId, setActiveId] = useState<string | null>(timeline[0]?.id ?? null);
   const active = timeline.find((t) => t.id === activeId) ?? null;
+  const sorted = [...timeline].sort((a, b) => a.order - b.order);
+
+  // Keep activeId valid if timeline loads async, changes externally, or active item disappears
+  useEffect(() => {
+    if (activeId && timeline.some((t) => t.id === activeId)) return;
+    setActiveId(sorted[0]?.id ?? null);
+  }, [timeline]);
 
   function update(patch: Partial<TimelineEntry>) {
     if (!active) return;
@@ -22,7 +29,10 @@ export function TimelineAdmin({ timeline, onChange }: { timeline: TimelineEntry[
     await deleteTimelineEntry(id);
     const next = timeline.filter((t) => t.id !== id);
     onChange(next);
-    if (activeId === id) setActiveId(next[0]?.id ?? null);
+    if (activeId === id) {
+      const nextSorted = [...next].sort((a, b) => a.order - b.order);
+      setActiveId(nextSorted[0]?.id ?? null);
+    }
     toast.success("Timeline milestone deleted successfully.");
   }
 
@@ -49,7 +59,7 @@ export function TimelineAdmin({ timeline, onChange }: { timeline: TimelineEntry[
     saveTimelineEntry(next.find((t) => t.id === b.id)!);
   }
 
-  const sorted = [...timeline].sort((a, b) => a.order - b.order);
+  
 
   return (
     <AdminListEditor

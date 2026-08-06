@@ -167,6 +167,25 @@ export function EventRegistrationModal({
   const [role, setRole] = useState<RegistrationRole | null>(firstAvailable);
   const activeRole = roleState.find(r => r.value === role) ?? null;
 
+  // Guard against being opened with a missing/stale event — e.g. a deep
+  // link to an event that's since been deleted, or a caller passing
+  // through an id that no longer resolves to a real event object. Placed
+  // after every hook call above so React's hook order stays consistent.
+  if (!event || !event.id || !event.title) {
+    return (
+      <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[420px] p-7 text-center shadow-2xl">
+          <p className="font-['Inter',sans-serif] text-[#1e1e1e]/70 text-[14px] mb-5">
+            This event couldn't be found — it may have been removed, or the link may be out of date.
+          </p>
+          <button onClick={onClose} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   function fail(message: string): false {
     toast.error(message);
     return false;

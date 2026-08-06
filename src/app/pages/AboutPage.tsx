@@ -25,7 +25,8 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
     .sort((a, b) => a.order - b.order)
     .map((c) => ({ img: c.image || imgStory1, role: c.role, name: c.name, story: c.bio }));
 
-  const yearTabOptions = timeline.map((t) => ({ id: t.year, name: t.year }));
+  // Deduplicate years to avoid duplicate chips if timeline contains repeated years
+  const yearTabOptions = Array.from(new Set(timeline.map((t) => t.year))).map((y) => ({ id: y, name: y }));
 
   return (
     <main className="bg-[#f4efe7]">
@@ -35,7 +36,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
       <section className="py-20 px-6">
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-[#a65a4a] rounded-2xl p-8 md:p-10">
-            <SectionLabel text="Our Mission" />
+            <p className={`${inter()} text-[14px] text-[#f4efe7] tracking-wider uppercase`}>Our Mission</p>
             <h3
               className={`${fraunces()} text-[#f4efe7] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
@@ -50,7 +51,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
             </p>
           </div>
           <div className="border-2 border-[#a65a4a] rounded-2xl p-8 md:p-10">
-            <SectionLabel text="Our Vision" />
+            <p className={`${inter()} text-[14px] text-[#1e1e1e]/60 tracking-wider uppercase`}>Our Vision</p>
             <h3
               className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
@@ -141,17 +142,15 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
           >
             One Contribution. Many Futures.
           </h2>
-          <Button
-            variant="secondary"
-            size="lg"
-            className="mt-8 px-12 py-4"
+          <button
             onClick={() => {
               setPage("donate");
               window.scrollTo({ top: 0 });
             }}
+            className={`${inter()} bg-[#f4efe7] text-[#a65a4a] text-[15px] font-bold px-10 py-3 rounded-full hover:bg-white transition-colors cursor-pointer text-center mt-8`}
           >
             Donate Now
-          </Button>
+          </button>
         </div>
       </section>
     </main>

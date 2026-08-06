@@ -33,8 +33,18 @@ export function CategoriesAdmin({
   }
 
   async function handleAdd() {
-    const cat = newCategory();
-    await saveCategory(cat);
+    // Create with a default unique name so we don't introduce duplicates
+    const base = "New Category";
+    let name = base;
+    let idx = 1;
+    const exists = (n: string) => categories.some((c) => (c.name || "").trim().toLowerCase() === n.trim().toLowerCase());
+    while (exists(name)) {
+      idx += 1;
+      name = `${base} (${idx})`;
+    }
+    const cat = { ...newCategory(), name };
+    const ok = await saveCategory(cat);
+    if (!ok) return toast.error("Couldn't create the category — please try again.");
     onCategoriesChange([...categories, cat]);
     toast.success("Category created!");
   }
@@ -42,8 +52,12 @@ export function CategoriesAdmin({
   async function handleRename(c: Category) {
     const name = (nameDraft[c.id] ?? c.name).trim();
     if (!name) return toast.error("Category name can't be empty");
+    // Prevent renaming to a name already used by another category (case-insensitive)
+    const duplicate = categories.find((x) => x.id !== c.id && (x.name || "").trim().toLowerCase() === name.toLowerCase());
+    if (duplicate) return toast.error("A category with that name already exists — please choose a different name.");
     const updated = { ...c, name };
-    await saveCategory(updated);
+    const ok = await saveCategory(updated);
+    if (!ok) return toast.error("Couldn't save the category — please try again.");
     onCategoriesChange(categories.map((x) => (x.id === c.id ? updated : x)));
     toast.success("Category updated");
   }

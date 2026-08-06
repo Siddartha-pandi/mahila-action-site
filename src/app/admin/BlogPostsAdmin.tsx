@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { AdminListEditor, GalleryField, ImageField, TagsField, inputBase, labelBase } from "../adminWidgets";
 import { BlogContentEditor } from "../BlogContentEditor";
@@ -15,25 +15,68 @@ export function BlogPostsAdmin({
   categories: Category[];
   onChange: (next: BlogPost[]) => void;
 }) {
-  const filtered = posts.filter((p) => p.section === section);
-  const [activeId, setActiveId] = useState<string | null>(filtered[0]?.id ?? null);
-  const active = posts.find((p) => p.id === activeId) ?? null;
   const usesCategories = section === "story" || section === "impact";
   const sectionNoun = section === "story" ? "Story" : section === "impact" ? "Impact page" : "Event blog";
 
-  function update(patch: Partial<BlogPost>) {
+  const buildUiItems = (): BlogPost[] => {
+    if (section !== "impact") {
+      return posts.filter((p) => p.section === section);
+    }
+
+    const existingImpacts = posts.filter((p) => p.section === "impact");
+    return categories.map((cat) => {
+      const found = existingImpacts.find((p) => p.categoryId === cat.id);
+      if (found) return found;
+      return {
+        id: `imp_cat_${cat.id}`,
+        section: "impact",
+        categoryId: cat.id,
+        title: cat.name,
+        excerpt: "",
+        content: "",
+        coverImage: "",
+        gallery: [],
+        tags: [],
+        createdAt: new Date().toISOString(),
+      } as BlogPost;
+    });
+  };
+
+  const [uiItems, setUiItems] = useState<BlogPost[]>(buildUiItems);
+  const [activeId, setActiveId] = useState<string | null>(uiItems[0]?.id ?? null);
+
+  useEffect(() => {
+    const items = buildUiItems();
+    setUiItems(items);
+    if (!items.find((item) => item.id === activeId)) {
+      setActiveId(items[0]?.id ?? null);
+    }
+  }, [posts, categories, section]);
+
+  const active = uiItems.find((p) => p.id === activeId) ?? uiItems[0] ?? null;
+
+  const update = (patch: Partial<BlogPost>) => {
     if (!active) return;
-    onChange(posts.map((p) => (p.id === active.id ? { ...p, ...patch } : p)));
-  }
+    setUiItems((current) => current.map((item) => (item.id === active.id ? { ...item, ...patch } : item)));
+  };
 
   function handleAdd() {
+    if (section === "impact") return;
     const post = newBlogPost(section, usesCategories ? categories[0]?.id ?? null : null);
     onChange([...posts, post]);
     setActiveId(post.id);
   }
 
   async function handleDelete(id: string) {
-    await deleteBlogPost(id);
+    if (section === "impact" && id.startsWith("imp_cat_")) {
+      const catId = id.replace(/^imp_cat_/, "");
+      const next = posts.filter((p) => !(p.section === "impact" && p.categoryId === catId));
+      onChange(next);
+      return;
+    }
+
+    const ok = await deleteBlogPost(id);
+    if (!ok) return toast.error(`Couldn't delete this ${sectionNoun.toLowerCase()} — please try again.`);
     const next = posts.filter((p) => p.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next.filter((p) => p.section === section)[0]?.id ?? null);
@@ -42,25 +85,37 @@ export function BlogPostsAdmin({
 
   async function handleSave() {
     if (!active) return;
-    await saveBlogPost(active);
-    toast.success(`${sectionNoun} saved and published!`);
+    const ok = await saveBlogPost(active);
+
+    const updatedPosts = posts.filter((p) => p.section !== "impact");
+    const updatedImpactPosts = uiItems
+      .map((item) => {
+        const existingPost = posts.find((p) => p.id === item.id || (p.section === "impact" && p.categoryId === item.categoryId));
+        return existingPost ? { ...existingPost, ...item } : item;
+      })
+      .filter((item) => item.section === "impact");
+
+    onChange([...updatedPosts, ...updatedImpactPosts]);
+
+    if (ok) toast.success(`${sectionNoun} saved and published!`);
+    else toast.error(`Save failed — changes were NOT stored. Check the console (F12) for details.`);
   }
 
   return (
     <AdminListEditor
-      items={filtered}
+      items={uiItems}
       activeId={activeId}
       onSelect={setActiveId}
-      onAdd={handleAdd}
+      onAdd={section === 'impact' ? undefined : handleAdd}
       onDelete={handleDelete}
       itemLabel={(p) => p.title}
       itemSubLabel={(p) => (usesCategories ? categories.find((c) => c.id === p.categoryId)?.name ?? "Uncategorized" : new Date(p.createdAt).toLocaleDateString())}
-      addLabel={section === "story" ? "Add New Story" : section === "impact" ? "Add New Impact Story" : "Add New Event Blog"}
+      addLabel={section === "story" ? "Add New Story" : section === "impact" ? "Edit Impact Pages" : "Add New Event Blog"}
       emptyLabel="Nothing here yet."
     >
 
       {!active ? (
-        <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[14px]">Select or add a post to edit it.</p>
+        <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[14px]">Select a category to edit its impact page.</p>
       ) : (
         <div className="flex flex-col gap-5 max-w-[640px]">
           <div>
@@ -98,8 +153,9 @@ export function BlogPostsAdmin({
           {section === "impact" && (
             <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/45 leading-relaxed">
               This is the page visitors see when they hover an "Our Impact" card on the homepage and click "Read Story".
-              There are always exactly 4 of these, matching the 4 homepage cards — they can be edited and updated here,
-              but not added or removed. To keep the cards linked correctly, don't change the category assignment above.
+              Each category gets one editable impact page via this panel — new categories added in the Categories section
+              will automatically appear here as editable slots. Don't change the category assignment above unless you want
+              to move the page to a different impact category.
             </p>
           )}
           <button onClick={handleSave} className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2">

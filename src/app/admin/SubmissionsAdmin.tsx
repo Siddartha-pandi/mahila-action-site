@@ -180,20 +180,29 @@ export function SubmissionsAdmin() {
     }
     if (!confirm("Are you sure you want to delete this submission? This removes it for everyone.")) return;
 
-    addToTrash({
-      id: String(item.id),
-      type: "submission",
-      title: item.data?.name || item.data?.contact_name || `Submission #${item.id}`,
-      subtitle: `${CATEGORY_LABEL[categoryOf(item)] || item.type} • ${item.data?.email || "No email"}`,
-      data: item,
-    });
-
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
 
+    // The submission is genuinely gone now — best-effort file a recoverable
+    // copy into Trash, but a failure here shouldn't make it look like the
+    // delete itself failed (it didn't), just that Recycle Bin recovery won't
+    // be available for this one item.
+    try {
+      addToTrash({
+        id: String(item.id),
+        type: "submission",
+        title: item.data?.name || item.data?.contact_name || `Submission #${item.id}`,
+        subtitle: `${CATEGORY_LABEL[categoryOf(item)] || item.type} • ${item.data?.email || "No email"}`,
+        data: item,
+      });
+      toast.success("Submission moved to Recycle Bin");
+    } catch {
+      toast.success("Submission deleted (couldn't file a recoverable copy in the Recycle Bin).");
+    }
+
     setSubmissions(prev => prev.filter(s => !(s.id === item.id && s.type === item.type)));
     if (selectedItem?.id === item.id && selectedItem?.type === item.type) setSelectedItem(null);
-    toast.success("Submission moved to Recycle Bin");
+
   }
 
   const list = Array.isArray(submissions) ? submissions : [];

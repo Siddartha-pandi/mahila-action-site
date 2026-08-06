@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     // donations.id is SERIAL — let the sequence assign it. Supplying a nanoid
     // string here makes PostgreSQL reject the whole insert (22P02).
     const insertRes = await queryDb(
-      `INSERT INTO donations (amount, name, email, phone, donation_type, anonymous, event_name, campaign_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      `INSERT INTO donations (amount, name, email, phone, donation_type, anonymous, event_name, campaign_id, campaign_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         Number(body.amount),
         body.name || null,
@@ -35,10 +35,59 @@ export async function POST(req: NextRequest) {
         body.donation_type === "monthly" ? "monthly" : "one-time",
         body.anonymous ? 1 : 0,
         body.event_name || null,
+        body.campaign_id || null,
         body.campaign_name || null,
       ]
     );
     const id = insertRes.rows[0]?.id;
+
+    // If this donation references a campaign, try to update the campaign's raised amount.
+    try {
+      const amount = Number(body.amount || 0);
+      const campaignId = body.campaign_id;
+      const campaignName = body.campaign_name;
+
+      if (campaignId) {
+        const updateRes = await queryDb(
+          "UPDATE campaigns SET raised = COALESCE(raised, 0) + $1 WHERE id = $2 RETURNING id",
+          [amount, campaignId]
+        );
+
+        if (updateRes.rowCount === 0 && campaignName) {
+          await queryDb(
+            "UPDATE campaigns SET raised = COALESCE(raised, 0) + $1 WHERE name = $2 RETURNING id",
+            [amount, campaignName]
+          );
+        }
+      } else if (campaignName) {
+        await queryDb(
+          "UPDATE campaigns SET raised = COALESCE(raised, 0) + $1 WHERE id = $2 OR name = $2 RETURNING id",
+          [amount, campaignName]
+        );
+      }
+
+      // Legacy JSON file fallback for deployments still using static campaign data.
+      if (campaignName) {
+        const fs = require('fs');
+        const path = require('path');
+        const DATA_PATH = path.join(process.cwd(), 'src', 'data', 'campaigns.json');
+        try {
+          const raw = fs.readFileSync(DATA_PATH, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const idx = parsed.findIndex((c: any) => String(c.id).trim() === String(campaignId || "").trim() || String(c.name).trim() === String(campaignName).trim());
+            if (idx !== -1) {
+              parsed[idx].raised = Number(parsed[idx].raised || 0) + amount;
+              fs.writeFileSync(DATA_PATH, JSON.stringify(parsed, null, 2), 'utf8');
+            }
+          }
+        } catch (err) {
+          // ignore file update errors
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to sync campaign raised amount:", err);
+    }
 
     // Anonymous donors are still receipted if they gave an address to send it to.
     if (body.email) {
