@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   tag TEXT,
   raised BIGINT DEFAULT 0,
   goal BIGINT DEFAULT 0,
+  image TEXT,
+  category TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

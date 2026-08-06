@@ -532,6 +532,8 @@ export async function initDb(): Promise<void> {
           "ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT",
           "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT",
           "ALTER TABLE cms_events ADD COLUMN IF NOT EXISTS category_id TEXT",
+          "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS image TEXT",
+          "ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS category TEXT",
         ];
 
         try {

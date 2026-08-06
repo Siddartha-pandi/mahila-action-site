@@ -186,7 +186,22 @@ export function getStoredRoles(): AdminRole[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ROLES);
     if (!raw) return DEFAULT_ROLES;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_ROLES;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((role: AdminRole) => {
+        const defaultRole = DEFAULT_ROLES.find((dr) => dr.id === role.id);
+        const mergedPermissions: PermissionMatrix = {
+          ...(defaultRole?.permissions || FULL_PERMISSIONS),
+          ...(role.permissions || {}),
+        };
+        for (const modKey of Object.keys(MODULE_LABELS) as AdminModule[]) {
+          if (!mergedPermissions[modKey]) {
+            mergedPermissions[modKey] = defaultRole?.permissions?.[modKey] || { view: true, edit: true, delete: true };
+          }
+        }
+        return { ...role, permissions: mergedPermissions };
+      });
+    }
+    return DEFAULT_ROLES;
   } catch {
     return DEFAULT_ROLES;
   }
@@ -408,8 +423,17 @@ export function hasPermission(
   // Fallback to role-level matrix permission
   const role = getRoleById(roleId);
   const modulePerms = role.permissions?.[module];
-  if (!modulePerms) return false;
+  if (modulePerms && typeof modulePerms[action] === "boolean") {
+    return Boolean(modulePerms[action]);
+  }
 
-  return Boolean(modulePerms[action]);
+  // Fallback to DEFAULT_ROLES matrix if module is missing from stored custom roles
+  const defaultRole = DEFAULT_ROLES.find(r => r.id === roleId || r.id === "admin");
+  const defaultModulePerms = defaultRole?.permissions?.[module];
+  if (defaultModulePerms && typeof defaultModulePerms[action] === "boolean") {
+    return Boolean(defaultModulePerms[action]);
+  }
+
+  return roleId === "admin" || roleId === "superadmin";
 }
 

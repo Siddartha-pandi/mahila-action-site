@@ -4,7 +4,9 @@ import { getAdminFromRequest } from "@/lib/auth";
 
 export async function GET(_req: NextRequest) {
   try {
-    const res = await queryDb("SELECT id, name, tag, COALESCE(raised,0) AS raised, COALESCE(goal,0) AS goal FROM campaigns ORDER BY created_at DESC");
+    const res = await queryDb(
+      "SELECT id, name, tag, category, COALESCE(raised,0) AS raised, COALESCE(goal,0) AS goal, COALESCE(image,'') AS image FROM campaigns ORDER BY created_at DESC"
+    );
     return NextResponse.json(res.rows || []);
   } catch (err: any) {
     console.error("GET /api/campaigns error:", err);
@@ -30,7 +32,7 @@ export async function PUT(req: NextRequest) {
       body.raised = Math.floor(r);
     }
 
-    const allowed = ["name", "tag", "raised", "goal"];
+    const allowed = ["name", "tag", "raised", "goal", "image", "category"];
     const updates: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -72,8 +74,8 @@ export async function POST(req: NextRequest) {
 
     // Insert if not exists
     await queryDb(
-      `INSERT INTO campaigns (id, name, tag, raised, goal) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
-      [body.id, body.name || body.id, body.tag || 'General', Number(body.raised || 0), Number(body.goal || 0)]
+      `INSERT INTO campaigns (id, name, tag, raised, goal, image, category) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
+      [body.id, body.name || body.id, body.tag || 'General', Number(body.raised || 0), Number(body.goal || 0), body.image || '', body.category || '']
     );
     const res = await queryDb("SELECT * FROM campaigns WHERE id = $1", [body.id]);
     return NextResponse.json({ ok: true, campaign: res.rows[0] }, { status: 201 });
