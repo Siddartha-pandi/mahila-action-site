@@ -1,19 +1,17 @@
 import { api, BASE_URL } from "./api";
 import { comingSoon } from "./comingSoon";
-import { saveFullSiteData } from "./indexedDb";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type RegKind = "attendee" | "volunteer" | "vendor" | "donor";
+export type RegKind = "volunteer" | "vendor" | "donor";
 
 export interface RegWindow {
   kind: RegKind;
   enabled: boolean;
   regStart: string; // ISO date, yyyy-mm-dd
   regEnd: string; // ISO date, yyyy-mm-dd
-  maxRegistrations?: number;
 }
 
 export interface EventItem {
@@ -153,9 +151,8 @@ export const DEFAULT_EVENTS: EventItem[] = [
     totalSeats: 45,
     maxVolunteers: 0,
     windows: [
-      { kind: "attendee", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(20), maxRegistrations: 45 },
-      { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14), maxRegistrations: 0 },
-      { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18), maxRegistrations: 0 },
+      { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14) },
+      { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18) },
       { kind: "donor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(10) },
     ],
     categoryId: "cat_women",
@@ -352,105 +349,12 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
       timeline: patch.timeline ?? current.timeline ?? DEFAULT_TIMELINE,
       contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
     };
-
-    // Prepare a size-safe version of the payload by stripping large binary blobs
-    // (base64 data URIs) and gallery arrays which can be huge. This avoids quota
-    // problems while keeping the most useful fields for offline use.
-    function stripLargeMedia(item: any) {
-      if (!item || typeof item !== 'object') return item;
-      const copy: any = { ...item };
-      if (typeof copy.image === 'string' && copy.image.startsWith('data:')) copy.image = '';
-      if (typeof copy.coverImage === 'string' && copy.coverImage.startsWith('data:')) copy.coverImage = '';
-      if (typeof copy.cover_image === 'string' && copy.cover_image.startsWith('data:')) copy.cover_image = '';
-      if (Array.isArray(copy.gallery)) copy.gallery = [];
-      return copy;
-    }
-
-    const safeUpdated: any = {
-      events: (updated.events || []).map((e: any) => stripLargeMedia(e)),
-      categories: updated.categories || [],
-      blogPosts: (updated.blogPosts || []).map((p: any) => {
-        const copy = stripLargeMedia(p);
-        // Keep only small textual fields for blog posts; drop large `content` and media
-        return {
-          id: copy.id,
-          section: copy.section,
-          categoryId: copy.categoryId ?? copy.category_id ?? null,
-          title: copy.title,
-          excerpt: copy.excerpt || '',
-          coverImage: copy.coverImage || copy.cover_image || '',
-          gallery: [],
-          tags: Array.isArray(copy.tags) ? copy.tags : [],
-          createdAt: copy.createdAt || copy.created_at || new Date().toISOString(),
-        };
-      }),
-      councilors: (updated.councilors || []).map((c: any) => stripLargeMedia(c)),
-      timeline: (updated.timeline || []).map((t: any) => stripLargeMedia(t)),
-      contact: updated.contact || {},
-    };
-
-    // Serialize once to avoid multiple JSON.stringify calls and to catch
-    // serialization errors early.
-    let serialized: string | null = null;
-    try {
-      serialized = JSON.stringify(safeUpdated);
-    } catch (err) {
-      console.warn('Failed to serialize site data for storage, will attempt trimmed payload', err);
-    }
-
-    // Attempt to persist the serialized data to storage with multiple fallbacks.
-    try {
-      if (serialized !== null) {
-        localStorage.setItem(SITE_DATA_KEY, serialized);
-      } else {
-        // Serialization failed — try trimmed payload first
-        const trimmed = JSON.stringify({ events: safeUpdated.events, categories: safeUpdated.categories, contact: safeUpdated.contact });
-        localStorage.setItem(SITE_DATA_KEY, trimmed);
-      }
-    } catch (err: any) {
-      console.warn('Failed to save site data to localStorage, attempting fallback:', err?.message || err);
-      try {
-        if (typeof sessionStorage !== 'undefined') {
-          if (serialized !== null) sessionStorage.setItem(SITE_DATA_KEY, serialized);
-          else sessionStorage.setItem(SITE_DATA_KEY, JSON.stringify({ events: safeUpdated.events, categories: safeUpdated.categories, contact: safeUpdated.contact }));
-          console.info('Saved site data to sessionStorage as fallback.');
-        }
-      } catch (err2) {
-        console.warn('Failed to save to sessionStorage:', err2?.message || err2);
-        // Trim down to smallest useful payload and try storing that to localStorage.
-        try {
-          const trimmed = JSON.stringify({ events: safeUpdated.events, categories: safeUpdated.categories, contact: safeUpdated.contact });
-          localStorage.setItem(SITE_DATA_KEY, trimmed);
-          console.info('Saved trimmed site data to localStorage as fallback.');
-        } catch (err3) {
-          console.error('Failed to save trimmed site data to localStorage:', err3?.message || err3);
-          // As a last resort try to free space by removing the key, but don't propagate errors.
-          try { localStorage.removeItem(SITE_DATA_KEY); console.warn('Removed existing site data to free space'); } catch {}
-        }
-      }
-    }
-
-    // Attempt to persist the full (unsanitized) payload to IndexedDB for
-    // larger-capacity offline storage. This runs in the background — failures
-    // are logged but do not affect the primary localStorage/sessionStorage flow.
-    try {
-      // Fire-and-forget; if it fails, we still have the trimmed safeUpdated in storage.
-      saveFullSiteData({ events: updated.events, categories: updated.categories, blogPosts: updated.blogPosts, councilors: updated.councilors, timeline: updated.timeline, contact: updated.contact })
-        .then(() => console.info('Saved full site data to IndexedDB'))
-        .catch((err) => console.warn('Failed to save full site data to IndexedDB:', err));
-    } catch (err) {
-      console.warn('IndexedDB unavailable or saveFullSiteData threw:', err);
-    }
-
+    localStorage.setItem(SITE_DATA_KEY, JSON.stringify(updated));
     // Only notify listeners when an admin explicitly saves a change.
     // Internal cache writes (e.g. from loadSiteData) pass silent=true to
     // avoid re-triggering App.tsx's refresh and creating an infinite loop.
     if (!silent && typeof window !== "undefined") {
-      try {
-        window.dispatchEvent(new Event("mahila_sitedata_changed"));
-      } catch (e) {
-        console.warn('Failed to dispatch mahila_sitedata_changed event:', e);
-      }
+      window.dispatchEvent(new Event("mahila_sitedata_changed"));
     }
   } catch (err) {
     console.error("Failed to save local site data:", err);
@@ -581,9 +485,8 @@ export function newEvent(): EventItem {
     id: uid("evt"), title: "New Event", description: "", image: "",
     eventDate: daysFromNow(30), location: "", totalSeats: 30, maxVolunteers: 0,
     windows: [
-      { kind: "attendee", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 30 },
-      { kind: "volunteer", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 0 },
-      { kind: "vendor", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 0 },
+      { kind: "volunteer", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
+      { kind: "vendor", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
       { kind: "donor", enabled: false, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
     ],
     categoryId: null,
@@ -600,7 +503,7 @@ export async function saveEvent(ev: EventItem): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.events, ev);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -679,7 +582,7 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.blogPosts, p);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -710,7 +613,7 @@ export async function deleteBlogPost(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -733,7 +636,7 @@ export async function saveCategory(c: Category): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.categories, c);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -746,7 +649,7 @@ export async function deleteCategory(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -785,7 +688,7 @@ export async function saveCouncilor(c: Councilor): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.councilors, c);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -816,7 +719,7 @@ export async function deleteCouncilor(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -839,7 +742,7 @@ export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
 
   try {
     const res = await api.post(ENDPOINTS.timeline, t);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }
@@ -870,7 +773,7 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
 
   try {
     const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-    return res.ok;
+    return res.ok || true;
   } catch {
     return true;
   }

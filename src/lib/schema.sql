@@ -87,20 +87,7 @@ CREATE TABLE IF NOT EXISTS cms_contact (
   hours_note TEXT
 );
 
--- 8. Campaigns table
-CREATE TABLE IF NOT EXISTS campaigns (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  tag TEXT,
-  raised BIGINT DEFAULT 0,
-  goal BIGINT DEFAULT 0,
-  image TEXT,
-  category TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 9. Donations table
+-- 8. Donations table
 CREATE TABLE IF NOT EXISTS donations (
   id SERIAL PRIMARY KEY,
   amount DOUBLE PRECISION NOT NULL,
@@ -110,7 +97,6 @@ CREATE TABLE IF NOT EXISTS donations (
   donation_type TEXT,
   anonymous INTEGER DEFAULT 0,
   event_name TEXT,
-  campaign_id TEXT REFERENCES campaigns(id) ON DELETE SET NULL,
   campaign_name TEXT,
   status TEXT NOT NULL DEFAULT 'New',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

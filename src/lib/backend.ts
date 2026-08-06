@@ -461,8 +461,7 @@ export async function saveDonation(data: {
   anonymous: boolean;
   donation_type?: "one-time" | "monthly";
   event_name?: string;
-  campaign_id?: string; // prefer id over name
-  campaign_name?: string; // kept as fallback
+  campaign_name?: string;
 }): Promise<SaveResult> {
   return submitForm("donation", "/api/donations", { donation_type: "one-time" as const, ...data });
 }

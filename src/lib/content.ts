@@ -21,9 +21,8 @@ export const DEFAULTS: Record<string, string> = {
   impact_card4_desc: "Strengthening health, safety, and social support networks.",
 
   // Events
-  events_heading: "Become a Volunteer",
+  events_heading: "Join The Movement",
   events_subtext: "Real change starts with participation. Volunteer your time, share your skills, or join a community event near you.",
-
   event_title: "Community Leadership Workshop",
   event_date: "August 12, 2026",
   event_location: "Hyderabad",

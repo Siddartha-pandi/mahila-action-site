@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
 import { imgDonateBanner, imgTakeAction, imgStory1, imgStory2, imgStory3 } from "../constants/images";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
@@ -11,57 +11,19 @@ import { useUserProfile } from "../hooks/useUserProfile";
 
 export function DonatePage() {
   const profile = useUserProfile();
-  const [campaigns, setCampaigns] = useState(CAMPAIGNS);
-  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      setLoadingCampaigns(true);
-      try {
-        const res = await fetch('/api/campaigns');
-        if (!res.ok) throw new Error('Failed to load');
-        const data = await res.json();
-        if (!mounted) return;
-        if (Array.isArray(data) && data.length > 0) setCampaigns(data);
-      } catch (err) {
-        // keep fallback CAMPAIGNS
-      } finally { setLoadingCampaigns(false); }
-    }
-    load();
-    return () => { mounted = false; };
-  }, []);
-
-  const featured = campaigns[0] ?? CAMPAIGNS[0];
-  const otherCampaigns = campaigns.slice(1);
+  const featured = CAMPAIGNS[0];
+  const otherCampaigns = CAMPAIGNS.slice(1);
   const campaignImages: Record<string, string> = {
     "women-leadership-fund": imgStory1,
     "skills-for-tomorrow": imgStory2,
     "community-health-drive": imgStory3,
   };
-  const [selectedCampaignId, setSelectedCampaignId] = useState(CAMPAIGNS[0].id);
-
-  useEffect(() => {
-    if (campaigns.length === 0) return;
-    if (!campaigns.some((c) => c.id === selectedCampaignId)) {
-      setSelectedCampaignId(campaigns[0].id);
-    }
-  }, [campaigns, selectedCampaignId]);
-
+  const [selectedCampaignId, setSelectedCampaignId] = useState(featured.id);
   const progress = Math.min((featured.raised / featured.goal) * 100, 100);
 
   function pickCampaign(id: string) {
     setSelectedCampaignId(id);
     document.getElementById("donate-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  async function refreshCampaigns() {
-    try {
-      const res = await fetch('/api/campaigns');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) setCampaigns(data);
-    } catch {}
   }
 
   return (
@@ -110,12 +72,10 @@ export function DonatePage() {
           {/* Donation form */}
           <div id="donate-form" className="w-full lg:w-[420px] shrink-0">
             <DonationFormCard
-              campaigns={campaigns}
               initialCampaignId={selectedCampaignId}
               initialName={profile?.name}
               initialEmail={profile?.email}
               initialPhone={profile?.phone}
-              onSaved={refreshCampaigns}
             />
           </div>
         </div>

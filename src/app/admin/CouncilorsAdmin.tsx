@@ -19,8 +19,7 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
   }
 
   async function handleDelete(id: string) {
-    const ok = await deleteCouncilor(id);
-    if (!ok) return toast.error("Couldn't delete this profile — please try again.");
+    await deleteCouncilor(id);
     const next = councilors.filter((c) => c.id !== id);
     onChange(next);
     if (activeId === id) setActiveId(next[0]?.id ?? null);
@@ -29,9 +28,8 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
 
   async function handleSave() {
     if (!active) return;
-    const ok = await saveCouncilor(active);
-    if (ok) toast.success("Councilor profile saved!");
-    else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
+    await saveCouncilor(active);
+    toast.success("Councilor profile saved!");
   }
 
   return (

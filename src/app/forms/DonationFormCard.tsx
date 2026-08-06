@@ -5,14 +5,13 @@ import { CheckCircle, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { saveDonation } from "@/lib/backend";
 import { firstError, validateAmount, validateEmail, validateName, validatePhone } from "@/lib/validation";
-import { CAMPAIGNS, formatLakh, type Campaign } from "../constants/campaigns";
+import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
 import { inter, fraunces } from "../components/shared/styleHelpers";
 import { PaymentModal } from "../modals/PaymentModal";
 import { useProfileField } from "../hooks/useUserProfile";
 
 export function DonationFormCard({
   eventName,
-  campaigns = CAMPAIGNS,
   initialCampaignId,
   initialName,
   initialEmail,
@@ -20,7 +19,6 @@ export function DonationFormCard({
   onSaved,
 }: {
   eventName?: string;
-  campaigns?: Campaign[];
   initialCampaignId?: string;
   /** Prefilled when the donor is signed in, so they don't retype their details. */
   initialName?: string;
@@ -34,8 +32,7 @@ export function DonationFormCard({
   const [donorName, setDonorName] = useProfileField(initialName);
   const [donorEmail, setDonorEmail] = useProfileField(initialEmail);
   const [donorPhone, setDonorPhone] = useProfileField(initialPhone);
-  const availableCampaigns = campaigns.length > 0 ? campaigns : CAMPAIGNS;
-  const [campaignId, setCampaignId] = useState(initialCampaignId ?? availableCampaigns[0].id);
+  const [campaignId, setCampaignId] = useState(initialCampaignId ?? CAMPAIGNS[0].id);
   const [anonymous, setAnonymous] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
@@ -46,13 +43,7 @@ export function DonationFormCard({
     if (initialCampaignId) setCampaignId(initialCampaignId);
   }, [initialCampaignId]);
 
-  useEffect(() => {
-    if (!availableCampaigns.some((campaign) => campaign.id === campaignId) && availableCampaigns.length > 0) {
-      setCampaignId(availableCampaigns[0].id);
-    }
-  }, [availableCampaigns, campaignId]);
-
-  const selectedCampaign = availableCampaigns.find((c) => c.id === campaignId) ?? availableCampaigns[0];
+  const selectedCampaign = CAMPAIGNS.find(c => c.id === campaignId) ?? CAMPAIGNS[0];
   const finalAmount = parseInt(customAmount, 10) || 0;
 
   function handleProceed() {
@@ -79,7 +70,6 @@ export function DonationFormCard({
       phone: donorPhone,
       anonymous,
       event_name: eventName,
-      campaign_id: selectedCampaign.id,
       campaign_name: selectedCampaign.name,
     });
     if (!res.ok) {
@@ -165,7 +155,7 @@ export function DonationFormCard({
               onChange={(e) => setCampaignId(e.target.value)}
               className={`${inter()} w-full bg-transparent text-[15px] text-[#1e1e1e] focus:outline-none cursor-pointer`}
             >
-              {availableCampaigns.map((c) => (
+              {CAMPAIGNS.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} — {formatLakh(c.raised)} raised so far
                 </option>
@@ -226,11 +216,7 @@ export function DonationFormCard({
         <div className="flex flex-col gap-3">
           <label className="flex items-center gap-3 cursor-pointer">
             <div
-              onClick={() => {
-                // Mutually exclusive: showing details means not anonymous
-                setShowDetails(true);
-                if (anonymous) setAnonymous(false);
-              }}
+              onClick={() => setShowDetails(!showDetails)}
               className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-colors ${showDetails ? "bg-[#a65a4a] border-[#a65a4a]" : "bg-[#f4efe7] border-[#a65a4a]"}`}
             >
               {showDetails && <CheckCircle size={14} className="text-[#f4efe7]" strokeWidth={3} />}
@@ -242,11 +228,11 @@ export function DonationFormCard({
           <label className="flex items-center gap-3 cursor-pointer">
             <div
               onClick={() => {
-                // Mutually exclusive: anonymous means hide details
-                setAnonymous(true);
-                if (showDetails) setShowDetails(false);
-                setDonorName("");
-                setDonorEmail("");
+                setAnonymous(!anonymous);
+                if (!anonymous) {
+                  setDonorName("");
+                  setDonorEmail("");
+                }
               }}
               className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-colors ${anonymous ? "bg-[#a65a4a] border-[#a65a4a]" : "bg-[#f4efe7] border-[#a65a4a]"}`}
             >

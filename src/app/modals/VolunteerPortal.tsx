@@ -90,17 +90,6 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   const [profile, setProfile] = useState<VolunteerProfile | null>(null);
   const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
 
-  // Restore a signed-in session on mount, unless the caller explicitly
-  // routed here to a specific auth step (e.g. a password reset link).
-  useEffect(() => {
-    if (initialStep) return;
-    const saved = getSavedUserSession();
-    if (saved) {
-      setProfile(saved);
-      setStep("dashboard");
-    }
-  }, []);
-
   useEffect(() => {
     if (initialStep) setStep(initialStep);
   }, [initialStep]);
@@ -170,7 +159,6 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     if (!identifier) return toast.error("Enter your email address or username");
     if (!loginPass.trim()) return toast.error("Enter your password");
     const lowerId = identifier.toLowerCase();
-    setAuthBusy(true);
 
     const adminRes = await signInAdmin(identifier, loginPass);
     if (adminRes.ok) {

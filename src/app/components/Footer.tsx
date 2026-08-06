@@ -3,7 +3,6 @@
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
 import { fraunces, inter, type Page } from "./shared/styleHelpers";
-import { useEffect, useState } from "react";
 
 const FOOTER_IMPACT_LINKS: { label: string; id: string }[] = [
   { label: "Women & Leadership", id: "women-leadership" },
@@ -23,35 +22,6 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   function openImpact(id: string) {
     openModal("impact", { id });
   }
-
-  const [email, setEmail] = useState<string>('contact@mahilaction.org');
-  const [phone, setPhone] = useState<string>('+91 XXXXXXXXX');
-
-  useEffect(() => {
-    let mounted = true;
-    async function loadContact() {
-      try {
-        const res = await fetch('/api/cms/contact-info');
-        if (!res.ok) throw new Error('Failed to fetch');
-        const data = await res.json();
-        if (!mounted) return;
-        if (data?.email) setEmail(data.email);
-        if (data?.phone) setPhone(data.phone);
-      } catch (err) {
-        // keep defaults
-      }
-    }
-    loadContact();
-
-    function onSiteDataChanged() {
-      loadContact();
-    }
-    window.addEventListener('mahila_sitedata_changed', onSiteDataChanged);
-    return () => {
-      mounted = false;
-      window.removeEventListener('mahila_sitedata_changed', onSiteDataChanged);
-    };
-  }, []);
 
   return (
     <footer className="bg-[#a65a4a]">
@@ -79,9 +49,8 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
               <button
                 onClick={() => openModal("volunteer")}
                 className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[15px] font-bold px-10 py-3 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}
-                aria-label="Become a Volunteer"
               >
-                Become a Volunteer
+                Join The Movement
               </button>
             </div>
           </div>
@@ -162,12 +131,12 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 className={`${inter()} text-[#f4efe7]/80 text-[13px] flex flex-col gap-2`}
               >
                 <a
-                  href={`mailto:${email}`}
+                  href="mailto:contact@mahilaction.org"
                   className="hover:text-[#f4efe7] transition-colors"
                 >
-                  {email}
+                  contact@mahilaction.org
                 </a>
-                <span>{phone}</span>
+                <span>+91 XXXXXXXXX</span>
               </div>
               {/* Social icons */}
               <div className="flex gap-4 mt-4">

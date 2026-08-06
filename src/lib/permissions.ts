@@ -9,7 +9,6 @@ export type AdminModule =
   | "councilors"
   | "timeline"
   | "contact"
-  | "campaigns"
   | "roles";
 
 export type PermissionAction = "view" | "edit" | "delete";
@@ -55,7 +54,6 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
   councilors: "Councilors",
   timeline: "Timeline Entries",
   contact: "Contact Information",
-  campaigns: "Campaigns",
   roles: "User & Role Management",
 };
 
@@ -72,7 +70,6 @@ const FULL_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: true, delete: true },
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
-  campaigns: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
 };
 
@@ -87,7 +84,6 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: true, delete: true },
   timeline: { view: true, edit: true, delete: true },
   contact: { view: true, edit: true, delete: true },
-  campaigns: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
 };
 
@@ -102,7 +98,6 @@ const STAFF_PERMISSIONS: PermissionMatrix = {
   councilors: { view: true, edit: false, delete: false },
   timeline: { view: true, edit: false, delete: false },
   contact: { view: true, edit: false, delete: false },
-  campaigns: { view: true, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
 };
 
@@ -117,7 +112,6 @@ const USER_PERMISSIONS: PermissionMatrix = {
   councilors: { view: false, edit: false, delete: false },
   timeline: { view: false, edit: false, delete: false },
   contact: { view: false, edit: false, delete: false },
-  campaigns: { view: false, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
 };
 
@@ -186,22 +180,7 @@ export function getStoredRoles(): AdminRole[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ROLES);
     if (!raw) return DEFAULT_ROLES;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((role: AdminRole) => {
-        const defaultRole = DEFAULT_ROLES.find((dr) => dr.id === role.id);
-        const mergedPermissions: PermissionMatrix = {
-          ...(defaultRole?.permissions || FULL_PERMISSIONS),
-          ...(role.permissions || {}),
-        };
-        for (const modKey of Object.keys(MODULE_LABELS) as AdminModule[]) {
-          if (!mergedPermissions[modKey]) {
-            mergedPermissions[modKey] = defaultRole?.permissions?.[modKey] || { view: true, edit: true, delete: true };
-          }
-        }
-        return { ...role, permissions: mergedPermissions };
-      });
-    }
-    return DEFAULT_ROLES;
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_ROLES;
   } catch {
     return DEFAULT_ROLES;
   }
@@ -212,7 +191,6 @@ export function saveStoredRoles(roles: AdminRole[]) {
     localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(roles));
   } catch (e) {
     console.error("Failed to save roles:", e);
-    throw e;
   }
 }
 
@@ -423,17 +401,8 @@ export function hasPermission(
   // Fallback to role-level matrix permission
   const role = getRoleById(roleId);
   const modulePerms = role.permissions?.[module];
-  if (modulePerms && typeof modulePerms[action] === "boolean") {
-    return Boolean(modulePerms[action]);
-  }
+  if (!modulePerms) return false;
 
-  // Fallback to DEFAULT_ROLES matrix if module is missing from stored custom roles
-  const defaultRole = DEFAULT_ROLES.find(r => r.id === roleId || r.id === "admin");
-  const defaultModulePerms = defaultRole?.permissions?.[module];
-  if (defaultModulePerms && typeof defaultModulePerms[action] === "boolean") {
-    return Boolean(defaultModulePerms[action]);
-  }
-
-  return roleId === "admin" || roleId === "superadmin";
+  return Boolean(modulePerms[action]);
 }
 
