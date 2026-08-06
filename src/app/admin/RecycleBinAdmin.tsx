@@ -72,33 +72,25 @@ export function RecycleBinAdmin() {
   }
 
   function handlePermanentDelete(item: TrashItem) {
-  if (!confirm(`Are you sure you want to permanently delete "${item.title}"? This cannot be undone.`)) {
-    return;
-  }
-  try {
+    if (!confirm(`Are you sure you want to permanently delete "${item.title}"? This cannot be undone.`)) {
+      return;
+    }
     removeFromTrash(item.id, item.type);
-  } catch {
-    return toast.error(`Couldn't permanently delete "${item.title}" — please try again.`);
+    toast.success(`Permanently deleted "${item.title}".`);
+    reload();
   }
-  toast.success(`Permanently deleted "${item.title}".`);
-  reload();
-}
 
-function handleEmptyTrash() {
-  if (!items.length) {
-    return toast.error("Recycle Bin is already empty.");
-  }
-  if (!confirm("Are you sure you want to EMPTY the Recycle Bin? All deleted items will be permanently erased!")) {
-    return;
-  }
-  try {
+  function handleEmptyTrash() {
+    if (!items.length) {
+      return toast.error("Recycle Bin is already empty.");
+    }
+    if (!confirm("Are you sure you want to EMPTY the Recycle Bin? All deleted items will be permanently erased!")) {
+      return;
+    }
     clearTrash();
-  } catch {
-    return toast.error("Couldn't empty the Recycle Bin — please try again.");
+    toast.success("Recycle Bin emptied successfully.");
+    reload();
   }
-  toast.success("Recycle Bin emptied successfully.");
-  reload();
-}
 
   const eventsCount = items.filter((i) => i.type === "event").length;
   const submissionsCount = items.filter((i) => i.type === "submission").length;

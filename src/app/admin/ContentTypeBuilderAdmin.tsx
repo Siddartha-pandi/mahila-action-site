@@ -84,7 +84,6 @@ export function ContentTypeBuilderAdmin() {
 
   // Normalize row IDs for fields
   const fieldsWithRowId = useMemo(() => {
-    if (!currentModel) return [];
     let currentMaxRow = 0;
     return currentModel.fields.map((f, idx) => {
       if (f.rowId === undefined || f.rowId === null) {
@@ -94,7 +93,7 @@ export function ContentTypeBuilderAdmin() {
       currentMaxRow = Math.max(currentMaxRow, f.rowId);
       return f;
     });
-  }, [currentModel]);
+  }, [currentModel.fields]);
 
   // Group fields by rowId into ordered rows
   const rowGroups = useMemo(() => {
@@ -106,19 +105,6 @@ export function ContentTypeBuilderAdmin() {
     });
     return Array.from(map.entries()).map(([rowId, fields]) => ({ rowId, fields }));
   }, [fieldsWithRowId]);
-
-  // If there's genuinely no content type to show (e.g. corrupted or emptied
-  // storage), stop here with a clear message instead of crashing the whole
-  // admin panel on the very next line that assumes currentModel exists.
-  if (!currentModel) {
-    return (
-      <div className="bg-white rounded-2xl border border-[#a65a4a]/20 shadow-sm p-10 text-center">
-        <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60">
-          No content types could be loaded. Try refreshing the page — if this keeps happening, check the console (F12) for details.
-        </p>
-      </div>
-    );
-  }
 
   // Sync content types across tabs/components in real time
   useEffect(() => {

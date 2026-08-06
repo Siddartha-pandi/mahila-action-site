@@ -39,9 +39,10 @@ export async function POST(req: NextRequest) {
         const cookieHeader = createAdminCookieHeader(adminPayload);
         const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
 
-        const res = NextResponse.json({ ok: true, email: envSuperadminEmail, jwt: token });
-        res.headers.append("Set-Cookie", cookieHeader);
-        return res;
+        return NextResponse.json(
+          { ok: true, email: envSuperadminEmail, jwt: token },
+          { headers: { "Set-Cookie": cookieHeader } }
+        );
       } else {
         return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
       }
@@ -67,9 +68,10 @@ export async function POST(req: NextRequest) {
     const cookieHeader = createAdminCookieHeader(adminPayload);
     const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
 
-    const res = NextResponse.json({ ok: true, email: user.email, jwt: token });
-    res.headers.append("Set-Cookie", cookieHeader);
-    return res;
+    return NextResponse.json(
+      { ok: true, email: user.email, jwt: token },
+      { headers: { "Set-Cookie": cookieHeader } }
+    );
   } catch (err: any) {
     console.error("Admin login error:", err);
     return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });

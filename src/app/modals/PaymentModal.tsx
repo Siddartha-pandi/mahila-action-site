@@ -22,22 +22,6 @@ export function PaymentModal({
 }) {
   const [qrMethod, setQrMethod] = useState<"gpay" | "phonepe">("gpay");
   const [confirming, setConfirming] = useState(false);
-  const [qrError, setQrError] = useState(false);
-
-  if (!amount || amount <= 0) {
-    return (
-      <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl w-[92vw] max-w-[420px] p-7 text-center shadow-2xl">
-          <p className={`${inter()} text-[#1e1e1e]/70 text-[14px] mb-5`}>
-            Something went wrong setting up this payment — the amount wasn't recognized. Please close this and try again.
-          </p>
-          <button onClick={onClose} className={`${inter()} w-full bg-[#a65a4a] text-[#f4efe7] font-semibold text-[15px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}>
-            Close
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   function handleConfirmPaid() {
     setConfirming(true);
@@ -87,7 +71,7 @@ export function PaymentModal({
             ]).map(m => (
               <button
                 key={m.id}
-                onClick={() => { setQrMethod(m.id); setQrError(false); }}
+                onClick={() => setQrMethod(m.id)}
                 className={`${inter()} flex-1 py-2.5 text-[13px] font-semibold rounded-lg border transition-colors cursor-pointer ${qrMethod === m.id ? "bg-[#a65a4a] text-[#f4efe7] border-[#a65a4a]" : "text-[#a65a4a] border-[#a65a4a]/40 hover:border-[#a65a4a]"}`}
               >
                 {m.label}
@@ -96,20 +80,8 @@ export function PaymentModal({
           </div>
 
           {/* QR code */}
-          {/* QR code */}
-          <div className="border-2 border-[#a65a4a]/25 rounded-2xl p-4 bg-white flex items-center justify-center size-[260px]">
-            {qrError ? (
-              <p className={`${inter()} text-[#1e1e1e]/50 text-[13px] text-center px-4`}>
-                QR code couldn't load. Please check your connection, or use the {qrMethod === "gpay" ? "PhonePe" : "Google Pay"} option instead.
-              </p>
-            ) : (
-              <img
-                src={qrImage}
-                alt={`${qrMethod === "gpay" ? "Google Pay" : "PhonePe"} QR code`}
-                className="size-full object-contain"
-                onError={() => setQrError(true)}
-              />
-            )}
+          <div className="border-2 border-[#a65a4a]/25 rounded-2xl p-4 bg-white">
+            <img src={qrImage} alt={`${qrMethod === "gpay" ? "Google Pay" : "PhonePe"} QR code`} className="size-[260px] object-contain" />
           </div>
           <p className={`${inter()} text-[#1e1e1e]/60 text-[13px] text-center`}>
             Scan this code with {qrMethod === "gpay" ? "Google Pay" : "PhonePe"} (or any UPI app) to pay <strong className="text-[#a65a4a]">₹{amount.toLocaleString("en-IN")}</strong>.

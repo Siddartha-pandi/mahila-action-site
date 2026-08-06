@@ -23,7 +23,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
-const KIND_LABEL: Record<RegKind, string> = { attendee: "Attendee", volunteer: "Volunteer", vendor: "Vendor", donor: "Donor" };
+const KIND_LABEL: Record<RegKind, string> = { volunteer: "Volunteer", vendor: "Vendor", donor: "Donor" };
 
 function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
   const normTitle = ev.title.trim().toLowerCase();
@@ -37,7 +37,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
     name: string;
     email: string;
     phone: string;
-    role: "Attendee" | "Volunteer" | "Vendor" | "Donor";
+    role: "Attendee" | "Volunteer" | "Vendor";
     seats: number;
     date: string;
     status: string;
@@ -442,14 +442,7 @@ export function EventsAdmin({
   function updateWindow(kind: RegKind, patch: Partial<EventItem["windows"][number]>) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
-    const nextWindows = active.windows.map((w) => (w.kind === kind ? { ...w, ...patch } : w));
-    // "Total Seats" and the Attendee window's registration cap are the same
-    // number — keep them in sync so there's only one place that really sets it.
-    const eventPatch: Partial<EventItem> = { windows: nextWindows };
-    if (kind === "attendee" && patch.maxRegistrations !== undefined) {
-      eventPatch.totalSeats = patch.maxRegistrations;
-    }
-    update(eventPatch);
+    update({ windows: active.windows.map((w) => (w.kind === kind ? { ...w, ...patch } : w)) });
   }
 
   function handleAdd() {
@@ -1033,22 +1026,6 @@ export function EventsAdmin({
                               className={inputBase}
                             />
                           </div>
-                          {w.kind !== "donor" && (
-                            <div className="col-span-2">
-                              <label className={labelBase}>Max {KIND_LABEL[w.kind]} Registrations Allowed</label>
-                              <input
-                                type="number"
-                                min={0}
-                                value={w.maxRegistrations ?? 0}
-                                onChange={(e) => updateWindow(w.kind, { maxRegistrations: Math.max(0, Number(e.target.value)) })}
-                                placeholder="0"
-                                className={inputBase}
-                              />
-                              <p className="font-['Inter',sans-serif] text-[11px] text-[#1e1e1e]/45 mt-1">
-                                Leave as 0 for unlimited {KIND_LABEL[w.kind].toLowerCase()} registrations.
-                              </p>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1060,7 +1037,7 @@ export function EventsAdmin({
                 </p>
               </div>
 
-              <button type="button" onClick={handleSave} className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2">
+              <button onClick={handleSave} className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2">
                 Save Event
               </button>
             </div>

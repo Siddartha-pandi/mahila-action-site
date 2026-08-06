@@ -9,8 +9,7 @@
     "build": "next build",
     "start": "next start",
     "seed:pg": "npx tsx src/scripts/seed-postgres.ts",
-    "seed:pg:wait": "npx tsx src/scripts/seed-postgres-wait.ts",
-    "db:repair-blog-post-seq": "npx tsx src/scripts/fix-blogpost-sequence.ts"
+    "seed:pg:wait": "npx tsx src/scripts/seed-postgres-wait.ts"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

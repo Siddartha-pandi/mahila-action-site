@@ -30,12 +30,6 @@ export function BlogDetailModal({
   onNavigate?: (dir: -1 | 1) => void;
 }) {
   const [galleryTop, setGalleryTop] = useState(0);
-  const [coverError, setCoverError] = useState(false);
-  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
-
-  function markImageBroken(src: string) {
-    setBrokenImages(prev => new Set(prev).add(src));
-  }
   const gallery = post.gallery ?? [];
   const n = gallery.length;
   const idxTop = n ? galleryTop % n : 0;
@@ -62,14 +56,9 @@ export function BlogDetailModal({
       </div>
 
       <div className="max-w-[1200px] mx-auto px-6 pb-20">
-        {post.coverImage && !coverError && (
+        {post.coverImage && (
           <div className="mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px]">
-            <img
-              src={post.coverImage}
-              alt={post.title}
-              className="w-full h-full object-cover"
-              onError={() => setCoverError(true)}
-            />
+            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
           </div>
         )}
 
@@ -90,16 +79,10 @@ export function BlogDetailModal({
           </div>
         )}
 
-        {richHtml.trim() ? (
-          <div
-            className="blog-rich-content mt-8 max-w-[1152px]"
-            dangerouslySetInnerHTML={{ __html: richHtml }}
-          />
-        ) : (
-          <p className={`${inter()} mt-8 text-[#1e1e1e]/50 text-[15px]`}>
-            No content has been added for this page yet.
-          </p>
-        )}
+        <div
+          className="blog-rich-content mt-8 max-w-[1152px]"
+          dangerouslySetInnerHTML={{ __html: richHtml }}
+        />
 
         {n > 0 && (
           <div className="mt-20">
@@ -123,7 +106,7 @@ export function BlogDetailModal({
                 className="relative flex items-center justify-center"
                 style={{ width: "min(610px,88vw)", height: "min(452px,65vw)" }}
               >
-                {n > 2 && !brokenImages.has(gallery[idxBot]) && (
+                {n > 2 && (
                   <div
                     className="absolute inset-0 flex items-center justify-center"
                     style={{ transform: "rotate(-6.09deg)" }}
@@ -133,11 +116,10 @@ export function BlogDetailModal({
                       alt=""
                       className="shadow-xl object-cover rounded-sm"
                       style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                      onError={() => markImageBroken(gallery[idxBot])}
                     />
                   </div>
                 )}
-                {n > 1 && !brokenImages.has(gallery[idxMid]) && (
+                {n > 1 && (
                   <div
                     className="absolute inset-0 flex items-center justify-center"
                     style={{ transform: "rotate(-3.13deg)" }}
@@ -147,21 +129,17 @@ export function BlogDetailModal({
                       alt=""
                       className="shadow-xl object-cover rounded-sm"
                       style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                      onError={() => markImageBroken(gallery[idxMid])}
                     />
                   </div>
                 )}
-                {!brokenImages.has(gallery[idxTop]) && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <img
-                      src={gallery[idxTop]}
-                      alt=""
-                      className="shadow-2xl object-cover rounded-sm"
-                      style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                      onError={() => markImageBroken(gallery[idxTop])}
-                    />
-                  </div>
-                )}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <img
+                    src={gallery[idxTop]}
+                    alt=""
+                    className="shadow-2xl object-cover rounded-sm"
+                    style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
+                  />
+                </div>
               </div>
 
               <button

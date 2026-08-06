@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { queryDb, getPool } from "@/lib/db";
+import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
 export async function GET() {
@@ -25,39 +25,20 @@ export async function POST(req: NextRequest) {
     const b = await req.json();
     let finalId = b.id;
 
-    // If caller provided a numeric id, try update first, otherwise insert with that id
     if (b.id && !isNaN(Number(b.id))) {
-      const upd = await queryDb(
-        `UPDATE cms_categories SET name = $2 WHERE id = $1 RETURNING id`,
+      await queryDb(
+        `INSERT INTO cms_categories (id, name) VALUES ($1, $2)
+         ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name`,
         [Number(b.id), b.name]
       );
-      if (upd.rowCount === 0) {
-        // No existing row with that id -> insert
-        await queryDb(`INSERT INTO cms_categories (id, name) VALUES ($1, $2)`, [Number(b.id), b.name]);
-      }
-      finalId = Number(b.id);
     } else {
-      // No id provided: find existing category by (case-insensitive) name first
-      const existing = await queryDb(`SELECT id FROM cms_categories WHERE LOWER(name) = LOWER($1) LIMIT 1`, [b.name]);
-      if (existing.rowCount > 0) {
-        finalId = existing.rows[0].id;
-      } else {
-        // Handle Postgres vs SQLite like other routes: ensure id is generated even if
-        // the column default is missing in Postgres by using nextval(pg_get_serial_sequence(...)).
-        const pool = await getPool();
-        if ((pool && (pool as any).isSqlite) || (typeof (pool as any).isSqlite !== "undefined" && (pool as any).isSqlite)) {
-          const res = await queryDb(`INSERT INTO cms_categories (name) VALUES ($1) RETURNING id`, [b.name]);
-          finalId = res.rows[0]?.id;
-        } else {
-          const res = await queryDb(
-            `INSERT INTO cms_categories (id, name) VALUES (nextval(pg_get_serial_sequence('cms_categories','id')), $1) RETURNING id`,
-            [b.name]
-          );
-          finalId = res.rows[0]?.id;
-        }
-      }
+      const res = await queryDb(
+        `INSERT INTO cms_categories (name) VALUES ($1)
+         ON CONFLICT(name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+        [b.name]
+      );
+      finalId = res.rows[0]?.id;
     }
-
     return NextResponse.json({ ok: true, id: finalId });
   } catch (err: any) {
     console.error("POST /api/cms/categories error:", err);
