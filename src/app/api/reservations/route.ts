@@ -32,28 +32,47 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // One booking per person per event, per role. The commitment column is what
-    // separates the two kinds of reservation — a volunteer sign-up and a plain
-    // attendee booking for the same event are different things, so only a
-    // repeat of the *same* kind counts as a duplicate.
+    // One booking per person per event. Attendees and volunteers for the same event
+    // are mutually exclusive: if you registered as an attendee, you do not need to
+    // register as a volunteer, and vice versa.
     const isVolunteerSignup = Boolean(body.volunteer_commitment);
-    const duplicate = await queryDb(
-      `SELECT id FROM event_reservations
+    const existing = await queryDb(
+      `SELECT id, volunteer_commitment FROM event_reservations
        WHERE LOWER(email) = LOWER($1)
          AND LOWER(event_name) = LOWER($2)
-         AND (volunteer_commitment IS NOT NULL) = $3
        LIMIT 1`,
-      [String(body.email).trim(), String(body.event_name).trim(), isVolunteerSignup]
+      [String(body.email).trim(), String(body.event_name).trim()]
     );
-    if (duplicate.rows.length > 0) {
-      return NextResponse.json(
-        {
-          error: isVolunteerSignup
-            ? `You've already signed up to volunteer at ${body.event_name}.`
-            : `You already have a seat reserved for ${body.event_name}. Please contact us if you need to change the number of seats.`,
-        },
-        { status: 409 }
-      );
+
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0];
+      const isExistingVolunteer = Boolean(row.volunteer_commitment && row.volunteer_commitment !== "vendor");
+
+      if (isVolunteerSignup) {
+        if (isExistingVolunteer) {
+          return NextResponse.json(
+            { error: `You've already signed up as a volunteer for ${body.event_name}.` },
+            { status: 409 }
+          );
+        } else {
+          return NextResponse.json(
+            { error: `You are already registered as an attendee for ${body.event_name} (attendees do not need to register as volunteers).` },
+            { status: 409 }
+          );
+        }
+      } else {
+        if (isExistingVolunteer) {
+          return NextResponse.json(
+            { error: `You are already registered as a volunteer for ${body.event_name} (volunteers do not need to register as attendees).` },
+            { status: 409 }
+          );
+        } else {
+          return NextResponse.json(
+            { error: `You already have a seat reserved for ${body.event_name}. Please contact us if you need to change the number of seats.` },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     const insertRes = await queryDb(

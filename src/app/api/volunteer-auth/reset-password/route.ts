@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const tokenHash = crypto.createHash("sha256").update(String(token)).digest("hex");
-    const result = await queryDb("SELECT * FROM users WHERE reset_token_hash = $1 AND role = 'volunteer'", [tokenHash]);
+    const result = await queryDb("SELECT * FROM users WHERE reset_token_hash = $1", [tokenHash]);
     const user = result.rows[0];
 
     if (!user || !user.reset_token_expires || new Date(user.reset_token_expires) < new Date()) {
@@ -45,3 +45,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+

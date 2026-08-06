@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS cms_events (
   event_date TEXT NOT NULL,
   location TEXT,
   total_seats INTEGER DEFAULT 0,
+  max_volunteers INTEGER DEFAULT 0,
   windows TEXT NOT NULL,
   category_id INTEGER REFERENCES cms_categories(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

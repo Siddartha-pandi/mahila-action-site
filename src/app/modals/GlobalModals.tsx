@@ -42,12 +42,20 @@ export function GlobalModals() {
     );
   }
 
-  if (modal === "volunteer" || modal === "login") {
+  if (modal === "volunteer" || modal === "login" || modal === "reset" || modal === "forgot" || modalKind === "reset" || modalKind === "forgot") {
     return (
       <VolunteerPortal
         onClose={closeModal}
-        initialStep={modal === "login" ? "login" : modalKind === "login" ? "login" : modalKind === "reset" ? "reset" : undefined}
-        resetToken={modalKind === "reset" ? (modalId ?? undefined) : undefined}
+        initialStep={
+          modal === "reset" || modalKind === "reset"
+            ? "reset"
+            : modal === "forgot" || modalKind === "forgot"
+            ? "forgot"
+            : modal === "login" || modalKind === "login"
+            ? "login"
+            : undefined
+        }
+        resetToken={modalKind === "reset" || modal === "reset" ? (modalId ?? undefined) : undefined}
         events={siteData.events}
       />
     );

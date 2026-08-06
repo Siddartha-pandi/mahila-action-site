@@ -93,6 +93,8 @@ export function EventRegistrationModal({
   registeredKeys,
   onClose,
   onRegistered,
+  volunteersFull = false,
+  volunteerCap = 0,
 }: {
   event: EventItem;
   profile: VolunteerAccountProfile;
@@ -100,6 +102,10 @@ export function EventRegistrationModal({
   registeredKeys: Set<string>;
   onClose: () => void;
   onRegistered: (role: RegistrationRole) => void;
+  /** True when admin has set a volunteer cap and it's been reached. */
+  volunteersFull?: boolean;
+  /** The max volunteer cap (0 = unlimited). Shown in disabled label. */
+  volunteerCap?: number;
 }) {
   // Shared contact details, prefilled from the signed-in account.
   const [name, setName] = useProfileField(profile.name);
@@ -129,15 +135,32 @@ export function EventRegistrationModal({
     return new Set(windows.filter(w => isWindowOpen(w)).map(w => w.kind as string));
   }, [event]);
 
+  // Mutual exclusion: attendee ↔ volunteer
+  const isRegisteredAsAttendee = registeredKeys.has(registrationKey("attendee", event.title));
+  const isRegisteredAsVolunteer = registeredKeys.has(registrationKey("volunteer", event.title));
+
   const roleState = useMemo(
     () =>
       ROLES.map(r => {
         const already = registeredKeys.has(registrationKey(r.value, event.title));
         // Donating twice isn't a duplicate, so donors are never locked out.
         const closed = r.value !== "attendee" && !openKinds.has(r.value);
-        return { ...r, already: r.value === "donor" ? false : already, closed, disabled: closed || (r.value !== "donor" && already) };
+        // Attendees don't need to sign up as volunteers, and vice versa.
+        const mutuallyExcluded =
+          (r.value === "volunteer" && isRegisteredAsAttendee) ||
+          (r.value === "attendee" && isRegisteredAsVolunteer);
+        // Volunteer cap enforced by admin.
+        const capFull = r.value === "volunteer" && volunteersFull;
+        return {
+          ...r,
+          already: r.value === "donor" ? false : already,
+          mutuallyExcluded,
+          capFull,
+          closed,
+          disabled: closed || (r.value !== "donor" && (already || mutuallyExcluded || capFull)),
+        };
       }),
-    [registeredKeys, openKinds, event.title]
+    [registeredKeys, openKinds, event.title, isRegisteredAsAttendee, isRegisteredAsVolunteer, volunteersFull]
   );
 
   const firstAvailable = roleState.find(r => !r.disabled)?.value ?? null;
@@ -248,6 +271,15 @@ export function EventRegistrationModal({
       toast.error(`You're already registered as ${role === "attendee" ? "an attendee" : `a ${role}`} for ${event.title}.`);
       return;
     }
+    // Mutual exclusion guard: attendees and volunteers are the same commitment level.
+    if (role === "volunteer" && isRegisteredAsAttendee) {
+      toast.error(`You're already registered as an attendee for ${event.title}. Attendees do not need to register as volunteers.`);
+      return;
+    }
+    if (role === "attendee" && isRegisteredAsVolunteer) {
+      toast.error(`You're already registered as a volunteer for ${event.title}. Volunteers do not need to register as attendees.`);
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -313,7 +345,11 @@ export function EventRegistrationModal({
             <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
               <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
               <p className="font-['Inter',sans-serif] text-[#993925] text-[13px] leading-relaxed">
-                You're already registered for this event in every way that's currently open. Check "My Registered Events" to see your entries.
+                {isRegisteredAsAttendee
+                  ? `You're already registered as an attendee for ${event.title}. Attendees do not need to register as volunteers — you're all set!`
+                  : isRegisteredAsVolunteer
+                  ? `You're already registered as a volunteer for ${event.title}. Volunteers do not need to register as attendees — you're all set!`
+                  : "You're already registered for this event in every way that's currently open. Check \"My Registered Events\" to see your entries."}
               </p>
             </div>
           ) : (
@@ -329,7 +365,17 @@ export function EventRegistrationModal({
                   {roleState.map(r => (
                     <option key={r.value} value={r.value} disabled={r.disabled}>
                       {r.label}
-                      {r.already ? " — already registered" : r.closed ? " — registration closed" : ""}
+                      {r.already
+                        ? " — already registered"
+                        : r.capFull
+                        ? ` — spots full (${volunteerCap}/${volunteerCap})`
+                        : r.mutuallyExcluded
+                        ? r.value === "volunteer"
+                          ? " — not needed (already an attendee)"
+                          : " — not needed (already a volunteer)"
+                        : r.closed
+                        ? " — registration closed"
+                        : ""}
                     </option>
                   ))}
                 </select>

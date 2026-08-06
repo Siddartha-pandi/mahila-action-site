@@ -24,6 +24,7 @@ export interface EventItem {
   eventDate: string; // ISO date — when the event itself happens
   location: string;
   totalSeats: number;
+  maxVolunteers: number; // 0 = unlimited; admin-set cap on volunteer sign-ups
   windows: RegWindow[];
   categoryId: string | null; // e.g. "Women & Leadership" — shares the same categories as Stories
   createdAt: string;
@@ -150,6 +151,7 @@ export const DEFAULT_EVENTS: EventItem[] = [
     eventDate: daysFromNow(21),
     location: "Hyderabad",
     totalSeats: 45,
+    maxVolunteers: 0,
     windows: [
       { kind: "attendee", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(20), maxRegistrations: 45 },
       { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14), maxRegistrations: 0 },
@@ -494,6 +496,7 @@ export async function loadSiteData(): Promise<SiteData> {
           eventDate: r.event_date || r.eventDate || "",
           location: r.location || "",
           totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
+          maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
           windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
           categoryId: r.category_id || r.categoryId || null,
           createdAt: r.created_at || r.createdAt || new Date().toISOString(),
@@ -576,7 +579,7 @@ export async function loadSiteData(): Promise<SiteData> {
 export function newEvent(): EventItem {
   return {
     id: uid("evt"), title: "New Event", description: "", image: "",
-    eventDate: daysFromNow(30), location: "", totalSeats: 30,
+    eventDate: daysFromNow(30), location: "", totalSeats: 30, maxVolunteers: 0,
     windows: [
       { kind: "attendee", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 30 },
       { kind: "volunteer", enabled: true, regStart: daysFromNow(0), regEnd: daysFromNow(20), maxRegistrations: 0 },
