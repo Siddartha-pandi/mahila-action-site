@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -39,7 +40,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const b = await req.json();
     const title = b.title;
     const description = b.description;
-    const image = b.image;
+    const image = b.image !== undefined ? await ensureMediaUrl(b.image, `event-${id}.png`) : undefined;
     const eventDate = b.eventDate || b.event_date;
     const location = b.location;
     const totalSeats = b.totalSeats !== undefined || b.total_seats !== undefined ? Number(b.totalSeats ?? b.total_seats) : undefined;

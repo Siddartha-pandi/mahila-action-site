@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { ensureMediaUrl, ensureMediaUrlsArray, ensureHtmlMediaUrls } from "@/lib/mediaServer";
 
 export function generateStaticParams() {
   return [];
@@ -36,10 +37,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const section = b.section;
     const title = b.title;
     const excerpt = b.excerpt;
-    const content = b.content;
-    const coverImage = b.coverImage || b.cover_image;
+    const content = b.content !== undefined ? await ensureHtmlMediaUrls(b.content, "story-content") : undefined;
+    const rawCover = b.coverImage || b.cover_image;
+    const coverImage = rawCover !== undefined ? await ensureMediaUrl(rawCover, "story-cover.png") : undefined;
     const categoryId = b.categoryId !== undefined || b.category_id !== undefined ? (b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null) : undefined;
-    const gallery = b.gallery ? JSON.stringify(b.gallery) : undefined;
+    const galleryItems = b.gallery ? await ensureMediaUrlsArray(b.gallery, "story-gallery") : undefined;
+    const gallery = galleryItems ? JSON.stringify(galleryItems) : undefined;
     const tags = b.tags ? JSON.stringify(b.tags) : undefined;
 
     const res = await queryDb(

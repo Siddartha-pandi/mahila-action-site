@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { ensureMediaUrl, ensureMediaUrlsArray, ensureHtmlMediaUrls } from "@/lib/mediaServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,7 +43,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const b = await req.json();
-    const coverImage = b.coverImage || b.cover_image || null;
+    const rawCover = b.coverImage || b.cover_image || null;
+    const coverImage = await ensureMediaUrl(rawCover, "story-cover.png");
+    const galleryItems = await ensureMediaUrlsArray(b.gallery || [], "story-gallery");
+    const content = await ensureHtmlMediaUrls(b.content || null, "story-content");
     const categoryId = b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null;
     let finalId = b.id;
 
@@ -59,9 +63,9 @@ export async function POST(req: NextRequest) {
           categoryId,
           b.title,
           b.excerpt || null,
-          b.content || null,
+          content,
           coverImage,
-          JSON.stringify(b.gallery || []),
+          JSON.stringify(galleryItems),
           JSON.stringify(b.tags || []),
         ]
       );
@@ -74,15 +78,15 @@ export async function POST(req: NextRequest) {
           categoryId,
           b.title,
           b.excerpt || null,
-          b.content || null,
+          content,
           coverImage,
-          JSON.stringify(b.gallery || []),
+          JSON.stringify(galleryItems),
           JSON.stringify(b.tags || []),
         ]
       );
       finalId = res.rows[0]?.id;
     }
-    return NextResponse.json({ ok: true, id: finalId });
+    return NextResponse.json({ ok: true, id: finalId, coverImage, gallery: galleryItems });
   } catch (err: any) {
     console.error("POST /api/cms/blog-posts error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

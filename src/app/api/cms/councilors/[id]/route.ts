@@ -1,28 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import fs from "fs/promises";
+import path from "path";
+
+const COUNCILORS_PATH = path.join(process.cwd(), "src", "data", "councilors.json");
 
 export function generateStaticParams() {
   return [];
 }
 
+interface CouncilorRecord {
+  id: string | number;
+  name: string;
+  role?: string;
+  bio?: string;
+  image?: string;
+  order?: number;
+  order_index?: number;
+}
+
+async function readCouncilors(): Promise<CouncilorRecord[]> {
+  try {
+    const raw = await fs.readFile(COUNCILORS_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeCouncilors(data: CouncilorRecord[]): Promise<void> {
+  await fs.mkdir(path.dirname(COUNCILORS_PATH), { recursive: true });
+  await fs.writeFile(COUNCILORS_PATH, JSON.stringify(data, null, 2), "utf-8");
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const res = await queryDb("SELECT * FROM councilors WHERE id = $1", [id]);
-    if (res.rows.length === 0) {
+    const list = await readCouncilors();
+    const item = list.find((c) => String(c.id) === String(id));
+    if (!item) {
       return NextResponse.json({ error: "Councilor not found" }, { status: 404 });
     }
-    const r = res.rows[0];
     return NextResponse.json({
-      ...r,
-      order: Number(r.order_index ?? r.order ?? 0),
+      ...item,
+      id: String(item.id),
+      order: Number(item.order_index ?? item.order ?? 0),
+      order_index: Number(item.order_index ?? item.order ?? 0),
     });
   } catch (err: any) {
     console.error("GET /api/cms/councilors/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
+
+import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminFromRequest(req);
@@ -31,28 +62,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const b = await req.json();
-    const name = b.name;
-    const role = b.role;
-    const bio = b.bio;
-    const image = b.image;
-    const orderIndex = b.order !== undefined || b.order_index !== undefined ? Number(b.order ?? b.order_index) : undefined;
-
-    const res = await queryDb(
-      `UPDATE councilors SET
-         name = COALESCE($1, name),
-         role = COALESCE($2, role),
-         bio = COALESCE($3, bio),
-         image = COALESCE($4, image),
-         order_index = COALESCE($5, order_index)
-       WHERE id = $6 RETURNING *`,
-      [name || null, role || null, bio || null, image || null, orderIndex ?? null, id]
-    );
-
-    if (res.rows.length === 0) {
+    const list = await readCouncilors();
+    const idx = list.findIndex((c) => String(c.id) === String(id));
+    if (idx === -1) {
       return NextResponse.json({ error: "Councilor not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true, councilor: res.rows[0] });
+    const orderIndex =
+      b.order !== undefined || b.order_index !== undefined
+        ? Number(b.order ?? b.order_index)
+        : list[idx].order_index ?? list[idx].order ?? 0;
+
+    const storedImage = b.image !== undefined
+      ? await ensureMediaUrl(b.image, `councilor-${id}.png`)
+      : list[idx].image;
+
+    const updated: CouncilorRecord = {
+      ...list[idx],
+      name: b.name ?? list[idx].name,
+      role: b.role !== undefined ? b.role : list[idx].role,
+      bio: b.bio !== undefined ? b.bio : list[idx].bio,
+      image: storedImage,
+      order: orderIndex,
+      order_index: orderIndex,
+    };
+
+    list[idx] = updated;
+    await writeCouncilors(list);
+
+    return NextResponse.json({ ok: true, councilor: updated });
   } catch (err: any) {
     console.error("PATCH /api/cms/councilors/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -69,10 +107,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
-    const res = await queryDb("DELETE FROM councilors WHERE id = $1 RETURNING id", [id]);
-    if (res.rows.length === 0) {
+    const list = await readCouncilors();
+    const next = list.filter((c) => String(c.id) !== String(id));
+    if (next.length === list.length) {
       return NextResponse.json({ error: "Councilor not found" }, { status: 404 });
     }
+
+    await writeCouncilors(next);
     return NextResponse.json({ ok: true, id });
   } catch (err: any) {
     console.error("DELETE /api/cms/councilors/[id] error:", err);

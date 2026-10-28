@@ -254,38 +254,9 @@ export async function seedAllData(dbPool: any): Promise<void> {
     ])
   );
 
-  // 5. Default Councilors (IDs: 1, 2, 3)
-  const councilors = [
-    { id: 1, name: "Sunita Devi", role: "Community Advocate", bio: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", image: "", order_index: 0 },
-    { id: 2, name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order_index: 1 },
-    { id: 3, name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order_index: 2 },
-  ];
-  await dbPool.query(
-    `INSERT INTO councilors (id, name, role, bio, image, order_index)
-     VALUES ${rowPlaceholders(councilors.length, 6)}
-     ON CONFLICT (id) DO NOTHING`,
-    councilors.flatMap((c) => [c.id, c.name, c.role, c.bio, c.image, c.order_index])
-  );
-
-  // 6. Default Timeline (IDs: 1..6)
-  const timeline = [
-    { id: 1, year: "1995", title: "Foundation of Mahila Action", description: "Registered by a small group of six local women, starting with a single room operating basic literacy circles for children of brick-kiln laborers.", image: "", order_index: 0 },
-    { id: 2, year: "2002", title: "Expanding Educational Access", description: "Launched three community learning centers reaching over 800 children and 400 adult learners across rural areas.", image: "", order_index: 1 },
-    { id: 3, year: "2009", title: "Women's Leadership Programme", description: "Introduced the flagship leadership programme, training over 200 women to take civic and economic leadership roles.", image: "", order_index: 2 },
-    { id: 4, year: "2016", title: "Livelihood & Skills Scale-Up", description: "Partnered with 12 corporate organizations to provide vocational training and employment to 3,000+ women.", image: "", order_index: 3 },
-    { id: 5, year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order_index: 4 },
-    { id: 6, year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order_index: 5 },
-  ];
-  await dbPool.query(
-    `INSERT INTO timeline (id, year, title, description, image, order_index)
-     VALUES ${rowPlaceholders(timeline.length, 6)}
-     ON CONFLICT (id) DO NOTHING`,
-    timeline.flatMap((t) => [t.id, t.year, t.title, t.description, t.image, t.order_index])
-  );
-
   // Synchronize PostgreSQL SERIAL sequences past manually seeded IDs
-  const tablesToSync = ["users", "categories", "events", "blog_posts", "councilors", "timeline", "media"];
-  // Sent as one batch — seven separate statements meant seven round trips.
+  const tablesToSync = ["users", "categories", "events", "blog_posts", "media"];
+  // Sent as one batch — statements sent together instead of multiple round trips.
   try {
     await dbPool.query(
       tablesToSync
@@ -364,6 +335,11 @@ export async function initDb(): Promise<void> {
         "DROP TABLE IF EXISTS contact CASCADE",
         "DROP TABLE IF EXISTS cms_contact CASCADE",
         "DROP TABLE IF EXISTS app_meta CASCADE",
+        "DROP TABLE IF EXISTS site_content CASCADE",
+        "DROP TABLE IF EXISTS councilors CASCADE",
+        "DROP TABLE IF EXISTS timeline CASCADE",
+        "DROP TABLE IF EXISTS cms_councilors CASCADE",
+        "DROP TABLE IF EXISTS cms_timeline CASCADE",
       ];
 
       try {

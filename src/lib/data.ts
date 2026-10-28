@@ -1,6 +1,8 @@
 import { api, BASE_URL } from "./api";
 import { comingSoon } from "./comingSoon";
 import contactJson from "../data/contact.json";
+import councilorsJson from "../data/councilors.json";
+import timelineJson from "../data/timeline.json";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -221,20 +223,38 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
   },
 ];
 
-export const DEFAULT_COUNCILORS: Councilor[] = [
-  { id: "coun_1", name: "Sunita Devi", role: "Community Advocate", bio: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", image: "", order: 0 },
-  { id: "coun_2", name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order: 1 },
-  { id: "coun_3", name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order: 2 },
-];
+export const DEFAULT_COUNCILORS: Councilor[] = (councilorsJson as any[])?.length
+  ? (councilorsJson as any[]).map((c) => ({
+      id: String(c.id),
+      name: c.name || "",
+      role: c.role || "",
+      bio: c.bio || "",
+      image: c.image || "",
+      order: Number(c.order_index ?? c.order ?? 0),
+    }))
+  : [
+      { id: "coun_1", name: "Sunita Devi", role: "Community Advocate", bio: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", image: "", order: 0 },
+      { id: "coun_2", name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order: 1 },
+      { id: "coun_3", name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order: 2 },
+    ];
 
-export const DEFAULT_TIMELINE: TimelineEntry[] = [
-  { id: "tl_1995", year: "1995", title: "Foundation of Mahila Action", description: "Registered by a small group of six local women, starting with a single room operating basic literacy circles for children of brick-kiln laborers.", image: "", order: 0 },
-  { id: "tl_2002", year: "2002", title: "Expanding Educational Access", description: "Launched three community learning centers reaching over 800 children and 400 adult learners across rural areas.", image: "", order: 1 },
-  { id: "tl_2009", year: "2009", title: "Women's Leadership Programme", description: "Introduced the flagship leadership programme, training over 200 women to take civic and economic leadership roles.", image: "", order: 2 },
-  { id: "tl_2016", year: "2016", title: "Livelihood & Skills Scale-Up", description: "Partnered with 12 corporate organizations to provide vocational training and employment to 3,000+ women.", image: "", order: 3 },
-  { id: "tl_2021", year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order: 4 },
-  { id: "tl_2026", year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order: 5 },
-];
+export const DEFAULT_TIMELINE: TimelineEntry[] = (timelineJson as any[])?.length
+  ? (timelineJson as any[]).map((t) => ({
+      id: String(t.id),
+      year: String(t.year || ""),
+      title: t.title || "",
+      description: t.description || "",
+      image: t.image || "",
+      order: Number(t.order_index ?? t.order ?? 0),
+    }))
+  : [
+      { id: "tl_1995", year: "1995", title: "Foundation of Mahila Action", description: "Registered by a small group of six local women, starting with a single room operating basic literacy circles for children of brick-kiln laborers.", image: "", order: 0 },
+      { id: "tl_2002", year: "2002", title: "Expanding Educational Access", description: "Launched three community learning centers reaching over 800 children and 400 adult learners across rural areas.", image: "", order: 1 },
+      { id: "tl_2009", year: "2009", title: "Women's Leadership Programme", description: "Introduced the flagship leadership programme, training over 200 women to take civic and economic leadership roles.", image: "", order: 2 },
+      { id: "tl_2016", year: "2016", title: "Livelihood & Skills Scale-Up", description: "Partnered with 12 corporate organizations to provide vocational training and employment to 3,000+ women.", image: "", order: 3 },
+      { id: "tl_2021", year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order: 4 },
+      { id: "tl_2026", year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order: 5 },
+    ];
 
 export const DEFAULT_CONTACT: ContactInfo = {
   email: contactJson.email || "contact@mahilaction.org",
@@ -531,28 +551,31 @@ export function newEvent(): EventItem {
 
 export async function saveEvent(ev: EventItem): Promise<{ ok: boolean; id?: string; error?: string }> {
   unrecordDeletedEventId(ev.id);
-  const current = getLocalSiteData();
-  const events = current.events ?? DEFAULT_EVENTS;
-  const idx = events.findIndex((e) => String(e.id) === String(ev.id));
-  const updated = idx >= 0 ? events.map((e) => (String(e.id) === String(ev.id) ? ev : e)) : [...events, ev];
-  saveLocalSiteData({ events: updated });
 
+  let itemToSave = { ...ev };
   try {
     const res = await api.post<any>(ENDPOINTS.events, ev);
     const assignedId = res.data?.id != null ? String(res.data.id) : undefined;
-    if (assignedId && assignedId !== String(ev.id)) {
-      unrecordDeletedEventId(assignedId);
-      const cur = getLocalSiteData();
-      const updatedItem = { ...ev, id: assignedId };
-      const curEvents = (cur.events ?? []).map((e) => (String(e.id) === String(ev.id) ? updatedItem : e));
-      if (!curEvents.some((e) => String(e.id) === assignedId)) {
-        curEvents.push(updatedItem);
-      }
-      saveLocalSiteData({ events: curEvents }, false);
-      return { ok: true, id: assignedId };
+    if (res.data?.image) {
+      itemToSave.image = res.data.image;
     }
-    return { ok: res.ok ?? true, id: assignedId ?? ev.id, error: res.error };
+    if (assignedId && assignedId !== String(ev.id)) {
+      itemToSave.id = assignedId;
+      unrecordDeletedEventId(assignedId);
+    }
+    const cur = getLocalSiteData();
+    const curEvents = (cur.events ?? []).map((e) => (String(e.id) === String(ev.id) ? itemToSave : e));
+    if (!curEvents.some((e) => String(e.id) === String(itemToSave.id))) {
+      curEvents.push(itemToSave);
+    }
+    saveLocalSiteData({ events: curEvents }, false);
+    return { ok: res.ok ?? true, id: itemToSave.id, error: res.error };
   } catch (err: any) {
+    const current = getLocalSiteData();
+    const events = current.events ?? DEFAULT_EVENTS;
+    const idx = events.findIndex((e) => String(e.id) === String(ev.id));
+    const updated = idx >= 0 ? events.map((e) => (String(e.id) === String(ev.id) ? ev : e)) : [...events, ev];
+    saveLocalSiteData({ events: updated });
     return { ok: true, id: ev.id };
   }
 }
@@ -622,18 +645,26 @@ export function newBlogPost(section: "story" | "event" | "impact", categoryId: s
 }
 
 export async function saveBlogPost(p: BlogPost): Promise<boolean> {
+  let itemToSave = { ...p };
+  try {
+    const res = await api.post<any>(ENDPOINTS.blogPosts, p);
+    if (res.data?.coverImage) {
+      itemToSave.coverImage = res.data.coverImage;
+    }
+    if (Array.isArray(res.data?.gallery)) {
+      itemToSave.gallery = res.data.gallery;
+    }
+    if (res.data?.id != null) {
+      itemToSave.id = String(res.data.id);
+    }
+  } catch {}
+
   const current = getLocalSiteData();
   const blogPosts = current.blogPosts ?? DEFAULT_BLOG_POSTS;
-  const idx = blogPosts.findIndex((item) => item.id === p.id);
-  const updated = idx >= 0 ? blogPosts.map((item) => (item.id === p.id ? p : item)) : [...blogPosts, p];
+  const idx = blogPosts.findIndex((item) => item.id === p.id || item.id === itemToSave.id);
+  const updated = idx >= 0 ? blogPosts.map((item, i) => (i === idx ? itemToSave : item)) : [...blogPosts, itemToSave];
   saveLocalSiteData({ blogPosts: updated });
-
-  try {
-    const res = await api.post(ENDPOINTS.blogPosts, p);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return true;
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
@@ -728,18 +759,23 @@ export function newCouncilor(order: number): Councilor {
 }
 
 export async function saveCouncilor(c: Councilor): Promise<boolean> {
+  let itemToSave = { ...c };
+  try {
+    const res = await api.post<any>(ENDPOINTS.councilors, c);
+    if (res.data?.image) {
+      itemToSave.image = res.data.image;
+    }
+    if (res.data?.id != null) {
+      itemToSave.id = String(res.data.id);
+    }
+  } catch {}
+
   const current = getLocalSiteData();
   const councilors = current.councilors ?? DEFAULT_COUNCILORS;
-  const idx = councilors.findIndex((item) => item.id === c.id);
-  const updated = idx >= 0 ? councilors.map((item) => (item.id === c.id ? c : item)) : [...councilors, c];
+  const idx = councilors.findIndex((item) => item.id === c.id || item.id === itemToSave.id);
+  const updated = idx >= 0 ? councilors.map((item, i) => (i === idx ? itemToSave : item)) : [...councilors, itemToSave];
   saveLocalSiteData({ councilors: updated });
-
-  try {
-    const res = await api.post(ENDPOINTS.councilors, c);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return true;
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
@@ -782,18 +818,23 @@ export function newTimelineEntry(order: number): TimelineEntry {
 }
 
 export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
+  let itemToSave = { ...t };
+  try {
+    const res = await api.post<any>(ENDPOINTS.timeline, t);
+    if (res.data?.image) {
+      itemToSave.image = res.data.image;
+    }
+    if (res.data?.id != null) {
+      itemToSave.id = String(res.data.id);
+    }
+  } catch {}
+
   const current = getLocalSiteData();
   const timeline = current.timeline ?? DEFAULT_TIMELINE;
-  const idx = timeline.findIndex((item) => item.id === t.id);
-  const updated = idx >= 0 ? timeline.map((item) => (item.id === t.id ? t : item)) : [...timeline, t];
+  const idx = timeline.findIndex((item) => item.id === t.id || item.id === itemToSave.id);
+  const updated = idx >= 0 ? timeline.map((item, i) => (i === idx ? itemToSave : item)) : [...timeline, itemToSave];
   saveLocalSiteData({ timeline: updated });
-
-  try {
-    const res = await api.post(ENDPOINTS.timeline, t);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return true;
 }
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {

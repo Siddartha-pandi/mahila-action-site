@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
 import { fileToDataUrl, uploadMediaToDb } from "@/lib/media";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -145,9 +146,12 @@ export function BlogContentEditor({
       const dataUrl = await fileToDataUrl(files[0]);
       setCropTarget({ src: dataUrl, forImg: null });
     } else if (files.length > 1) {
-      for (const file of files) {
-        const url = await uploadMediaToDb(file);
-        insertImageHtml(url);
+      try {
+        const urls = await Promise.all(files.map((file) => uploadMediaToDb(file)));
+        urls.forEach((url) => insertImageHtml(url));
+        toast.success(`${urls.length} images uploaded!`);
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to upload images");
       }
     }
   }
@@ -225,15 +229,25 @@ export function BlogContentEditor({
   }
 
   async function handleCropConfirm(croppedDataUrl: string) {
-    const savedUrl = await uploadMediaToDb(croppedDataUrl, "story-image.png");
-    if (cropTarget?.forImg) {
-      // Re-cropping an image already placed in the content — update it in place.
-      cropTarget.forImg.src = savedUrl;
-      emitChange();
-    } else {
-      insertImageHtml(savedUrl);
+    try {
+      const savedUrl = await uploadMediaToDb(croppedDataUrl, "story-image.png");
+      if (savedUrl.startsWith("data:")) {
+        toast.warning("Image could not be saved to media table (saved locally).");
+      } else {
+        toast.success("Image saved to media table!");
+      }
+      if (cropTarget?.forImg) {
+        // Re-cropping an image already placed in the content — update it in place.
+        cropTarget.forImg.src = savedUrl;
+        emitChange();
+      } else {
+        insertImageHtml(savedUrl);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload image");
+    } finally {
+      setCropTarget(null);
     }
-    setCropTarget(null);
   }
 
   // Floating selection bubble menu (Medium-style: select text to format it).

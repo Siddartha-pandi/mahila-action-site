@@ -1,8 +1,9 @@
 import { api } from "./api";
 import { comingSoon } from "./comingSoon";
+import siteContentJson from "../data/site_content.json";
 
-// ── Default content — used until the API responds, or if it's unreachable ─
-export const DEFAULTS: Record<string, string> = {
+// ── Default content — sourced from JSON with built-in fallbacks ─
+const FALLBACK_DEFAULTS: Record<string, string> = {
   // Hero
   hero_title: "When Women Rise,\nCommunities Thrive.",
   hero_subtitle: "For over 28 years, Mahila Action has worked alongside women, children, and communities to create opportunities, protect rights, and build lasting change from the ground up.",
@@ -56,7 +57,11 @@ export const DEFAULTS: Record<string, string> = {
   img_story1: "",
   img_story2: "",
   img_story3: "",
-  img_about_banner: "",
+};
+
+export const DEFAULTS: Record<string, string> = {
+  ...FALLBACK_DEFAULTS,
+  ...(siteContentJson as Record<string, string> || {}),
 };
 
 export type ContentMap = typeof DEFAULTS;

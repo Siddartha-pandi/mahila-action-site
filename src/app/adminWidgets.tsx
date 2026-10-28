@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Plus, Trash2, Pencil, X, ImagePlus, Crop, UploadCloud, Search } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
 import { Pagination } from "./components/ui/Pagination";
@@ -34,7 +35,14 @@ export function ImageField({
     setUploading(true);
     try {
       const url = await uploadMediaToDb(file);
+      if (url.startsWith("data:")) {
+        toast.warning("Image could not be saved to media table (fallback saved locally).");
+      } else {
+        toast.success("Image uploaded to media table!");
+      }
       onChange(url);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload image");
     } finally {
       setUploading(false);
     }
@@ -154,7 +162,14 @@ export function ImageField({
             setUploading(true);
             try {
               const url = await uploadMediaToDb(cropped, "cropped-image.png");
+              if (url.startsWith("data:")) {
+                toast.warning("Cropped image could not be saved to media table (fallback saved locally).");
+              } else {
+                toast.success("Cropped image saved to media table!");
+              }
               onChange(url);
+            } catch (err: any) {
+              toast.error(err?.message || "Failed to upload cropped image");
             } finally {
               setUploading(false);
             }
@@ -190,7 +205,15 @@ export function GalleryField({
     setUploading(true);
     try {
       const uploaded = await Promise.all(imageFiles.map((f) => uploadMediaToDb(f)));
+      const hasFallback = uploaded.some((u) => u.startsWith("data:"));
+      if (hasFallback) {
+        toast.warning("Some images could not be saved to media table (saved locally).");
+      } else {
+        toast.success(`${uploaded.length} image${uploaded.length > 1 ? "s" : ""} saved to media table!`);
+      }
       onChange([...value, ...uploaded]);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload gallery images");
     } finally {
       setUploading(false);
     }
@@ -328,7 +351,14 @@ export function GalleryField({
             setUploading(true);
             try {
               const url = await uploadMediaToDb(cropped, "gallery-cropped.png");
+              if (url.startsWith("data:")) {
+                toast.warning("Cropped image could not be saved to media table (saved locally).");
+              } else {
+                toast.success("Cropped image saved to media table!");
+              }
               onChange(value.map((v, idx) => (idx === targetIndex ? url : v)));
+            } catch (err: any) {
+              toast.error(err?.message || "Failed to upload cropped image");
             } finally {
               setUploading(false);
             }

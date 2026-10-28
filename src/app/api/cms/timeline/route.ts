@@ -1,15 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
-import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import fs from "fs/promises";
+import path from "path";
+
+import { ensureMediaUrl } from "@/lib/mediaServer";
+
+const TIMELINE_PATH = path.join(process.cwd(), "src", "data", "timeline.json");
+
+interface TimelineRecord {
+  id: string | number;
+  year: string;
+  title: string;
+  description?: string;
+  image?: string;
+  order?: number;
+  order_index?: number;
+}
+
+async function readTimeline(): Promise<TimelineRecord[]> {
+  try {
+    const raw = await fs.readFile(TIMELINE_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeTimeline(data: TimelineRecord[]): Promise<void> {
+  await fs.mkdir(path.dirname(TIMELINE_PATH), { recursive: true });
+  await fs.writeFile(TIMELINE_PATH, JSON.stringify(data, null, 2), "utf-8");
+}
 
 export async function GET() {
   try {
-    const result = await queryDb("SELECT * FROM timeline ORDER BY order_index ASC");
+    const list = await readTimeline();
+    const sorted = [...list].sort(
+      (a, b) => Number(a.order_index ?? a.order ?? 0) - Number(b.order_index ?? b.order ?? 0)
+    );
     return NextResponse.json(
-      result.rows.map((r: any) => ({
+      sorted.map((r) => ({
         ...r,
+        id: String(r.id),
         order: Number(r.order_index ?? r.order ?? 0),
+        order_index: Number(r.order_index ?? r.order ?? 0),
       }))
     );
   } catch (err: any) {
@@ -25,25 +58,48 @@ export async function POST(req: NextRequest) {
   try {
     const b = await req.json();
     const orderIndex = Number(b.order ?? b.order_index ?? 0);
-    let finalId = b.id;
+    const list = await readTimeline();
 
-    if (b.id && !isNaN(Number(b.id))) {
-      await queryDb(
-        `INSERT INTO timeline (id, year, title, description, image, order_index)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT(id) DO UPDATE SET year=EXCLUDED.year, title=EXCLUDED.title, description=EXCLUDED.description,
-           image=EXCLUDED.image, order_index=EXCLUDED.order_index`,
-        [Number(b.id), b.year, b.title, b.description || null, b.image || null, orderIndex]
-      );
-    } else {
-      const res = await queryDb(
-        `INSERT INTO timeline (year, title, description, image, order_index)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [b.year, b.title, b.description || null, b.image || null, orderIndex]
-      );
-      finalId = res.rows[0]?.id;
+    let finalId = b.id ? String(b.id) : null;
+    if (!finalId) {
+      const maxNum = list.reduce((max, t) => {
+        const n = Number(t.id);
+        return isNaN(n) ? max : Math.max(max, n);
+      }, 0);
+      finalId = String(maxNum + 1);
     }
-    return NextResponse.json({ ok: true, id: finalId });
+
+    const existingIndex = list.findIndex((t) => String(t.id) === finalId);
+
+    // Automatically store base64 data URLs in PostgreSQL media table
+    const storedImage = b.image !== undefined
+      ? await ensureMediaUrl(b.image, `timeline-${finalId}.png`)
+      : undefined;
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = {
+        ...list[existingIndex],
+        year: b.year ?? list[existingIndex].year,
+        title: b.title ?? list[existingIndex].title,
+        description: b.description ?? list[existingIndex].description,
+        image: storedImage ?? list[existingIndex].image,
+        order: orderIndex,
+        order_index: orderIndex,
+      };
+    } else {
+      list.push({
+        id: finalId,
+        year: b.year ?? "",
+        title: b.title ?? "",
+        description: b.description ?? "",
+        image: storedImage ?? "",
+        order: orderIndex,
+        order_index: orderIndex,
+      });
+    }
+
+    await writeTimeline(list);
+    return NextResponse.json({ ok: true, id: finalId, image: storedImage });
   } catch (err: any) {
     console.error("POST /api/cms/timeline error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

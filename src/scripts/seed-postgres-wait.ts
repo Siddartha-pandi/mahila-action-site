@@ -41,8 +41,6 @@ async function main() {
       pool.query("SELECT COUNT(*) as count FROM categories;"),
       pool.query("SELECT COUNT(*) as count FROM events;"),
       pool.query("SELECT COUNT(*) as count FROM blog_posts;"),
-      pool.query("SELECT COUNT(*) as count FROM councilors;"),
-      pool.query("SELECT COUNT(*) as count FROM timeline;"),
     ]).catch(() => []);
 
     const getCount = (res: any) => res?.rows?.[0]?.count ?? res?.rows?.[0]?.["COUNT(*)"] ?? 0;
@@ -55,9 +53,10 @@ async function main() {
       console.log(`Categories:     ${getCount(counts[1])}`);
       console.log(`Events:         ${getCount(counts[2])}`);
       console.log(`Blog Posts:     ${getCount(counts[3])}`);
-      console.log(`Councilors:     ${getCount(counts[4])}`);
-      console.log(`Timeline:       ${getCount(counts[5])}`);
       console.log(`Contact Info:   Stored in JSON format (src/data/contact.json)`);
+      console.log(`Councilors:     Stored in JSON format (src/data/councilors.json)`);
+      console.log(`Timeline:       Stored in JSON format (src/data/timeline.json)`);
+      console.log(`Site Content:   Stored in JSON format (src/data/site_content.json)`);
       console.log(`App Metadata:   Stored in JSON format (src/data/app_meta.json)`);
       console.log("==================================================\n");
     }

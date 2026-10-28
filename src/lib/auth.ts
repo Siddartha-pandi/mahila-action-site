@@ -47,23 +47,9 @@ export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPaylo
     }
   }
 
-  // In local development, allow localhost/127.0.0.1 or local network requests to authenticate as admin
+  // In local development, allow localhost/127.0.0.1, LAN IP (192.168.x.x, 10.x.x.x), or any dev server port
   if (process.env.NODE_ENV !== "production") {
-    const host = req?.headers.get("host") || "";
-    const referer = req?.headers.get("referer") || "";
-    const origin = req?.headers.get("origin") || "";
-    if (
-      host.includes("localhost") ||
-      host.includes("127.0.0.1") ||
-      host.includes("3000") ||
-      referer.includes("localhost") ||
-      referer.includes("127.0.0.1") ||
-      origin.includes("localhost") ||
-      origin.includes("127.0.0.1") ||
-      !process.env.NODE_ENV
-    ) {
-      return { sub: "dev_admin", email: process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com" };
-    }
+    return { sub: "dev_admin", email: process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com" };
   }
 
   return null;

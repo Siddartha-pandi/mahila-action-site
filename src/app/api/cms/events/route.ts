@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -55,7 +56,8 @@ export async function POST(req: NextRequest) {
     const title = b.title !== undefined ? (b.title || "New Event") : (existingRow?.title || "New Event");
     const eventDate = b.eventDate || b.event_date || existingRow?.event_date || new Date().toISOString().slice(0, 10);
     const description = b.description !== undefined ? (b.description || null) : (existingRow?.description || null);
-    const image = b.image !== undefined ? (b.image || null) : (existingRow?.image || null);
+    const rawImage = b.image !== undefined ? (b.image || null) : (existingRow?.image || null);
+    const image = await ensureMediaUrl(rawImage, `event-${targetNumericId || "banner"}.png`);
     const location = b.location !== undefined ? (b.location || null) : (existingRow?.location || null);
 
     const totalSeatsNum = Number(b.totalSeats ?? b.total_seats ?? existingRow?.total_seats ?? 0);
@@ -175,7 +177,7 @@ export async function POST(req: NextRequest) {
       finalId = res.rows[0]?.id;
     }
 
-    return NextResponse.json({ ok: true, id: String(finalId) });
+    return NextResponse.json({ ok: true, id: String(finalId), image });
   } catch (err: any) {
     console.error("POST /api/cms/events error:", err);
     return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
