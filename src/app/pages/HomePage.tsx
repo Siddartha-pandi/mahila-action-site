@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useNavigate } from "react-router";
 import { ArrowRight, Users, BookOpen, Briefcase, Heart } from "lucide-react";
 import { upcomingOrOpenEvents, isEventOpen, type EventItem } from "@/lib/data";
 import { STORY_FALLBACK_IMAGES } from "../constants/fallbacks";
@@ -21,6 +22,7 @@ function c(content: Record<string, string>, key: string) {
 }
 
 export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
+  const navigate = useNavigate();
   const content = useContent();
   const siteData = useSiteData();
   const { openModal } = useModal();
@@ -47,7 +49,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || STORY_FALLBACK_IMAGES[p.id]?.banner || imgEvent, title: p.title, excerpt: p.excerpt }));
 
   const upcoming = upcomingOrOpenEvents(siteData.events);
-  const railEvents = (upcoming.length > 0 ? upcoming : siteData.events).slice(0, MAX_RAIL_ITEMS);
+  const railEvents = (upcoming.length > 0 ? upcoming : siteData.events.filter((e) => e.published !== false)).slice(0, MAX_RAIL_ITEMS);
   const [activeEventIndex, setActiveEventIndex] = useState(0);
   // The CTA always acts on whichever event the carousel is currently showing.
   const featuredEvent: EventItem | null = railEvents[activeEventIndex] ?? railEvents[0] ?? null;
@@ -67,7 +69,8 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   }
 
   function categoryName(categoryId: string | null) {
-    return siteData.categories.find((c) => c.id === categoryId)?.name;
+    if (!categoryId) return undefined;
+    return siteData.categories.find((c) => String(c.id) === String(categoryId) || c.name === categoryId)?.name;
   }
 
   return (
@@ -120,16 +123,32 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               <p className="font-['Inter',sans-serif] font-medium mt-[0.7vw]" style={{ fontSize: "clamp(10px,1.55vw,22px)", lineHeight: 1.27 }}>Women Leading<br />Their Communities</p>
             </div>
           </div>
-          <div className="bg-[#a65a4a] flex-1 min-w-0 rounded-[3vw] flex flex-col items-start justify-between overflow-hidden" style={{ height: "28vw", padding: "3.5vw 1.8vw" }}>
-            <div className="font-['Fraunces',serif] font-semibold text-[#f4efe7]" style={{ fontSize: "clamp(12px,2vw,29px)", lineHeight: 1.38, fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+          <div className="bg-[#a65a4a] flex-1 min-w-0 rounded-[3vw] flex flex-col items-start justify-between overflow-hidden" style={{ height: "30vw", padding: "clamp(16px,2.4vw,34px) clamp(10px,1.4vw,20px)" }}>
+            <div className="font-['Fraunces',serif] font-semibold text-[#f4efe7]" style={{ fontSize: "clamp(12px,1.9vw,28px)", lineHeight: 1.35, fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               <p className="mb-0">Join Thousands</p>
               <p className="mb-0">Building</p>
               <p className="mb-0">Stronger</p>
               <p>Communities.</p>
             </div>
-            <button onClick={() => openModal("volunteer")} className="bg-[#f4efe7] text-[#a65a4a] font-['Inter',sans-serif] font-semibold w-full text-center rounded-full hover:bg-white transition-colors cursor-pointer" style={{ fontSize: "clamp(10px,1vw,15px)", padding: "clamp(5px,1vw,10px) 0" }}>
-              Become a Volunteer
-            </button>
+            <div className="w-full flex flex-col gap-[0.5vw] mt-auto pt-2">
+              <button
+                onClick={() => goToPage("account")}
+                className="bg-[#f4efe7] text-[#a65a4a] font-['Inter',sans-serif] font-semibold w-full text-center rounded-full hover:bg-white transition-colors cursor-pointer shadow-sm leading-tight"
+                style={{ fontSize: "clamp(9px,0.85vw,14px)", padding: "clamp(6px,0.7vw,10px) 0.5rem" }}
+              >
+                Become a Volunteer
+              </button>
+              <button
+                onClick={() => {
+                  navigate("/account?tab=perm");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="border-2 border-[#f4efe7] text-[#f4efe7] font-['Inter',sans-serif] font-semibold w-full text-center rounded-full hover:bg-[#f4efe7] hover:text-[#a65a4a] transition-all cursor-pointer leading-tight"
+                style={{ fontSize: "clamp(9px,0.85vw,14px)", padding: "clamp(5px,0.65vw,9px) 0.5rem" }}
+              >
+                Become a Permanent Volunteer
+              </button>
+            </div>
           </div>
           <div className="relative flex-1 min-w-0 overflow-hidden rounded-[3vw]" style={{ height: "35vw" }}>
             <img loading="eager" decoding="async" src={imgHeroSide} alt="" className="absolute inset-0 size-full object-cover object-center" />
@@ -177,6 +196,28 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
             <div className="bg-[#993925] rounded-2xl flex flex-col items-center justify-center text-[#f4efe7] text-center" style={{ padding: "clamp(14px,4.5vw,20px) 8px" }}>
               <p className="font-['Inter',sans-serif] font-bold leading-none" style={{ fontSize: "clamp(20px,6.5vw,28px)" }}>28+</p>
               <p className="font-['Inter',sans-serif] italic leading-tight px-2 mt-1.5" style={{ fontSize: "clamp(11px,3.2vw,13px)" }}>Years Walking<br />Alongside Women</p>
+            </div>
+          </div>
+          <div className="bg-[#a65a4a] rounded-2xl p-5 flex flex-col gap-4 text-left">
+            <div className="font-['Fraunces',serif] font-semibold text-[#f4efe7] text-[20px] leading-tight" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+              Join Thousands Building Stronger Communities.
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => goToPage("account")}
+                className="bg-[#f4efe7] text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[14px] py-2.5 px-4 rounded-full text-center hover:bg-white transition-colors cursor-pointer shadow-sm"
+              >
+                Become a Volunteer
+              </button>
+              <button
+                onClick={() => {
+                  navigate("/account?tab=perm");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="border-2 border-[#f4efe7] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[14px] py-2.5 px-4 rounded-full text-center hover:bg-[#f4efe7] hover:text-[#a65a4a] transition-all cursor-pointer"
+              >
+                Become a Permanent Volunteer
+              </button>
             </div>
           </div>
         </div>

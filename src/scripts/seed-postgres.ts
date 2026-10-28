@@ -26,6 +26,7 @@ async function main() {
     console.log(`Councilors:     ${getCount(councilorCount)}`);
     console.log(`Timeline:       ${getCount(timelineCount)}`);
     console.log(`Contact Info:   Stored in JSON format (src/data/contact.json)`);
+    console.log(`App Metadata:   Stored in JSON format (src/data/app_meta.json)`);
     console.log("==================================================\n");
 
     if (typeof pool.end === "function") {

@@ -410,3 +410,5 @@ export function AdminPage({
     </main>
   );
 }
+// Events admin with standalone overview table & 3-dots actions menu
+

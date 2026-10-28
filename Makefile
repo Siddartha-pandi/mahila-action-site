@@ -1,4 +1,4 @@
-.PHONY: install run dev build start
+.PHONY: install run dev build start seed seed-wait
 
 NPM ?= npm
 
@@ -15,3 +15,9 @@ build:
 
 start:
 	$(NPM) run start
+
+seed:
+	$(NPM) run seed:pg
+
+seed-wait:
+	$(NPM) run seed:pg:wait

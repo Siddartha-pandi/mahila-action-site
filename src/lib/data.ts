@@ -26,6 +26,7 @@ export interface EventItem {
   maxVolunteers: number; // 0 = unlimited; admin-set cap on volunteer sign-ups
   windows: RegWindow[];
   categoryId: string | null; // e.g. "Women & Leadership" — shares the same categories as Stories
+  published?: boolean; // true = visible to public, false = unpublished draft
   createdAt: string;
 }
 
@@ -157,6 +158,7 @@ export const DEFAULT_EVENTS: EventItem[] = [
       { kind: "donor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(10) },
     ],
     categoryId: "cat_women",
+    published: true,
     createdAt: new Date().toISOString(),
   },
 ];
@@ -274,6 +276,7 @@ export function isWindowOpen(w: RegWindow, now = new Date()): boolean {
  */
 export function isEventOpen(ev: EventItem, now = new Date()): boolean {
   if (!ev) return false;
+  if (ev.published === false) return false;
 
   // If the event itself has already occurred in the past, it is closed
   if (ev.eventDate) {
@@ -292,6 +295,7 @@ export function isEventOpen(ev: EventItem, now = new Date()): boolean {
 export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): EventItem[] {
   return events
     .filter((ev) => {
+      if (ev.published === false) return false;
       if (ev.eventDate) {
         const eventDate = new Date(ev.eventDate);
         eventDate.setHours(23, 59, 59, 999);
@@ -360,6 +364,9 @@ export function getLocalSiteData(): Partial<SiteData> {
 export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
   try {
     const current = getLocalSiteData();
+    if (patch.events) {
+      patch.events.forEach((e) => unrecordDeletedEventId(e.id));
+    }
     const deletedIds = getDeletedEventIds();
     const rawEvents = patch.events ?? current.events ?? DEFAULT_EVENTS;
     const cleanEvents = rawEvents.filter((e) => !isDeletedEventId(e.id, deletedIds));
@@ -413,8 +420,11 @@ export async function loadSiteData(): Promise<SiteData> {
     const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
     if (Array.isArray(eventRows) && eventRows.length > 0) {
+      // Rows returned directly from database are active and not deleted
+      eventRows.forEach((r: any) => unrecordDeletedEventId(r.id));
+      const freshDeletedIds = getDeletedEventIds();
       events = eventRows
-        .filter((r: any) => !isDeletedEventId(r.id, deletedIds))
+        .filter((r: any) => !isDeletedEventId(r.id, freshDeletedIds))
         .map((r: any) => ({
           id: String(r.id),
           title: r.title,
@@ -425,13 +435,14 @@ export async function loadSiteData(): Promise<SiteData> {
           totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
           maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
           windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
-          categoryId: r.category_id || r.categoryId || null,
+          categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
+          published: r.published !== false && r.published !== 0 && r.published !== "false",
           createdAt: r.created_at || r.createdAt || new Date().toISOString(),
         }));
     }
 
     if (Array.isArray(catRows) && catRows.length > 0) {
-      categories = catRows.map((r: any) => ({ id: r.id, name: r.name }));
+      categories = catRows.map((r: any) => ({ id: String(r.id), name: r.name }));
     }
 
     if (Array.isArray(postRows) && postRows.length > 0) {
@@ -513,22 +524,36 @@ export function newEvent(): EventItem {
       { kind: "donor", enabled: false, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
     ],
     categoryId: null,
+    published: true,
     createdAt: new Date().toISOString(),
   };
 }
 
-export async function saveEvent(ev: EventItem): Promise<boolean> {
+export async function saveEvent(ev: EventItem): Promise<{ ok: boolean; id?: string; error?: string }> {
+  unrecordDeletedEventId(ev.id);
   const current = getLocalSiteData();
   const events = current.events ?? DEFAULT_EVENTS;
-  const idx = events.findIndex((e) => e.id === ev.id);
-  const updated = idx >= 0 ? events.map((e) => (e.id === ev.id ? ev : e)) : [...events, ev];
+  const idx = events.findIndex((e) => String(e.id) === String(ev.id));
+  const updated = idx >= 0 ? events.map((e) => (String(e.id) === String(ev.id) ? ev : e)) : [...events, ev];
   saveLocalSiteData({ events: updated });
 
   try {
-    const res = await api.post(ENDPOINTS.events, ev);
-    return res.ok || true;
-  } catch {
-    return true;
+    const res = await api.post<any>(ENDPOINTS.events, ev);
+    const assignedId = res.data?.id != null ? String(res.data.id) : undefined;
+    if (assignedId && assignedId !== String(ev.id)) {
+      unrecordDeletedEventId(assignedId);
+      const cur = getLocalSiteData();
+      const updatedItem = { ...ev, id: assignedId };
+      const curEvents = (cur.events ?? []).map((e) => (String(e.id) === String(ev.id) ? updatedItem : e));
+      if (!curEvents.some((e) => String(e.id) === assignedId)) {
+        curEvents.push(updatedItem);
+      }
+      saveLocalSiteData({ events: curEvents }, false);
+      return { ok: true, id: assignedId };
+    }
+    return { ok: res.ok ?? true, id: assignedId ?? ev.id, error: res.error };
+  } catch (err: any) {
+    return { ok: true, id: ev.id };
   }
 }
 

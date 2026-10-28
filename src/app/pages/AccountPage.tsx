@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router";
 import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,8 +29,38 @@ const ROLE_LABEL: Record<RegistrationRole, string> = {
 export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const { openModal } = useModal();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => getSavedUserSession());
-  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse" | "perm">("registered");
+  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse" | "perm">(() => {
+    if (tabParam === "perm" || tabParam === "donations" || tabParam === "browse" || tabParam === "registered") {
+      return tabParam;
+    }
+    return "registered";
+  });
+
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (currentTab === "perm" || currentTab === "donations" || currentTab === "browse" || currentTab === "registered") {
+      setDashTab(currentTab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tab: "registered" | "donations" | "browse" | "perm") => {
+    setDashTab(tab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === "registered") {
+          next.delete("tab");
+        } else {
+          next.set("tab", tab);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
   /** Event the registration form is open for — registering is one event at a
    *  time now, because each role asks for different details. */
@@ -202,12 +233,13 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const now = new Date();
   const realEvents = siteData.events
     .filter((ev) => {
+      if (ev.published === false) return false;
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
       if (windows.length === 0) return true;
       return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
     })
     .map((ev) => ({
-      id: ev.id,
+      id: String(ev.id),
       raw: ev,
       status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
       title: ev.title,
@@ -220,7 +252,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       ),
     }));
 
-  const registeringEvent = realEvents.find(e => e.id === registeringEventId) ?? null;
+  const registeringEvent = realEvents.find(e => String(e.id) === String(registeringEventId)) ?? null;
 
   return (
     <main className="bg-[#f4efe7] min-h-screen">
@@ -231,15 +263,19 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
           {!profile ? (
             <div className="max-w-[520px] mx-auto bg-white rounded-3xl p-8 sm:p-10 border border-[#a65a4a]/20 text-center shadow-lg">
               <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
-                <User size={32} />
+                {dashTab === "perm" ? <Star size={32} className="text-[#a65a4a] fill-[#a65a4a]" /> : <User size={32} />}
               </div>
-              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Sign In to View Your Account</h3>
+              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">
+                {dashTab === "perm" ? "Permanent Volunteer Program" : "Sign In to View Your Account"}
+              </h3>
               <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/65 max-w-md mx-auto mt-2 leading-relaxed">
-                Please sign in to access your registered events, seat reservations, volunteer activities, and contribution history.
+                {dashTab === "perm"
+                  ? "Please sign in or create an account to view or apply for Permanent Volunteer status with Mahila Action."
+                  : "Please sign in to access your registered events, seat reservations, volunteer activities, and contribution history."}
               </p>
               <button
                 onClick={() => {
-                  rememberIntendedDestination("/account");
+                  rememberIntendedDestination(window.location.pathname + (window.location.search || (dashTab === "perm" ? "?tab=perm" : "")));
                   openModal("login");
                 }}
                 className="mt-6 px-8 py-3.5 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
@@ -299,7 +335,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
               <div className="flex border-b-2 border-[#a65a4a]/20 mb-8 gap-4 sm:gap-8 overflow-x-auto">
                 <button
-                  onClick={() => setDashTab("registered")}
+                  onClick={() => handleTabChange("registered")}
                   className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
                     dashTab === "registered"
                       ? "border-[#a65a4a] text-[#a65a4a]"
@@ -310,7 +346,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 </button>
 
                 <button
-                  onClick={() => setDashTab("donations")}
+                  onClick={() => handleTabChange("donations")}
                   className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
                     dashTab === "donations"
                       ? "border-[#a65a4a] text-[#a65a4a]"
@@ -321,7 +357,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 </button>
 
                 <button
-                  onClick={() => setDashTab("browse")}
+                  onClick={() => handleTabChange("browse")}
                   className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
                     dashTab === "browse"
                       ? "border-[#a65a4a] text-[#a65a4a]"
@@ -332,7 +368,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 </button>
 
                 <button
-                  onClick={() => setDashTab("perm")}
+                  onClick={() => handleTabChange("perm")}
                   className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
                     dashTab === "perm"
                       ? "border-[#a65a4a] text-[#a65a4a]"
@@ -554,7 +590,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
               )}
 
               {dashTab === "perm" && (
-                <div>
+                <div id="permanent-volunteer-section">
                   {/* ── 1. Deactivated State (Only if not re-applying) ── */}
                   {isDeactivated && !reApplying && (
                     <div className="bg-white rounded-3xl border border-gray-250 p-8 sm:p-10 text-center shadow-sm">

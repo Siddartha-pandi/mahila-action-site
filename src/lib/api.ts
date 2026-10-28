@@ -11,7 +11,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boole
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
     const validJwt = token && token !== "session" && token.includes(".") ? token : null;
-    const authHeaders: Record<string, string> = validJwt ? { Authorization: `Bearer ${validJwt}` } : {};
+    const authHeaders: Record<string, string> = validJwt
+      ? { Authorization: `Bearer ${validJwt}` }
+      : token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
 
     const url = BASE_URL ? `${BASE_URL}${path}` : path;
     const res = await fetch(url, {

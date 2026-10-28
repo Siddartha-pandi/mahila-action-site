@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS events (
   max_volunteers INTEGER DEFAULT 0,
   windows TEXT NOT NULL,
   category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  published BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -135,16 +136,7 @@ CREATE TABLE IF NOT EXISTS site_content (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 13. Internal bookkeeping for the app itself (schema version marker, etc).
--- Deliberately separate from site_content, which is user-editable CMS copy and
--- is returned wholesale by GET /api/content.
-CREATE TABLE IF NOT EXISTS app_meta (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 14. Recycle Bin (soft-deleted items held for restore or permanent erase)
+-- 13. Recycle Bin (soft-deleted items held for restore or permanent erase)
 -- item_id is TEXT because sources use both integer (CMS tables) and string (submissions) ids.
 -- data holds a full JSON snapshot of the original row so it can be restored later.
 CREATE TABLE IF NOT EXISTS recycle_bin (
@@ -162,14 +154,14 @@ CREATE TABLE IF NOT EXISTS recycle_bin (
 CREATE UNIQUE INDEX IF NOT EXISTS recycle_bin_item_unique ON recycle_bin (item_type, item_id);
 CREATE INDEX IF NOT EXISTS recycle_bin_deleted_at_idx ON recycle_bin (deleted_at);
 
--- 15. Performance Indexes for Low-Latency Lookups
+-- 14. Performance Indexes for Low-Latency Lookups
 CREATE INDEX IF NOT EXISTS users_role_status_idx ON users (role, status);
 CREATE INDEX IF NOT EXISTS blog_posts_section_cat_idx ON blog_posts (section, category_id, created_at);
 CREATE INDEX IF NOT EXISTS events_date_cat_idx ON events (event_date, category_id);
 CREATE INDEX IF NOT EXISTS donations_status_created_idx ON donations (status, created_at);
 CREATE INDEX IF NOT EXISTS event_reservations_status_created_idx ON event_reservations (status, created_at);
 
--- 16. Media & Images Table (binary BYTEA storage)
+-- 15. Media & Images Table (binary BYTEA storage)
 CREATE TABLE IF NOT EXISTS media (
   id SERIAL PRIMARY KEY,
   filename TEXT NOT NULL,

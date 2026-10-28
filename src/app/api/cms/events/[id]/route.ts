@@ -2,24 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 
-export function generateStaticParams() {
-  return [];
-}
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const res = await queryDb("SELECT * FROM events WHERE id = $1", [id]);
+    const res = await queryDb("SELECT * FROM events WHERE id = $1", [id], { noCache: true });
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
     const r = res.rows[0];
     return NextResponse.json({
       ...r,
+      id: String(r.id),
       eventDate: r.event_date || r.eventDate || "",
       totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
       maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
-      categoryId: r.category_id || r.categoryId || null,
+      categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
+      published: r.published !== false && r.published !== 0 && r.published !== "false",
       createdAt: r.created_at || r.createdAt || "",
       windows: typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : r.windows || [],
     });
@@ -45,6 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const maxVolunteers = b.maxVolunteers !== undefined || b.max_volunteers !== undefined ? Number(b.maxVolunteers ?? b.max_volunteers) : undefined;
     const windows = b.windows ? JSON.stringify(b.windows) : undefined;
     const categoryId = b.categoryId !== undefined || b.category_id !== undefined ? (b.categoryId || b.category_id ? Number(b.categoryId || b.category_id) : null) : undefined;
+    const published = b.published !== undefined ? Boolean(b.published) : undefined;
 
     const res = await queryDb(
       `UPDATE events SET
@@ -56,9 +58,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
          total_seats = COALESCE($6, total_seats),
          max_volunteers = COALESCE($7, max_volunteers),
          windows = COALESCE($8, windows),
-         category_id = COALESCE($9, category_id)
-       WHERE id = $10 RETURNING *`,
-      [title || null, description || null, image || null, eventDate || null, location || null, totalSeats ?? null, maxVolunteers ?? null, windows || null, categoryId ?? null, id]
+         category_id = COALESCE($9, category_id),
+         published = COALESCE($10, published)
+       WHERE id = $11 RETURNING *`,
+      [title || null, description || null, image || null, eventDate || null, location || null, totalSeats ?? null, maxVolunteers ?? null, windows || null, categoryId ?? null, published ?? null, id]
     );
 
     if (res.rows.length === 0) {

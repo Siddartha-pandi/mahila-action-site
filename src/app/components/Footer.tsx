@@ -47,7 +47,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 Donate For The Cause
               </button>
               <button
-                onClick={() => openModal("volunteer")}
+                onClick={() => nav("eventsBlog")}
                 className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[15px] font-bold px-10 py-3 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}
               >
                 Join The Movement

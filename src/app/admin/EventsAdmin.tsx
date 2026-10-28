@@ -21,6 +21,11 @@ import {
   AlertCircle,
   Plus,
   ArrowLeft,
+  Globe,
+  Eye,
+  EyeOff,
+  MoreVertical,
+  Trash2,
 } from "lucide-react";
 
 const KIND_LABEL: Record<RegKind, string> = { volunteer: "Volunteer", vendor: "Vendor", donor: "Donor" };
@@ -378,6 +383,357 @@ function EventDetailRegistrationsView({
   );
 }
 
+export function EventsPaginationBar({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  return (
+    <div className="bg-white rounded-2xl p-4 border border-[#a65a4a]/15 shadow-sm">
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        pageSize={pageSize}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />
+    </div>
+  );
+}
+
+export function EventsOverviewTable({
+  events,
+  categories,
+  submissions,
+  canDelete,
+  onSelectEvent,
+  onEditEvent,
+  onTogglePublish,
+  onDeleteEvent,
+}: {
+  events: EventItem[];
+  categories: Category[];
+  submissions: SubmissionItem[];
+  canDelete: boolean;
+  onSelectEvent: (id: string) => void;
+  onEditEvent: (id: string) => void;
+  onTogglePublish: (ev: EventItem, publish: boolean) => void;
+  onDeleteEvent: (id: string) => void;
+}) {
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-row-menu]")) {
+        setMenuOpenId(null);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpenId(null);
+    };
+    document.addEventListener("click", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [menuOpenId]);
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
+      <div className="overflow-x-auto min-h-[380px] pb-36">
+        <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
+          <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
+            <tr>
+              <th className="py-3 px-3">Event Details</th>
+              <th className="py-3 px-3">Status</th>
+              <th className="py-3 px-2 text-center">Capacity</th>
+              <th className="py-3 px-2 text-center">Attendees</th>
+              <th className="py-3 px-2 text-center">Volunteers</th>
+              <th className="py-3 px-2 text-center">Vendors</th>
+              <th className="py-3 px-2 text-center">Total</th>
+              <th className="py-3 px-3 min-w-[110px]">Occupancy</th>
+              <th className="py-3 px-3 text-right min-w-[210px] whitespace-nowrap sticky right-0 bg-[#faf7f3] z-20 shadow-[-6px_0_12px_-3px_rgba(0,0,0,0.08)] border-l border-[#a65a4a]/15">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#a65a4a]/10">
+            {events.map((ev, index) => {
+              const stats = getEventStats(ev, submissions);
+              const isOpen = isEventOpen(ev);
+              const catName = categories.find((c) => String(c.id) === String(ev.categoryId) || c.name === ev.categoryId)?.name;
+
+              return (
+                <tr
+                  key={ev.id}
+                  onClick={() => onSelectEvent(ev.id)}
+                  className={`hover:bg-[#a65a4a]/5 transition-colors cursor-pointer group relative ${
+                    menuOpenId === ev.id ? "z-40" : "z-auto"
+                  }`}
+                >
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2.5">
+                      {ev.image ? (
+                        <img src={ev.image} alt="" className="size-9 rounded-lg object-cover border border-[#a65a4a]/20 shrink-0" />
+                      ) : (
+                        <div className="size-9 rounded-lg bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
+                          <Calendar size={17} />
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-[#1e1e1e] group-hover:text-[#a65a4a] transition-colors">{ev.title}</p>
+                          {ev.published === false && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
+                              <EyeOff size={10} /> Draft
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#1e1e1e]/50 mt-0.5">
+                          <span>{ev.eventDate || "Date TBD"}</span>
+                          {ev.location && <span>• {ev.location}</span>}
+                          {catName && <span className="px-1.5 py-0.2 rounded bg-[#a65a4a]/10 text-[#a65a4a] font-medium">{catName}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-3">
+                    {stats.isFull ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
+                        <AlertCircle size={12} /> Sold Out
+                      </span>
+                    ) : isOpen ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                        <CheckCircle size={12} /> Open
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
+                        <Clock size={12} /> Closed
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-2 text-center font-semibold text-gray-900">
+                    {stats.capacity > 0 ? stats.capacity : "Unlimited"}
+                  </td>
+                  <td className="py-3 px-2 text-center">
+                    <span className="font-bold text-amber-700">{stats.attendeeSeats}</span>
+                    <span className="text-[10px] text-gray-400 block">({stats.attendeeCount} bkg)</span>
+                  </td>
+                  <td className="py-3 px-2 text-center">
+                    {(() => {
+                      const cap = Number(ev.maxVolunteers ?? 0);
+                      const count = stats.volunteerCount;
+                      const isCapped = cap > 0;
+                      const isFull = isCapped && count >= cap;
+                      return (
+                        <div>
+                          <span className={`font-bold ${isFull ? "text-rose-700" : "text-emerald-700"}`}>
+                            {count}{isCapped ? `/${cap}` : ""}
+                          </span>
+                          {isFull && (
+                            <span className="text-[9px] font-semibold bg-rose-100 text-rose-700 px-1 py-0.2 rounded-full block mt-0.5">Full</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                  <td className="py-3 px-2 text-center">
+                    <span className="font-bold text-purple-700">{stats.vendorCount}</span>
+                  </td>
+                  <td className="py-3 px-2 text-center font-bold text-[#a65a4a] text-[13px]">
+                    {stats.totalMembers}
+                  </td>
+                  <td className="py-3 px-3">
+                    {stats.capacity > 0 ? (
+                      <div>
+                        <div className="flex justify-between text-[10px] font-medium mb-1">
+                          <span>{stats.percentUsed}%</span>
+                          <span>{stats.attendeeSeats}/{stats.capacity}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              stats.percentUsed >= 100
+                                ? "bg-rose-600"
+                                : stats.percentUsed >= 75
+                                ? "bg-amber-500"
+                                : "bg-emerald-600"
+                            }`}
+                            style={{ width: `${stats.percentUsed}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">Open</span>
+                    )}
+                  </td>
+                  <td
+                    className={`py-3 px-3 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-[#fbf7f4] shadow-[-6px_0_12px_-3px_rgba(0,0,0,0.08)] border-l border-[#a65a4a]/15 ${
+                      menuOpenId === ev.id ? "z-40" : "z-10"
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSelectEvent(ev.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a] hover:text-white transition-all shadow-2xs cursor-pointer shrink-0"
+                      >
+                        View Members ({stats.totalMembers}) →
+                      </button>
+
+                      {/* 3-dots Overflow Menu Button */}
+                      <div className="relative inline-block text-left shrink-0" data-row-menu>
+                        <button
+                          type="button"
+                          onClick={() => setMenuOpenId(menuOpenId === ev.id ? null : ev.id)}
+                          className={`size-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
+                            menuOpenId === ev.id
+                              ? "bg-[#a65a4a] text-white border-[#a65a4a] shadow-xs"
+                              : "bg-white text-gray-700 border-gray-300 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 hover:border-[#a65a4a]/40 shadow-2xs"
+                          }`}
+                          title="More options (Edit, Publish/Unpublish, Delete)"
+                          aria-label="More options"
+                        >
+                          <MoreVertical size={17} />
+                        </button>
+
+                        {/* 3-dots Dropdown Menu */}
+                        {menuOpenId === ev.id && (
+                          <div
+                            className={`absolute right-0 w-56 rounded-xl bg-white border border-gray-200 shadow-xl py-1.5 z-50 text-left ${
+                              index >= Math.max(0, events.length - 2) && events.length > 2
+                                ? "bottom-full mb-1.5"
+                                : "top-full mt-1.5"
+                            }`}
+                            style={{ minWidth: "220px" }}
+                          >
+                            <div className="px-3.5 py-1.5 border-b border-gray-100 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                              Options
+                            </div>
+
+                            {/* Edit Option */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                onEditEvent(ev.id);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-gray-700 hover:bg-[#a65a4a]/10 hover:text-[#a65a4a] transition-colors cursor-pointer"
+                            >
+                              <Edit3 size={15} className="text-[#a65a4a]" />
+                              <span>Edit Event</span>
+                            </button>
+
+                            <div className="my-1 border-t border-gray-100" />
+
+                            {/* Publish Option */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                onTogglePublish(ev, true);
+                              }}
+                              className={`w-full flex items-center justify-between px-3.5 py-2 text-[13px] font-medium transition-colors cursor-pointer ${
+                                ev.published !== false
+                                  ? "bg-emerald-50 text-emerald-800 font-semibold"
+                                  : "text-gray-700 hover:bg-emerald-50 hover:text-emerald-800"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <Globe size={15} className="text-emerald-600" />
+                                <span>Publish Event</span>
+                              </div>
+                              {ev.published !== false && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  Published
+                                </span>
+                              )}
+                            </button>
+
+                            {/* Unpublish Option */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                onTogglePublish(ev, false);
+                              }}
+                              className={`w-full flex items-center justify-between px-3.5 py-2 text-[13px] font-medium transition-colors cursor-pointer ${
+                                ev.published === false
+                                  ? "bg-amber-50 text-amber-800 font-semibold"
+                                  : "text-gray-700 hover:bg-amber-50 hover:text-amber-800"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <EyeOff size={15} className="text-amber-600" />
+                                <span>Unpublish (Draft)</span>
+                              </div>
+                              {ev.published === false && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                  Draft
+                                </span>
+                              )}
+                            </button>
+
+                            <div className="my-1 border-t border-gray-100" />
+
+                            {/* View Members Option */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuOpenId(null);
+                                onSelectEvent(ev.id);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors cursor-pointer"
+                            >
+                              <Users size={15} className="text-indigo-600" />
+                              <span>View Members ({stats.totalMembers})</span>
+                            </button>
+
+                            {/* Delete Option */}
+                            {canDelete && (
+                              <>
+                                <div className="my-1 border-t border-gray-100" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMenuOpenId(null);
+                                    onDeleteEvent(ev.id);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-[13px] font-medium text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 size={15} />
+                                  <span>Move to Recycle Bin</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function EventsAdmin({
   events,
   categories,
@@ -481,9 +837,48 @@ export function EventsAdmin({
       }
     }
 
-    const ok = await saveEvent(active);
-    if (ok) toast.success("Event saved and published!");
-    else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
+    const result = await saveEvent(active);
+    if (result.ok) {
+      const savedId = result.id || active.id;
+      const updatedActive = { ...active, id: savedId };
+      setActiveId(savedId);
+      onChange(events.map((e) => (String(e.id) === String(active.id) ? updatedActive : e)));
+      toast.success("Event saved successfully!");
+    } else {
+      toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
+    }
+  }
+
+  async function handleSetPublish(targetEv: EventItem | undefined, publish: boolean) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
+    const ev = targetEv || active;
+    if (!ev) return;
+    if ((ev.published !== false) === publish) return;
+
+    const patched: EventItem = { ...ev, published: publish };
+
+    const result = await saveEvent(patched);
+    if (result.ok) {
+      const savedId = result.id || ev.id;
+      const updatedItem = { ...patched, id: savedId };
+      if (active && String(active.id) === String(ev.id)) {
+        setActiveId(savedId);
+      }
+      onChange(events.map((e) => (String(e.id) === String(ev.id) ? updatedItem : e)));
+      if (publish) {
+        toast.success(`"${ev.title}" is now Published and live on the website!`);
+      } else {
+        toast.success(`"${ev.title}" is now Unpublished (Draft) and hidden from the website.`);
+      }
+    } else {
+      toast.error(result.error || "Failed to update event publication status.");
+    }
+  }
+
+  async function handleTogglePublish(targetEv?: EventItem) {
+    const ev = targetEv || active;
+    if (!ev) return;
+    return handleSetPublish(ev, ev.published === false);
   }
 
   function exportEventCSV(ev: EventItem) {
@@ -531,6 +926,8 @@ export function EventsAdmin({
     if (filterCategory !== "all" && e.categoryId !== filterCategory) return false;
 
     if (filterStatus !== "all") {
+      if (filterStatus === "published" && e.published === false) return false;
+      if (filterStatus === "draft" && e.published !== false) return false;
       if (filterStatus === "open" && (!isOpen || stats.isFull)) return false;
       if (filterStatus === "closed" && (isOpen || stats.isFull)) return false;
       if (filterStatus === "sold_out" && !stats.isFull) return false;
@@ -608,12 +1005,42 @@ export function EventsAdmin({
 
         <div className="flex items-center gap-2 shrink-0">
           {viewMode === "event_detail" && active && (
-            <button
-              onClick={() => setViewMode("editor")}
-              className="inline-flex items-center gap-1.5 border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a]/10 text-[13px] font-semibold px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
-            >
-              <Edit3 size={15} /> Edit Event Content
-            </button>
+            <>
+              <div className="inline-flex items-center p-1 rounded-xl bg-gray-100 border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => handleSetPublish(active, true)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer ${
+                    active.published !== false
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-gray-600 hover:bg-white hover:text-black"
+                  }`}
+                  title="Make this event published and live on website"
+                >
+                  <Globe size={14} />
+                  <span>Publish</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetPublish(active, false)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer ${
+                    active.published === false
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-gray-600 hover:bg-white hover:text-black"
+                  }`}
+                  title="Make this event unpublished (draft) and hidden from website"
+                >
+                  <EyeOff size={14} />
+                  <span>Unpublish</span>
+                </button>
+              </div>
+              <button
+                onClick={() => setViewMode("editor")}
+                className="inline-flex items-center gap-1.5 border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a]/10 text-[13px] font-semibold px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+              >
+                <Edit3 size={15} /> Edit Event Content
+              </button>
+            </>
           )}
           {canEdit && (
             <button
@@ -709,6 +1136,8 @@ export function EventsAdmin({
                 className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
               >
                 <option value="all">All Statuses</option>
+                <option value="published">🌐 Published Only</option>
+                <option value="draft">📝 Unpublished (Draft) Only</option>
                 <option value="open">🟢 Open for Registration</option>
                 <option value="closed">⚪ Closed</option>
                 <option value="sold_out">🔴 Sold Out</option>
@@ -732,167 +1161,33 @@ export function EventsAdmin({
             </p>
           </div>
 
-          {/* Events Members Registration Table */}
-          <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
-                <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
-                  <tr>
-                    <th className="py-3.5 px-4">Event Details</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4 text-center">Capacity</th>
-                    <th className="py-3.5 px-4 text-center">Attendees (Seats)</th>
-                    <th className="py-3.5 px-4 text-center">Volunteers</th>
-                    <th className="py-3.5 px-4 text-center">Vendors</th>
-                    <th className="py-3.5 px-4 text-center">Total Members</th>
-                    <th className="py-3.5 px-4 min-w-[140px]">Occupancy</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#a65a4a]/10">
-                  {paginatedEvents.map((ev) => {
-                    const stats = getEventStats(ev, submissions);
-                    const isOpen = isEventOpen(ev);
-                    const catName = categories.find((c) => c.id === ev.categoryId)?.name;
+          {/* Events Table (Separate Component) */}
+          <EventsOverviewTable
+            events={paginatedEvents}
+            categories={categories}
+            submissions={submissions}
+            canDelete={canDelete}
+            onSelectEvent={(id) => {
+              setActiveId(id);
+              setViewMode("event_detail");
+            }}
+            onEditEvent={(id) => {
+              setActiveId(id);
+              setViewMode("editor");
+            }}
+            onTogglePublish={handleSetPublish}
+            onDeleteEvent={handleDelete}
+          />
 
-                    return (
-                      <tr
-                        key={ev.id}
-                        onClick={() => {
-                          setActiveId(ev.id);
-                          setViewMode("event_detail");
-                        }}
-                        className="hover:bg-[#a65a4a]/5 transition-colors cursor-pointer group"
-                      >
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-3">
-                            {ev.image ? (
-                              <img src={ev.image} alt="" className="size-10 rounded-lg object-cover border border-[#a65a4a]/20 shrink-0" />
-                            ) : (
-                              <div className="size-10 rounded-lg bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
-                                <Calendar size={18} />
-                              </div>
-                            )}
-                            <div>
-                              <p className="font-semibold text-[#1e1e1e] group-hover:text-[#a65a4a] transition-colors">{ev.title}</p>
-                              <div className="flex items-center gap-2 text-[11px] text-[#1e1e1e]/50 mt-0.5">
-                                <span>{ev.eventDate || "Date TBD"}</span>
-                                {ev.location && <span>• {ev.location}</span>}
-                                {catName && <span className="px-1.5 py-0.2 rounded bg-[#a65a4a]/10 text-[#a65a4a] font-medium">{catName}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {stats.isFull ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
-                              <AlertCircle size={12} /> Sold Out
-                            </span>
-                          ) : isOpen ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              <CheckCircle size={12} /> Open
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-                              <Clock size={12} /> Closed
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-semibold text-gray-900">
-                          {stats.capacity > 0 ? stats.capacity : "Unlimited"}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="font-bold text-amber-700">{stats.attendeeSeats}</span>
-                          <span className="text-[11px] text-gray-400 block">({stats.attendeeCount} bookings)</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          {(() => {
-                            const cap = Number(ev.maxVolunteers ?? 0);
-                            const count = stats.volunteerCount;
-                            const isCapped = cap > 0;
-                            const isFull = isCapped && count >= cap;
-                            return (
-                              <div>
-                                <span className={`font-bold ${isFull ? "text-rose-700" : "text-emerald-700"}`}>
-                                  {count}{isCapped ? `/${cap}` : ""}
-                                </span>
-                                {isFull && (
-                                  <span className="text-[10px] font-semibold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full block mt-0.5">Full</span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="font-bold text-purple-700">{stats.vendorCount}</span>
-                        </td>
-                        <td className="py-3.5 px-4 text-center font-bold text-[#a65a4a] text-[14px]">
-                          {stats.totalMembers}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          {stats.capacity > 0 ? (
-                            <div>
-                              <div className="flex justify-between text-[11px] font-medium mb-1">
-                                <span>{stats.percentUsed}%</span>
-                                <span>{stats.attendeeSeats}/{stats.capacity}</span>
-                              </div>
-                              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${
-                                    stats.percentUsed >= 100
-                                      ? "bg-rose-600"
-                                      : stats.percentUsed >= 75
-                                      ? "bg-amber-500"
-                                      : "bg-emerald-600"
-                                  }`}
-                                  style={{ width: `${stats.percentUsed}%` }}
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-gray-400">Open capacity</span>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => {
-                                setActiveId(ev.id);
-                                setViewMode("editor");
-                              }}
-                              className="p-1.5 text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors"
-                              title="Edit Event Content"
-                            >
-                              <Edit3 size={15} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setActiveId(ev.id);
-                                setViewMode("event_detail");
-                              }}
-                              className="flex items-center gap-1 px-3 py-1 rounded-lg text-[12px] font-semibold border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a] hover:text-white transition-all shadow-2xs cursor-pointer"
-                            >
-                              View Members ({stats.totalMembers}) →
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
-                <Pagination
-                  currentPage={eventPage}
-                  totalPages={eventTotalPages}
-                  totalItems={eventTotalItems}
-                  pageSize={eventPageSize}
-                  onPageChange={setEventPage}
-                  onPageSizeChange={setEventPageSize}
-                />
-              </div>
-            </div>
-          </div>
+          {/* Events Pagination (Separate Component) */}
+          <EventsPaginationBar
+            currentPage={eventPage}
+            totalPages={eventTotalPages}
+            totalItems={eventTotalItems}
+            pageSize={eventPageSize}
+            onPageChange={setEventPage}
+            onPageSizeChange={setEventPageSize}
+          />
         </div>
       ) : (
         /* Event Editor Mode */
@@ -903,7 +1198,7 @@ export function EventsAdmin({
           onAdd={handleAdd}
           onDelete={handleDelete}
           itemLabel={(e) => e.title}
-          itemSubLabel={(e) => (isEventOpen(e) ? "Open for registration" : "Closed")}
+          itemSubLabel={(e) => `${e.published === false ? "📝 Draft • " : "🌐 Published • "}${isEventOpen(e) ? "Open" : "Closed"}`}
           addLabel="Add New Event"
           emptyLabel="No events yet."
         >
@@ -911,6 +1206,65 @@ export function EventsAdmin({
             <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[14px]">Select or add an event to edit it.</p>
           ) : (
             <div className="flex flex-col gap-5 max-w-[640px]">
+              {/* Event Publication Status Card */}
+              <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                active.published === false
+                  ? "bg-amber-50/70 border-amber-200"
+                  : "bg-emerald-50/70 border-emerald-200"
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    active.published === false ? "bg-amber-200 text-amber-900" : "bg-emerald-200 text-emerald-900"
+                  }`}>
+                    {active.published === false ? <EyeOff size={18} /> : <Globe size={18} />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[13px] text-[#1e1e1e]">
+                        {active.published === false ? "Draft (Unpublished)" : "Published & Live"}
+                      </span>
+                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${
+                        active.published === false ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        {active.published === false ? "Hidden" : "Public"}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-[#1e1e1e]/60 mt-0.5">
+                      {active.published === false
+                        ? "This event is currently hidden from the public website and portals."
+                        : "This event is visible to all visitors on the website, homepage, and volunteer portal."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSetPublish(active, true)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer shadow-xs ${
+                      active.published !== false
+                        ? "bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/30"
+                        : "bg-white text-gray-700 border border-gray-300 hover:bg-emerald-50 hover:text-emerald-800"
+                    }`}
+                  >
+                    <Globe size={14} />
+                    <span>Publish Event</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetPublish(active, false)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer shadow-xs ${
+                      active.published === false
+                        ? "bg-amber-600 text-white shadow-xs ring-2 ring-amber-600/30"
+                        : "bg-white text-gray-700 border border-gray-300 hover:bg-amber-50 hover:text-amber-800"
+                    }`}
+                  >
+                    <EyeOff size={14} />
+                    <span>Unpublish Event</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Event Member Quick Stats Box */}
               {(() => {
                 const activeStats = getEventStats(active, submissions);
@@ -946,10 +1300,10 @@ export function EventsAdmin({
               <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} />
               <div>
                 <label className={labelBase}>Category (shown as the badge on the event image)</label>
-                <select value={active.categoryId ?? ""} onChange={(e) => update({ categoryId: e.target.value || null })} className={`${inputBase} cursor-pointer`}>
+                <select value={active.categoryId ? String(active.categoryId) : ""} onChange={(e) => update({ categoryId: e.target.value || null })} className={`${inputBase} cursor-pointer`}>
                   <option value="">No category</option>
                   {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -1037,9 +1391,41 @@ export function EventsAdmin({
                 </p>
               </div>
 
-              <button onClick={handleSave} className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2">
-                Save Event
-              </button>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+                >
+                  Save Changes
+                </button>
+                <div className="inline-flex items-center p-1 rounded-full bg-gray-100 border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => handleSetPublish(active, true)}
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
+                      active.published !== false
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-gray-600 hover:bg-white hover:text-black"
+                    }`}
+                  >
+                    <Globe size={14} />
+                    <span>Publish Event</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetPublish(active, false)}
+                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
+                      active.published === false
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "text-gray-600 hover:bg-white hover:text-black"
+                    }`}
+                  >
+                    <EyeOff size={14} />
+                    <span>Unpublish Event</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </AdminListEditor>

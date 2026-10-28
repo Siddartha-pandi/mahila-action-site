@@ -58,6 +58,7 @@ async function main() {
       console.log(`Councilors:     ${getCount(counts[4])}`);
       console.log(`Timeline:       ${getCount(counts[5])}`);
       console.log(`Contact Info:   Stored in JSON format (src/data/contact.json)`);
+      console.log(`App Metadata:   Stored in JSON format (src/data/app_meta.json)`);
       console.log("==================================================\n");
     }
 

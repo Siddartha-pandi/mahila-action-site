@@ -18,7 +18,7 @@ import { firstError, validateEmail, validateName, validatePassword, validatePhon
 import { setCurrentAdminSession } from "@/lib/permissions";
 import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination, consumeIntendedDestination } from "../hooks/useAuthGuard";
-import { type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
+import { useSiteData, type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
 
 // Fallback static volunteer events (used as display items when no CMS events exist)
 const VOLUNTEER_EVENTS = [
@@ -63,8 +63,9 @@ const VOLUNTEER_EVENTS = [
 const inputCls = `w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]`;
 const labelCls = `font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider mb-1 block`;
 
-export function VolunteerPortal({ onClose, initialStep, resetToken, events, prompt }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events: EventItem[]; prompt?: string }) {
+export function VolunteerPortal({ onClose, initialStep, resetToken, events, prompt }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events?: EventItem[]; prompt?: string }) {
   const navigate = useNavigate();
+  const siteData = useSiteData();
   const { closeModal } = useModal();
   const handleClose = useCallback(() => {
     if (onClose) onClose();
@@ -259,7 +260,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   function toggleEvent(id: string) {
     // Prevent selecting disabled events (already volunteer or attendee)
-    const ev = realEvents.find(e => e.id === id);
+    const ev = realEvents.find(e => String(e.id) === String(id));
     if (ev?.disabled) return;
     setSelectedEvents(prev =>
       prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
@@ -268,7 +269,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   async function handleConfirm() {
     if (selectedEvents.length === 0) return toast.error("Please select at least one event");
-    const eventTitles = realEvents.filter(e => selectedEvents.includes(e.id)).map(e => e.title);
+    const eventTitles = realEvents.filter(e => selectedEvents.includes(String(e.id))).map(e => e.title);
     const res = await saveVolunteer({
       name: profile?.name ?? "",
       email: profile?.email ?? "",
@@ -313,8 +314,29 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     return s;
   }, [userSubmissions]);
 
-  const realEvents = events
+  const availableEvents: EventItem[] = (
+    events && events.length > 0
+      ? events
+      : siteData?.events && siteData.events.length > 0
+      ? siteData.events
+      : (VOLUNTEER_EVENTS.map(v => ({
+          id: String(v.id),
+          title: v.title,
+          description: v.desc,
+          image: "",
+          eventDate: v.date,
+          location: v.location,
+          totalSeats: v.slots,
+          maxVolunteers: 0,
+          windows: [{ kind: "volunteer" as const, enabled: true, regStart: "2026-01-01", regEnd: "2026-12-31" }],
+          categoryId: null,
+          createdAt: new Date().toISOString(),
+        })) as EventItem[])
+  );
+
+  const realEvents = availableEvents
     .filter((ev) => {
+      if (ev.published === false) return false;
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
       if (windows.length === 0) return true;
       return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
@@ -323,15 +345,18 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       const normTitle = ev.title.trim().toLowerCase();
       const alreadyVolunteer = registeredAsVolunteerTitles.has(normTitle);
       const alreadyAttendee = registeredAsAttendeeTitles.has(normTitle);
+      const catObj = siteData?.categories?.find(c => String(c.id) === String(ev.categoryId) || c.name === ev.categoryId);
+      const categoryName = catObj?.name || (typeof (ev as any).category === "string" ? (ev as any).category : "");
+
       return {
-        id: ev.id,
+        id: String(ev.id),
         status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
         title: ev.title,
         date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
         location: ev.location || "Online / TBD",
-        category: "",
-        slots: ev.totalSeats || 0,
-        desc: ev.description || "",
+        category: categoryName,
+        slots: ev.maxVolunteers && ev.maxVolunteers > 0 ? ev.maxVolunteers : ev.totalSeats || 0,
+        desc: ev.description || (ev as any).desc || "",
         // Mutual exclusion: attendees don't need to volunteer, volunteers don't need to attend
         disabled: alreadyVolunteer || alreadyAttendee,
         disabledReason: alreadyVolunteer

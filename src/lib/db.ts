@@ -16,7 +16,7 @@ let initPromise: Promise<void> | null = globalRef._dbInitPromise || null;
 const queryCache = new Map<string, { data: any; expiresAt: number }>();
 const CACHE_TTL_MS = 15000; // 15s cache for lightning fast responses
 
-function clearQueryCache() {
+export function clearQueryCache() {
   queryCache.clear();
 }
 
@@ -57,32 +57,52 @@ export async function getPool() {
   return pool;
 }
 
-// Marker row recording which schema.sql has already been applied. Startup
+const APP_META_PATH = path.join(process.cwd(), "src", "data", "app_meta.json");
+
+export function getAppMeta(key?: string): any {
+  try {
+    if (fs.existsSync(APP_META_PATH)) {
+      const content = fs.readFileSync(APP_META_PATH, "utf-8");
+      const data = JSON.parse(content);
+      return key ? data[key] ?? null : data;
+    }
+  } catch (err) {
+    console.warn("Failed to read app_meta.json:", err);
+  }
+  return key ? null : {};
+}
+
+export function setAppMeta(key: string, value: any): void {
+  try {
+    const data = getAppMeta() || {};
+    data[key] = value;
+    data.updated_at = new Date().toISOString();
+    const dir = path.dirname(APP_META_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(APP_META_PATH, JSON.stringify(data, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Failed to write to app_meta.json:", err);
+  }
+}
+
+// Marker recording which schema.sql has already been applied. Startup
 // compares it against a hash of the current file, so the ~50 schema and seed
-// statements only run when something actually changed. Against a remote
-// database every one of those statements costs a full network round trip.
+// statements only run when something actually changed. Stored in JSON format
+// (src/data/app_meta.json) to eliminate unnecessary DB queries.
 const SCHEMA_MARKER_KEY = "__schema_version";
 
 function schemaFingerprint(rawSchema: string): string {
   return crypto.createHash("sha256").update(rawSchema).digest("hex").slice(0, 16);
 }
 
-async function readAppliedSchemaVersion(dbPool: any): Promise<string | null> {
-  try {
-    const res = await dbPool.query("SELECT value FROM app_meta WHERE key = $1", [SCHEMA_MARKER_KEY]);
-    return res.rows[0]?.value ?? null;
-  } catch {
-    // app_meta does not exist yet — this is a first boot.
-    return null;
-  }
+function readAppliedSchemaVersion(): string | null {
+  return getAppMeta(SCHEMA_MARKER_KEY);
 }
 
-async function recordSchemaVersion(dbPool: any, version: string): Promise<void> {
-  await dbPool.query(
-    `INSERT INTO app_meta (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
-    [SCHEMA_MARKER_KEY, version]
-  );
+function recordSchemaVersion(version: string): void {
+  setAppMeta(SCHEMA_MARKER_KEY, version);
 }
 
 /**
@@ -313,11 +333,17 @@ export async function initDb(): Promise<void> {
       // Applying the schema and seed costs one network round trip per statement
       // — around fifty of them. Once a given schema.sql has been applied there is
       // nothing left to do, so check a marker row first and skip the whole thing.
-      // Changing schema.sql changes its hash, which makes the next start reapply.
-      const schemaVersion = schemaFingerprint(rawSchema);
-      const appliedVersion = await readAppliedSchemaVersion(currentPool);
+      // Verify if the database actually has the required tables. If the database
+      // was reset or is fresh, apply the schema even if app_meta.json has a cached hash.
+      const tableCheck = await currentPool
+        .query("SELECT to_regclass('public.users') as regclass")
+        .catch(() => ({ rows: [] }));
+      const hasTables = Boolean(tableCheck.rows[0]?.regclass);
 
-      if (appliedVersion === schemaVersion) {
+      const schemaVersion = schemaFingerprint(rawSchema);
+      const appliedVersion = readAppliedSchemaVersion();
+
+      if (hasTables && appliedVersion === schemaVersion) {
         await removeSuperadminRows(currentPool).catch(() => { });
         isInitialized = true;
         globalRef._dbInitialized = true;
@@ -334,8 +360,10 @@ export async function initDb(): Promise<void> {
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS category_id TEXT",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS max_volunteers INTEGER DEFAULT 0",
+        "ALTER TABLE events ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT TRUE",
         "DROP TABLE IF EXISTS contact CASCADE",
         "DROP TABLE IF EXISTS cms_contact CASCADE",
+        "DROP TABLE IF EXISTS app_meta CASCADE",
       ];
 
       try {
@@ -354,9 +382,7 @@ export async function initDb(): Promise<void> {
 
       // Seed all default data into database
       await seedAllData(currentPool);
-      await recordSchemaVersion(currentPool, schemaVersion).catch((err) =>
-        console.warn("Could not record schema version marker:", err?.message || err)
-      );
+      recordSchemaVersion(schemaVersion);
 
       isInitialized = true;
       globalRef._dbInitialized = true;
@@ -373,24 +399,26 @@ export async function initDb(): Promise<void> {
   return initPromise;
 }
 
-export async function queryDb(text: string, params: any[] = []) {
+export async function queryDb(text: string, params: any[] = [], options?: { noCache?: boolean }) {
   // Bypass live queries during Next.js static build phase
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return { rows: [], rowCount: 0 };
   }
 
   const isSelect = /^\s*SELECT/i.test(text);
-  const cacheKey = isSelect ? `${text}::${JSON.stringify(params)}` : "";
+  const cacheKey = isSelect && !options?.noCache ? `${text}::${JSON.stringify(params)}` : "";
 
-  // Return cached result if SELECT query is within TTL
-  if (isSelect) {
+  // Return cached result if SELECT query is within TTL and noCache is not set
+  if (isSelect && !options?.noCache) {
     const cached = queryCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.data;
     }
   } else {
-    // Invalidate SELECT cache whenever a write query runs
-    clearQueryCache();
+    // Invalidate SELECT cache whenever a write query runs or cache is bypassed
+    if (!isSelect) {
+      clearQueryCache();
+    }
   }
 
   if (!isInitialized) {
@@ -421,8 +449,8 @@ export async function queryDb(text: string, params: any[] = []) {
     }
   }
 
-  // Store in cache for 15 seconds if SELECT query
-  if (isSelect && res) {
+  // Store in cache for 15 seconds if SELECT query and caching not bypassed
+  if (isSelect && !options?.noCache && res) {
     queryCache.set(cacheKey, { data: res, expiresAt: Date.now() + CACHE_TTL_MS });
   }
 

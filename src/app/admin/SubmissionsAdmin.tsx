@@ -467,123 +467,199 @@ export function SubmissionsAdmin() {
       </div>
 
       {/* Page Tab Selector Bar */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-[#a65a4a]/15 shadow-sm">
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setFilterType("all")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "all" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            All Submissions ({list.length})
-          </button>
-          <button
-            onClick={() => setFilterType("volunteer")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🙋‍♀️ Volunteers ({volunteerList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("member")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white shadow-sm ring-2 ring-teal-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🧡 Members ({memberList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("vendor")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "vendor" ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🛍️ Vendors ({vendorList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("reservation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "reservation" ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🎟️ Event Attendees ({reservationList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("donation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "donation" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            💖 Donors ({donationList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("contact")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            ✉️ Contact ({contactList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("perm_volunteer_request")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            ⭐ Perm Volunteers ({permVolList.length})
-            {permVolList.filter(v => v.status === "New").length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-amber-400 text-white text-[10px] font-bold">
-                {permVolList.filter(v => v.status === "New").length}
+      {/* Search & Filter Toolbar Container */}
+      <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden flex flex-col">
+        {/* Tier 1: Category Filter Tabs */}
+        <div className="p-3 sm:p-3.5 bg-[#faf7f3]/50 border-b border-[#a65a4a]/10">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setFilterType("all")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                filterType === "all"
+                  ? "bg-[#a65a4a] text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 hover:text-black"
+              }`}
+            >
+              <span>All Submissions</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "all" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"}`}>
+                {list.length}
               </span>
-            )}
-          </button>
-          <button
-            onClick={() => setFilterType("perm_volunteer_deactivate")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            ❌ Deactivations ({permDeactivateList.length})
-            {permDeactivateList.filter(v => v.status === "New").length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold">
-                {permDeactivateList.filter(v => v.status === "New").length}
+            </button>
+            <button
+              onClick={() => setFilterType("volunteer")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "volunteer"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-emerald-50 hover:text-emerald-800"
+              }`}
+            >
+              <span>🙋‍♀️ Volunteers</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "volunteer" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"}`}>
+                {volunteerList.length}
               </span>
-            )}
-          </button>
+            </button>
+            <button
+              onClick={() => setFilterType("member")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "member"
+                  ? "bg-teal-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-teal-50 hover:text-teal-800"
+              }`}
+            >
+              <span>🧡 Members</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "member" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800"}`}>
+                {memberList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("vendor")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "vendor"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-purple-50 hover:text-purple-800"
+              }`}
+            >
+              <span>🛍️ Vendors</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "vendor" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"}`}>
+                {vendorList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("reservation")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "reservation"
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-amber-50 hover:text-amber-800"
+              }`}
+            >
+              <span>🎟️ Event Attendees</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "reservation" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"}`}>
+                {reservationList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("donation")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "donation"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-rose-50 hover:text-rose-800"
+              }`}
+            >
+              <span>💖 Donors</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "donation" ? "bg-white/20 text-white" : "bg-rose-100 text-rose-800"}`}>
+                {donationList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("contact")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "contact"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-blue-50 hover:text-blue-800"
+              }`}
+            >
+              <span>✉️ Contact</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "contact" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"}`}>
+                {contactList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("perm_volunteer_request")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "perm_volunteer_request"
+                  ? "bg-[#a65a4a] text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-[#a65a4a]/10 hover:text-[#a65a4a]"
+              }`}
+            >
+              <span>⭐ Perm Volunteers</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "perm_volunteer_request" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"}`}>
+                {permVolList.length}
+              </span>
+              {permVolList.filter(v => v.status === "New").length > 0 && (
+                <span className="inline-flex items-center justify-center size-4 rounded-full bg-amber-400 text-white text-[10px] font-bold" title="Pending review">
+                  {permVolList.filter(v => v.status === "New").length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setFilterType("perm_volunteer_deactivate")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "perm_volunteer_deactivate"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-rose-50 hover:text-rose-800"
+              }`}
+            >
+              <span>❌ Deactivations</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "perm_volunteer_deactivate" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"}`}>
+                {permDeactivateList.length}
+              </span>
+              {permDeactivateList.filter(v => v.status === "New").length > 0 && (
+                <span className="inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold" title="Pending review">
+                  {permDeactivateList.filter(v => v.status === "New").length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-[220px]">
+        {/* Tier 2: Search Input & Dropdown Filters Bar */}
+        <div className="p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Left: Search Bar */}
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-2.5 size-4 text-[#1e1e1e]/40" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full pl-9 pr-3 py-1.5 text-[13px] border border-[#a65a4a]/25 rounded-lg focus:outline-none focus:border-[#a65a4a] bg-white"
+              placeholder="Search by name, email, phone, or details..."
+              className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#a65a4a]/25 rounded-xl focus:outline-none focus:border-[#a65a4a] bg-white transition-all shadow-2xs"
             />
           </div>
 
-          {availableEventTitles.length > 0 && (
-            <select
-              value={filterEvent}
-              onChange={e => setFilterEvent(e.target.value)}
-              className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium max-w-[180px] truncate"
-            >
-              <option value="all">All Events</option>
-              {availableEventTitles.map(title => (
-                <option key={title} value={title}>
-                  🗓️ {title}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* Right: Dropdown Filters & Counter */}
+          <div className="flex flex-wrap items-center gap-2">
+            {availableEventTitles.length > 0 && (
+              <select
+                value={filterEvent}
+                onChange={e => setFilterEvent(e.target.value)}
+                className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium max-w-[190px] truncate shadow-2xs cursor-pointer"
+              >
+                <option value="all">🗓️ All Events</option>
+                {availableEventTitles.map(title => (
+                  <option key={title} value={title}>
+                    🗓️ {title}
+                  </option>
+                ))}
+              </select>
+            )}
 
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a]"
-          >
-            <option value="all">All Statuses</option>
-            <option value="New">New</option>
-            <option value="Contacted">Contacted</option>
-            <option value="Completed">Completed</option>
-          </select>
-
-          {(filterType === "donation" || filterType === "all") && (
             <select
-              value={filterDonorType}
-              onChange={e => setFilterDonorType(e.target.value)}
-              className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium shadow-2xs cursor-pointer"
             >
-              <option value="all">All Donors (Users & Anonymous)</option>
-              <option value="named">👤 Named Users ({namedDonationList.length})</option>
-              <option value="anonymous">🕵️ Anonymous Donors ({anonDonationList.length})</option>
+              <option value="all">📋 All Statuses</option>
+              <option value="New">🟡 New</option>
+              <option value="Contacted">🔵 Contacted</option>
+              <option value="Completed">🟢 Completed</option>
             </select>
-          )}
+
+            {(filterType === "donation" || filterType === "all") && (
+              <select
+                value={filterDonorType}
+                onChange={e => setFilterDonorType(e.target.value)}
+                className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium shadow-2xs cursor-pointer"
+              >
+                <option value="all">💖 All Donors (Users & Anon)</option>
+                <option value="named">👤 Named Users ({namedDonationList.length})</option>
+                <option value="anonymous">🕵️ Anonymous ({anonDonationList.length})</option>
+              </select>
+            )}
+
+            <p className="text-[12px] text-gray-500 font-medium shrink-0 ml-1">
+              Showing <span className="font-semibold text-gray-800">{filtered.length}</span> of {list.length}
+            </p>
+          </div>
         </div>
       </div>
 
