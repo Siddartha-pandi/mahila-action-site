@@ -11,7 +11,7 @@ import {
   isProtectedModal,
   rememberIntendedDestination,
 } from "../hooks/useAuthGuard";
-import { IMPACT_FALLBACK_IMAGES, STORY_FALLBACK_IMAGES, IMPACT_CARD_CATEGORY } from "../constants/fallbacks";
+import { IMPACT_CARD_CATEGORY } from "../constants/fallbacks";
 import { VolunteerPortal } from "./VolunteerPortal";
 import { AttendEventModal, PartnerWithUsModal, ClosedEventNoticeModal, ReserveSeatModal } from "./ReserveSeatModal";
 
@@ -85,14 +85,10 @@ export function GlobalModals() {
         : siteData.blogPosts.find(p => String(p.id) === String(modalId));
     if (!post) return null;
 
-    const fb =
-      modal === "impact"
-        ? IMPACT_FALLBACK_IMAGES[modalId]
-        : STORY_FALLBACK_IMAGES[post.id];
     const enrichedPost = {
       ...post,
-      coverImage: post.coverImage || fb?.banner || "",
-      gallery: post.gallery?.length ? post.gallery : (fb?.gallery ?? []),
+      coverImage: post.coverImage || "",
+      gallery: Array.isArray(post.gallery) ? post.gallery : [],
     };
     const categoryLabel =
       siteData.categories.find(cat => String(cat.id) === String(post.categoryId))?.name ??

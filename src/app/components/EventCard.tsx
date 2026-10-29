@@ -2,7 +2,7 @@
 
 import { Calendar, MapPin, Globe, EyeOff } from "lucide-react";
 import { isEventOpen, type EventItem } from "@/lib/data";
-import { imgEvent } from "../constants/images";
+import { SafeImage } from "./SafeImage";
 import { inter } from "./shared/styleHelpers";
 
 export function formatEventDate(iso: string) {
@@ -31,12 +31,13 @@ export function EventCard({
 
   return (
     <div className={`relative w-full ${className} rounded-2xl overflow-hidden ${event.published === false ? "ring-3 ring-amber-400/80" : ""}`}>
-      <img
-        loading="lazy"
-        decoding="async"
-        src={event.image || imgEvent}
+      <SafeImage
+        src={event.image}
         alt={event.title}
         className="absolute inset-0 size-full object-cover"
+        containerClassName="absolute inset-0 size-full flex flex-col items-center justify-center bg-[#2c1d19] text-[#f4efe7]/60 gap-2 select-none"
+        errorText="Image not available"
+        iconSize={40}
       />
       <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent" />
 

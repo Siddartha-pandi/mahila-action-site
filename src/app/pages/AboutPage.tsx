@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { TIMELINE_FALLBACK_IMAGES } from "../constants/fallbacks";
-import { imgAboutBanner, imgEvent, imgTakeAction, imgStory1 } from "../constants/images";
+import { SafeImage } from "../components/SafeImage";
+import { imgAboutBanner, imgTakeAction } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
@@ -15,7 +15,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const timeline = [...siteData.timeline]
     .sort((a, b) => a.order - b.order)
-    .map((t) => ({ year: t.year, img: t.image || TIMELINE_FALLBACK_IMAGES[t.id] || imgEvent, title: t.title, desc: t.description }));
+    .map((t) => ({ year: t.year, img: t.image || "", title: t.title, desc: t.description }));
 
   const [activeYear, setActiveYear] = useState(timeline[0]?.year ?? "");
   const active = timeline.find((t) => t.year === activeYear) ?? timeline[0];
@@ -23,7 +23,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
   const councilors = siteData.councilors
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((c) => ({ img: c.image || imgStory1, role: c.role, name: c.name, story: c.bio }));
+    .map((c) => ({ img: c.image || "", role: c.role, name: c.name, story: c.bio }));
 
   const yearTabOptions = timeline.map((t) => ({ id: t.year, name: t.year }));
 
@@ -101,13 +101,14 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
               </div>
               {active && (
                 <div className="flex flex-col lg:flex-row gap-8 items-center">
-                  <div className="relative w-full lg:w-[520px] h-[380px] rounded-2xl overflow-hidden shrink-0">
-                    <img
-                      loading="lazy"
-                      decoding="async"
+                  <div className="relative w-full lg:w-[520px] h-[380px] rounded-2xl overflow-hidden shrink-0 bg-[#a65a4a]/10 border border-[#a65a4a]/20">
+                    <SafeImage
                       src={active.img}
                       alt={active.title}
                       className="absolute inset-0 size-full object-cover"
+                      containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-2 select-none"
+                      errorText="Image not available"
+                      iconSize={40}
                     />
                   </div>
                   <div>

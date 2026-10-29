@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowRight, Users, BookOpen, Briefcase, Heart } from "lucide-react";
 import { upcomingOrOpenEvents, isEventOpen, type EventItem } from "@/lib/data";
-import { STORY_FALLBACK_IMAGES } from "../constants/fallbacks";
+import { SafeImage } from "../components/SafeImage";
 import { imgImpact1, imgImpact2, imgImpact3, imgImpact4, imgEvent, imgHeroCard, imgHeroMain, imgHeroSide, heroSvg, statsSvg } from "../constants/images";
 import { useContent } from "../context/ContentContext";
 import { useSiteData } from "../context/SiteDataContext";
@@ -46,7 +46,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
     .filter(p => p.section === "story")
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, MAX_RAIL_ITEMS);
-  const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || STORY_FALLBACK_IMAGES[p.id]?.banner || imgEvent, title: p.title, excerpt: p.excerpt }));
+  const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || "", title: p.title, excerpt: p.excerpt }));
 
   const upcoming = upcomingOrOpenEvents(siteData.events);
   const railEvents = (upcoming.length > 0 ? upcoming : siteData.events.filter((e) => e.published !== false)).slice(0, MAX_RAIL_ITEMS);
@@ -378,8 +378,15 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                 slideClassName="basis-full sm:basis-1/2 lg:basis-1/3"
                 slides={stories.map((s) => (
                   <div key={s.id} className="rounded-2xl overflow-hidden group cursor-pointer flex flex-col h-full">
-                    <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl">
-                      <img loading="lazy" decoding="async" src={s.img} alt={s.title} className="size-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl bg-[#a65a4a]/20 relative">
+                      <SafeImage
+                        src={s.img}
+                        alt={s.title}
+                        className="size-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/20 text-[#f4efe7]/80 gap-2 select-none"
+                        errorText="Image not available"
+                        iconSize={32}
+                      />
                     </div>
                     <div className="bg-[#a65a4a] p-6 rounded-b-2xl flex-1 flex flex-col">
                       <p className={`${inter()} text-[#f4efe7] text-[20px] font-semibold capitalize line-clamp-2`}>{s.title}</p>

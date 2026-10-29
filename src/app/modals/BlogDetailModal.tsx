@@ -6,6 +6,7 @@ import { marked } from "marked";
 import { type BlogPost } from "@/lib/data";
 import { fraunces, inter } from "../components/shared/styleHelpers";
 import { Badge } from "../components/ui/Badge";
+import { SafeImage } from "../components/SafeImage";
 
 function isLikelyHtml(s: string) {
   return /<\/?[a-z][\s\S]*>/i.test(s);
@@ -57,8 +58,15 @@ export function BlogDetailModal({
 
       <div className="max-w-[1200px] mx-auto px-6 pb-20">
         {post.coverImage && (
-          <div className="mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px]">
-            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
+          <div className="mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px] relative bg-[#a65a4a]/10">
+            <SafeImage
+              src={post.coverImage}
+              alt={post.title}
+              className="w-full h-full object-cover"
+              containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-2 select-none"
+              errorText="Image not available"
+              iconSize={48}
+            />
           </div>
         )}
 
@@ -111,12 +119,19 @@ export function BlogDetailModal({
                     className="absolute inset-0 flex items-center justify-center"
                     style={{ transform: "rotate(-6.09deg)" }}
                   >
-                    <img
-                      src={gallery[idxBot]}
-                      alt=""
-                      className="shadow-xl object-cover rounded-sm"
+                    <div
                       style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                    />
+                      className="shadow-xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
+                    >
+                      <SafeImage
+                        src={gallery[idxBot]}
+                        alt="Gallery image"
+                        className="size-full object-cover"
+                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
+                        errorText="Image not available"
+                        iconSize={32}
+                      />
+                    </div>
                   </div>
                 )}
                 {n > 1 && (
@@ -124,21 +139,35 @@ export function BlogDetailModal({
                     className="absolute inset-0 flex items-center justify-center"
                     style={{ transform: "rotate(-3.13deg)" }}
                   >
-                    <img
-                      src={gallery[idxMid]}
-                      alt=""
-                      className="shadow-xl object-cover rounded-sm"
+                    <div
                       style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                    />
+                      className="shadow-xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
+                    >
+                      <SafeImage
+                        src={gallery[idxMid]}
+                        alt="Gallery image"
+                        className="size-full object-cover"
+                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
+                        errorText="Image not available"
+                        iconSize={32}
+                      />
+                    </div>
                   </div>
                 )}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <img
-                    src={gallery[idxTop]}
-                    alt=""
-                    className="shadow-2xl object-cover rounded-sm"
+                  <div
                     style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                  />
+                    className="shadow-2xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
+                  >
+                    <SafeImage
+                      src={gallery[idxTop]}
+                      alt="Gallery image"
+                      className="size-full object-cover"
+                      containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
+                      errorText="Image not available"
+                      iconSize={36}
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { STORY_FALLBACK_IMAGES } from "../constants/fallbacks";
-import { imgHeroCard, imgStory1 } from "../constants/images";
+import { imgHeroCard } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { PageBanner } from "../components/PageBanner";
@@ -54,7 +53,6 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
                 title={s.title}
                 excerpt={s.excerpt}
                 coverImage={s.coverImage}
-                fallbackImage={STORY_FALLBACK_IMAGES[s.id]?.banner || imgStory1}
                 onClick={() => openModal("story", { id: s.id })}
                 ctaText="Read Story →"
               />
