@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
+import { sendPermVolunteerAcknowledgementEmail, sendPermVolunteerAlertToAdmin } from "@/lib/email";
 import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
@@ -27,6 +28,18 @@ export async function POST(req: NextRequest) {
       [name.trim(), email.trim().toLowerCase(), phone || null, typeVal, message || null]
     );
     const id = insertRes.rows[0]?.id;
+
+    sendPermVolunteerAcknowledgementEmail(email.trim().toLowerCase(), name.trim(), typeVal).catch((err) =>
+      console.error("sendPermVolunteerAcknowledgementEmail failed:", err)
+    );
+
+    sendPermVolunteerAlertToAdmin({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phone || null,
+      requestType: typeVal,
+      message: message || null,
+    }).catch((err) => console.error("sendPermVolunteerAlertToAdmin failed:", err));
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {

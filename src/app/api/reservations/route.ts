@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
-import { sendReservationConfirmationEmail } from "@/lib/email";
+import { sendReservationConfirmationEmail, sendReservationAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,9 +95,25 @@ export async function POST(req: NextRequest) {
       [assignedSubRole, String(body.email).trim()]
     );
 
-    sendReservationConfirmationEmail(body.email, body.name, body.event_name, !!body.volunteer_commitment).catch((err) =>
+    sendReservationConfirmationEmail(
+      body.email,
+      body.name,
+      body.event_name,
+      !!body.volunteer_commitment,
+      Number(body.seats) || 1
+    ).catch((err) =>
       console.error("sendReservationConfirmationEmail failed:", err)
     );
+
+    sendReservationAlertToAdmin({
+      eventName: body.event_name,
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
+      seats: Number(body.seats) || 1,
+      isVolunteer: !!body.volunteer_commitment,
+      companions: body.companions,
+    }).catch((err) => console.error("sendReservationAlertToAdmin failed:", err));
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {
@@ -112,9 +127,7 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   try {
-    const result = await queryDb(
-      "SELECT * FROM event_reservations WHERE volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee' ORDER BY created_at DESC"
-    );
+    const result = await queryDb("SELECT * FROM event_reservations ORDER BY created_at DESC");
     return NextResponse.json(result.rows);
   } catch (err: any) {
     console.error("GET /api/reservations error:", err);

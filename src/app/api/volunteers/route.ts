@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
-import { sendVolunteerConfirmationEmail } from "@/lib/email";
+import { sendVolunteerConfirmationEmail, sendVolunteerAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -132,6 +131,14 @@ export async function POST(req: NextRequest) {
       console.error("sendVolunteerConfirmationEmail failed:", err)
     );
 
+    sendVolunteerAlertToAdmin({
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
+      events: selectedEvents,
+      skills: body.skills,
+    }).catch((err) => console.error("sendVolunteerAlertToAdmin failed:", err));
+
     return NextResponse.json({ ok: true, id: firstId }, { status: 201 });
   } catch (err: any) {
     console.error("POST /api/volunteers error:", err);
@@ -152,8 +159,10 @@ export async function GET(req: NextRequest) {
       name: row.name,
       email: row.email,
       phone: row.phone,
+      event_name: row.event_name,
       selected_events: [row.event_name],
       volunteer_commitment: row.volunteer_commitment,
+      companions: row.companions,
       status: row.status,
       created_at: row.created_at,
     }));

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { sendDonationReceiptEmail } from "@/lib/email";
+import { sendDonationReceiptEmail, sendDonationAlertToAdmin } from "@/lib/email";
 import { firstError, validateAmount, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
@@ -55,6 +55,17 @@ export async function POST(req: NextRequest) {
         body.donation_type === "monthly"
       ).catch((err) => console.error("sendDonationReceiptEmail failed:", err));
     }
+
+    sendDonationAlertToAdmin({
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
+      amount: Number(body.amount),
+      donationType: body.donation_type === "monthly" ? "monthly" : "one-time",
+      campaign: body.campaign_name,
+      eventName: body.event_name,
+      anonymous: !!body.anonymous,
+    }).catch((err) => console.error("sendDonationAlertToAdmin failed:", err));
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {

@@ -3,6 +3,7 @@ import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
+import { sendMemberWelcomeEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   const admin = await getAdminFromRequest(req);
@@ -76,7 +77,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "An account with this email address already exists." }, { status: 409 });
     }
 
-    const password_hash = bcrypt.hashSync(String(password || "123456"), 10);
+    const rawPassword = password ? String(password) : "123456";
+    const password_hash = bcrypt.hashSync(rawPassword, 10);
     const assignedRole = role || "user";
     const assignedStatus = status || "Active";
     const serializedPerms = permissions
@@ -92,9 +94,12 @@ export async function POST(req: NextRequest) {
     );
     const id = insertRes.rows[0]?.id;
 
+    sendMemberWelcomeEmail(normalizedEmail, name.trim(), assignedRole, rawPassword).catch((err) =>
+      console.error("sendMemberWelcomeEmail failed:", err)
+    );
+
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {
-
     if (String(err.message).includes("unique") || String(err.message).includes("UNIQUE")) {
       return NextResponse.json({ error: "An account with this email is already registered." }, { status: 409 });
     }
