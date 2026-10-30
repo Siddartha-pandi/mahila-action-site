@@ -269,6 +269,139 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
   },
 ];
 
+export function findImpactPost(
+  posts: BlogPost[],
+  categories: Category[],
+  modalIdOrSlug: string | null | undefined
+): BlogPost | undefined {
+  if (!modalIdOrSlug) return undefined;
+  const raw = String(modalIdOrSlug).trim();
+  const lower = raw.toLowerCase();
+
+  const impactPosts = (posts || []).filter((p) => p.section === "impact");
+  const allAvailable = impactPosts.length > 0 ? impactPosts : (posts || []);
+
+  // 1. Direct ID match
+  const byId = allAvailable.find((p) => String(p.id).toLowerCase() === lower);
+  if (byId) return byId;
+
+  // 2. Map canonical topic keys
+  type Topic = "women" | "education" | "livelihood" | "wellbeing";
+  let topic: Topic | null = null;
+
+  if (
+    lower === "women-leadership" ||
+    lower === "women" ||
+    lower === "leadership" ||
+    lower === "cat_women" ||
+    lower === "1" ||
+    lower === "7"
+  ) {
+    topic = "women";
+  } else if (
+    lower === "education" ||
+    lower === "education-learning" ||
+    lower === "learning" ||
+    lower === "cat_education" ||
+    lower === "2" ||
+    lower === "8"
+  ) {
+    topic = "education";
+  } else if (
+    lower === "livelihood" ||
+    lower === "livelihood-skills" ||
+    lower === "skills" ||
+    lower === "economic" ||
+    lower === "cat_livelihood" ||
+    lower === "3" ||
+    lower === "9"
+  ) {
+    topic = "livelihood";
+  } else if (
+    lower === "wellbeing" ||
+    lower === "community-wellbeing" ||
+    lower === "health" ||
+    lower === "dignity" ||
+    lower === "cat_wellbeing" ||
+    lower === "4" ||
+    lower === "10"
+  ) {
+    topic = "wellbeing";
+  }
+
+  function matchTopic(p: BlogPost, t: Topic): boolean {
+    const title = (p.title || "").toLowerCase();
+    const excerpt = (p.excerpt || "").toLowerCase();
+    const pCatId = String(p.categoryId || "").toLowerCase();
+    const catName = (findCategory(categories, p.categoryId)?.name || "").toLowerCase();
+    const pId = String(p.id).toLowerCase();
+
+    if (t === "women") {
+      if (pId === "7" || pCatId === "1" || pCatId === "cat_women") return true;
+      if (catName.includes("women") || catName.includes("leadership")) return true;
+      if (title.includes("women") || title.includes("leadership") || excerpt.includes("women")) return true;
+    } else if (t === "education") {
+      if (pId === "8" || pCatId === "2" || pCatId === "cat_education") return true;
+      if (catName.includes("education") || catName.includes("learning")) return true;
+      if (title.includes("education") || title.includes("learning") || excerpt.includes("education")) return true;
+    } else if (t === "livelihood") {
+      if (pId === "9" || pCatId === "3" || pCatId === "cat_livelihood") return true;
+      if (catName.includes("livelihood") || catName.includes("skills")) return true;
+      if (title.includes("economic") || title.includes("livelihood") || title.includes("skills") || excerpt.includes("livelihood")) return true;
+    } else if (t === "wellbeing") {
+      if (pId === "10" || pCatId === "4" || pCatId === "cat_wellbeing") return true;
+      if (catName.includes("wellbeing") || catName.includes("health")) return true;
+      if (title.includes("health") || title.includes("wellbeing") || title.includes("dignity") || excerpt.includes("wellbeing")) return true;
+    }
+    return false;
+  }
+
+  if (topic) {
+    // Check in impact posts first
+    const matchInImpact = impactPosts.find((p) => matchTopic(p, topic!));
+    if (matchInImpact) return matchInImpact;
+
+    // Check in all posts
+    const matchInAll = (posts || []).find((p) => matchTopic(p, topic!));
+    if (matchInAll) return matchInAll;
+
+    // Check in DEFAULT_BLOG_POSTS
+    const matchInDefault = DEFAULT_BLOG_POSTS.find((p) => matchTopic(p, topic!));
+    if (matchInDefault) return matchInDefault;
+  }
+
+  // 3. Category matching via findCategory
+  const foundCat = findCategory(categories, raw);
+  if (foundCat) {
+    const byCategory = impactPosts.find((p) => {
+      const pCat = findCategory(categories, p.categoryId);
+      return pCat && String(pCat.id) === String(foundCat.id);
+    });
+    if (byCategory) return byCategory;
+  }
+
+  // 4. Default blog posts fallback by id or title substring
+  const defaultById = DEFAULT_BLOG_POSTS.find(
+    (p) => String(p.id).toLowerCase() === lower || (p.title && p.title.toLowerCase().includes(lower))
+  );
+  if (defaultById) return defaultById;
+
+  // 5. Index-based fallback if topic was identified
+  if (topic && impactPosts.length > 0) {
+    const topicIndexMap: Record<Topic, number> = {
+      women: 0,
+      education: 1,
+      livelihood: 2,
+      wellbeing: 3,
+    };
+    const idx = topicIndexMap[topic];
+    if (impactPosts[idx]) return impactPosts[idx];
+  }
+
+  // 6. Absolute last fallback: first impact post available
+  return impactPosts[0] ?? DEFAULT_BLOG_POSTS.find((p) => p.section === "impact");
+}
+
 export const DEFAULT_COUNCILORS: Councilor[] = (councilorsJson as any[])?.length
   ? (councilorsJson as any[]).map((c) => ({
       id: String(c.id),
@@ -305,9 +438,9 @@ export const DEFAULT_TIMELINE: TimelineEntry[] = (timelineJson as any[])?.length
 export const DEFAULT_CONTACT: ContactInfo = {
   email: contactJson.email || "contact@mahilaction.org",
   emailNote: contactJson.emailNote || "We reply within 24 hours",
-  phone: contactJson.phone || "+91 XXXXXXXXXX",
+  phone: contactJson.phone || "+91 123454321",
   phoneNote: contactJson.phoneNote || "Mon – Sat, 9 AM – 6 PM IST",
-  address: contactJson.address || "Hyderabad, Telangana",
+  address: contactJson.address || "Visakapatnam, Andhra Pradesh",
   addressNote: contactJson.addressNote || "India – 500 001",
   hours: contactJson.hours || "Mon – Friday",
   hoursNote: contactJson.hoursNote || "9:00 AM – 5:30 PM IST",
@@ -512,19 +645,29 @@ export async function loadSiteData(): Promise<SiteData> {
     }
 
     if (Array.isArray(postRows) && postRows.length > 0) {
-      blogPosts = postRows.map((r: any) => ({
-        id: String(r.id),
-        section: r.section,
-        categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
-        title: r.title,
-        excerpt: r.excerpt || "",
-        content: r.content || "",
-        coverImage: mediaUrl(r.cover_image || r.coverImage),
-        gallery: mediaUrls(r.gallery),
-        tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
-        published: r.published !== false && r.published !== 0 && r.published !== "false",
-        createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-      }));
+      blogPosts = postRows.map((r: any) => {
+        let catId = resolveCategoryId(categories, r.category_id ?? r.categoryId);
+        if (r.section === "impact" && (!catId || catId === "null")) {
+          const lower = (r.title || "").toLowerCase();
+          if (lower.includes("women") || lower.includes("leadership") || String(r.id) === "7") catId = "1";
+          else if (lower.includes("education") || lower.includes("learning") || String(r.id) === "8") catId = "2";
+          else if (lower.includes("economic") || lower.includes("livelihood") || lower.includes("skills") || String(r.id) === "9") catId = "3";
+          else if (lower.includes("health") || lower.includes("wellbeing") || lower.includes("dignity") || String(r.id) === "10") catId = "4";
+        }
+        return {
+          id: String(r.id),
+          section: r.section,
+          categoryId: catId,
+          title: r.title,
+          excerpt: r.excerpt || "",
+          content: r.content || "",
+          coverImage: mediaUrl(r.cover_image || r.coverImage),
+          gallery: mediaUrls(r.gallery),
+          tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+          published: r.published !== false && r.published !== 0 && r.published !== "false",
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        };
+      });
     }
 
     if (Array.isArray(councilorRows) && councilorRows.length > 0) {

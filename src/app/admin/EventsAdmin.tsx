@@ -209,21 +209,16 @@ function EventDetailRegistrationsView({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">{active.title}</h3>
-              {onTogglePublish && (
-                <button
-                  type="button"
-                  onClick={() => onTogglePublish(active, active.published === false)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer shadow-2xs ${
-                    active.published !== false
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
-                      : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
-                  }`}
-                  title={active.published !== false ? "Live on site. Click to unpublish." : "Draft. Click to publish."}
-                >
-                  {active.published !== false ? <Globe size={12} className="text-emerald-600" /> : <EyeOff size={12} className="text-amber-600" />}
-                  <span>{active.published !== false ? "🟢 Live" : "⚠️ Draft"}</span>
-                </button>
-              )}
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border shadow-2xs select-none ${
+                  active.published !== false
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : "bg-amber-50 text-amber-800 border-amber-300"
+                }`}
+              >
+                {active.published !== false ? <Globe size={12} className="text-emerald-600" /> : <EyeOff size={12} className="text-amber-600" />}
+                <span>{active.published !== false ? "🟢 Live" : "⚠️ Draft"}</span>
+              </span>
               {expStats.isFull ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
                   <AlertCircle size={12} /> Sold Out
@@ -449,6 +444,7 @@ export function EventsOverviewTable({
   onDeleteEvent: (id: string) => void;
 }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!menuOpenId) return;
@@ -456,24 +452,37 @@ export function EventsOverviewTable({
       const target = e.target as HTMLElement;
       if (!target.closest("[data-row-menu]")) {
         setMenuOpenId(null);
+        setMenuCoords(null);
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpenId(null);
+      if (e.key === "Escape") {
+        setMenuOpenId(null);
+        setMenuCoords(null);
+      }
     };
+    const handleScrollOrResize = () => {
+      setMenuOpenId(null);
+      setMenuCoords(null);
+    };
+
     document.addEventListener("click", handleClickOutside);
     document.addEventListener("keydown", handleEscape);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
     return () => {
       document.removeEventListener("click", handleClickOutside);
       document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
     };
   }, [menuOpenId]);
 
   return (
-    <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
-      <div className="overflow-x-auto min-h-[380px] pb-36">
-        <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
-          <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
+    <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden h-auto">
+      <div className="overflow-x-auto overflow-y-auto max-h-[345px]">
+        <table className="w-full text-left font-['Inter',sans-serif] text-[13px] border-collapse">
+          <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55 sticky top-0 z-20 shadow-2xs">
             <tr>
               <th className="py-3 px-3">Event Details</th>
               <th className="py-3 px-3">Status</th>
@@ -483,7 +492,7 @@ export function EventsOverviewTable({
               <th className="py-3 px-2 text-center">Vendors</th>
               <th className="py-3 px-2 text-center">Total</th>
               <th className="py-3 px-3 min-w-[110px]">Occupancy</th>
-              <th className="py-3 px-3 text-right min-w-[300px] whitespace-nowrap sticky right-0 bg-[#faf7f3] z-20 shadow-[-6px_0_12px_-3px_rgba(0,0,0,0.08)] border-l border-[#a65a4a]/15">Actions</th>
+              <th className="py-3 px-3 text-right min-w-[140px] whitespace-nowrap sticky top-0 right-0 bg-[#faf7f3] z-30">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#a65a4a]/10">
@@ -495,8 +504,7 @@ export function EventsOverviewTable({
               return (
                 <tr
                   key={ev.id}
-                  onClick={() => onSelectEvent(ev.id)}
-                  className={`hover:bg-[#a65a4a]/5 transition-colors cursor-pointer group relative ${
+                  className={`hover:bg-[#a65a4a]/5 transition-colors relative ${
                     menuOpenId === ev.id ? "z-40" : "z-auto"
                   }`}
                 >
@@ -511,7 +519,7 @@ export function EventsOverviewTable({
                       )}
                       <div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-semibold text-[#1e1e1e] group-hover:text-[#a65a4a] transition-colors">{ev.title}</p>
+                          <p className="font-semibold text-[#1e1e1e]">{ev.title}</p>
                           {ev.published === false && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
                               <EyeOff size={10} /> Draft
@@ -528,23 +536,17 @@ export function EventsOverviewTable({
                   </td>
                   <td className="py-3 px-3">
                     <div className="flex flex-col gap-1.5 items-start">
-                      {/* Direct 1-Click Publish / Draft Toggle */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTogglePublish(ev, ev.published === false);
-                        }}
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shadow-2xs ${
+                      {/* Publication Status Badge (display only) */}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border shadow-2xs select-none ${
                           ev.published !== false
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
-                            : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-amber-50 text-amber-800 border-amber-300"
                         }`}
-                        title={ev.published !== false ? "Currently Published & Live. Click to Unpublish." : "Currently Draft (Hidden). Click to Publish."}
                       >
                         {ev.published !== false ? <Globe size={10} className="text-emerald-600" /> : <EyeOff size={10} className="text-amber-600" />}
                         <span>{ev.published !== false ? "🟢 Live" : "⚠️ Draft"}</span>
-                      </button>
+                      </span>
 
                       {stats.isFull ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
@@ -617,69 +619,40 @@ export function EventsOverviewTable({
                     )}
                   </td>
                   <td
-                    className={`py-3 px-3 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-[#fbf7f4] shadow-[-6px_0_12px_-3px_rgba(0,0,0,0.08)] border-l border-[#a65a4a]/15 ${
+                    className={`py-3 px-3 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-[#fbf7f4] ${
                       menuOpenId === ev.id ? "z-40" : "z-10"
                     }`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      
-                      {/* Direct 1-Click Publish / Unpublish Toggle */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onTogglePublish(ev, ev.published === false);
-                        }}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-2xs cursor-pointer shrink-0 border ${
-                          ev.published !== false
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                            : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
-                        }`}
-                        title={
-                          ev.published !== false
-                            ? "Currently Published (Live on site). Click to Unpublish."
-                            : "Currently Draft (Hidden from site). Click to Publish."
-                        }
-                      >
-                        {ev.published !== false ? (
-                          <>
-                            <Globe size={13} className="text-emerald-600" />
-                            <span>Published</span>
-                          </>
-                        ) : (
-                          <>
-                            <EyeOff size={13} className="text-amber-600" />
-                            <span>Draft</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEditEvent(ev.id);
-                        }}
-                        className="p-1.5 text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer shrink-0"
-                        title="Edit Event Content"
-                      >
-                        <Edit3 size={15} />
-                      </button>
-
                       <button
                         type="button"
                         onClick={() => onSelectEvent(ev.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a] hover:text-white transition-all shadow-2xs cursor-pointer shrink-0"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a] hover:text-white transition-all shadow-2xs cursor-pointer shrink-0"
+                        title="View event details and registrations"
                       >
-                        View Members ({stats.totalMembers}) →
+                        <Eye size={13} />
+                        <span>View</span>
                       </button>
 
                       {/* 3-dots Overflow Menu Button */}
                       <div className="relative inline-block text-left shrink-0" data-row-menu>
                         <button
                           type="button"
-                          onClick={() => setMenuOpenId(menuOpenId === ev.id ? null : ev.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (menuOpenId === ev.id) {
+                              setMenuOpenId(null);
+                              setMenuCoords(null);
+                            } else {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setMenuCoords({
+                                top: rect.bottom + 6,
+                                left: Math.max(12, rect.right - 224),
+                              });
+                              setMenuOpenId(ev.id);
+                            }
+                          }}
                           className={`size-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer ${
                             menuOpenId === ev.id
                               ? "bg-[#a65a4a] text-white border-[#a65a4a] shadow-xs"
@@ -692,14 +665,14 @@ export function EventsOverviewTable({
                         </button>
 
                         {/* 3-dots Dropdown Menu */}
-                        {menuOpenId === ev.id && (
+                        {menuOpenId === ev.id && menuCoords && (
                           <div
-                            className={`absolute right-0 w-56 rounded-xl bg-white border border-gray-200 shadow-xl py-1.5 z-50 text-left ${
-                              index >= Math.max(0, events.length - 2) && events.length > 2
-                                ? "bottom-full mb-1.5"
-                                : "top-full mt-1.5"
-                            }`}
-                            style={{ minWidth: "220px" }}
+                            className="fixed w-56 rounded-xl bg-white border border-gray-200 shadow-2xl py-1.5 z-[9999] text-left"
+                            style={{
+                              top: `${menuCoords.top}px`,
+                              left: `${menuCoords.left}px`,
+                              minWidth: "220px",
+                            }}
                           >
                             <div className="px-3.5 py-1.5 border-b border-gray-100 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                               Options
@@ -825,7 +798,7 @@ export function EventsAdmin({
   onChange: (next: EventItem[]) => void;
 }) {
   const [viewMode, setViewMode] = useState<"overview" | "event_detail" | "editor">("overview");
-  const [activeId, setActiveId] = useState<string | null>(events[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(events[0]?.id ? String(events[0].id) : null);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -837,7 +810,13 @@ export function EventsAdmin({
 
   const [submissions, setSubmissions] = useState<SubmissionItem[]>(() => getSubmissions());
 
-  const active = events.find((e) => e.id === activeId) ?? null;
+  const active = events.find((e) => String(e.id) === String(activeId)) ?? events[0] ?? null;
+
+  useEffect(() => {
+    if (!activeId && events.length > 0) {
+      setActiveId(String(events[0].id));
+    }
+  }, [events, activeId]);
 
   const session = getCurrentAdminSession();
   const canEdit = hasPermission(session, "events", "edit");
@@ -860,7 +839,7 @@ export function EventsAdmin({
   function update(patch: Partial<EventItem>) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
-    onChange(events.map((e) => (e.id === active.id ? { ...e, ...patch } : e)));
+    onChange(events.map((e) => (String(e.id) === String(active.id) ? { ...e, ...patch } : e)));
   }
 
   /**
@@ -1401,18 +1380,52 @@ export function EventsAdmin({
                 <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={3} className={`${inputBase} resize-y`} />
               </div>
               <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} />
-              <div>
-                <label className={labelBase}>Category (shown as the badge on the event image)</label>
-                <select
-                  value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
-                  onChange={(e) => update({ categoryId: e.target.value || null })}
-                  className={`${inputBase} cursor-pointer`}
-                >
-                  <option value="">No category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={String(c.id)}>{c.name}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelBase}>Category (shown as badge on event)</label>
+                  <select
+                    value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
+                    onChange={(e) => update({ categoryId: e.target.value || null })}
+                    className={`${inputBase} cursor-pointer`}
+                  >
+                    <option value="">No category</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelBase}>Publication Status (Visibility)</label>
+                  <div className="inline-flex items-center p-1 rounded-lg bg-gray-100 border border-gray-200 w-full h-[42px]">
+                    <button
+                      type="button"
+                      onClick={() => handleSetPublish(active, true)}
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
+                        active.published !== false
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-gray-600 hover:text-black hover:bg-white/60"
+                      }`}
+                      title="Make this event published and live on website"
+                    >
+                      <Globe size={13} />
+                      <span>Published (Live)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetPublish(active, false)}
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
+                        active.published === false
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "text-gray-600 hover:text-black hover:bg-white/60"
+                      }`}
+                      title="Make this event unpublished (draft) and hidden from website"
+                    >
+                      <EyeOff size={13} />
+                      <span>Draft (Hidden)</span>
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

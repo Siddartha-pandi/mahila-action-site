@@ -8,11 +8,11 @@ const CONTACT_JSON_PATH = path.join(process.cwd(), "src", "data", "contact.json"
 const DEFAULT_CONTACT_DATA = {
   email: "contact@mahilaction.org",
   emailNote: "We reply within 24 hours",
-  phone: "+91 XXXXXXXXXX",
+  phone: "+91 123454321",
   phoneNote: "Mon – Sat, 9 AM – 6 PM IST",
-  address: "Hyderabad, Telangana",
+  address: "Visakapatnam, Andhra Pradesh",
   addressNote: "India – 500 001",
-  hours: "Mon – Friday",
+  hours: "Mon – Fri",
   hoursNote: "9:00 AM – 5:30 PM IST",
 };
 

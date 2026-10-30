@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocation } from "react-router";
-import { upcomingOrOpenEvents, findCategory, type RegKind } from "@/lib/data";
+import { upcomingOrOpenEvents, findCategory, findImpactPost, DEFAULT_BLOG_POSTS, type RegKind } from "@/lib/data";
 import { BlogDetailModal } from "./BlogDetailModal";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
@@ -11,9 +11,9 @@ import {
   isProtectedModal,
   rememberIntendedDestination,
 } from "../hooks/useAuthGuard";
-import { IMPACT_CARD_CATEGORY } from "../constants/fallbacks";
 import { VolunteerPortal } from "./VolunteerPortal";
 import { AttendEventModal, PartnerWithUsModal, ClosedEventNoticeModal, ReserveSeatModal } from "./ReserveSeatModal";
+import "../constants/fallbacks";
 
 type ReserveUIKind = RegKind | "attendee";
 
@@ -78,20 +78,11 @@ export function GlobalModals() {
   }
 
   if ((modal === "story" || modal === "impact") && modalId) {
-    const impactPosts = siteData.blogPosts.filter(p => p.section === "impact");
     const post =
       modal === "impact"
-        ? impactPosts.find(p => String(p.id) === String(modalId)) ??
-          impactPosts.find(p => {
-            const foundCat = findCategory(siteData.categories, p.categoryId);
-            const targetCat = findCategory(siteData.categories, IMPACT_CARD_CATEGORY[modalId] || modalId);
-            return (
-              String(p.categoryId) === String(IMPACT_CARD_CATEGORY[modalId]) ||
-              String(p.categoryId) === String(modalId) ||
-              (foundCat && targetCat && String(foundCat.id) === String(targetCat.id))
-            );
-          })
-        : siteData.blogPosts.find(p => String(p.id) === String(modalId));
+        ? findImpactPost(siteData.blogPosts, siteData.categories, modalId)
+        : siteData.blogPosts.find((p) => String(p.id) === String(modalId)) ??
+          DEFAULT_BLOG_POSTS.find((p) => String(p.id) === String(modalId));
     if (!post) return null;
 
     const enrichedPost = {
@@ -99,9 +90,23 @@ export function GlobalModals() {
       coverImage: post.coverImage || "",
       gallery: Array.isArray(post.gallery) ? post.gallery : [],
     };
-    const categoryLabel =
-      findCategory(siteData.categories, post.categoryId)?.name ??
-      (modal === "impact" ? "Our Impacts" : "Our Stories");
+
+    const catName = findCategory(siteData.categories, post.categoryId)?.name;
+    const lowerTitle = (post.title || "").toLowerCase();
+    const fallbackCategoryName =
+      post.id === "7" || lowerTitle.includes("women") || lowerTitle.includes("leadership")
+        ? "Women & Leadership"
+        : post.id === "8" || lowerTitle.includes("education") || lowerTitle.includes("learning")
+        ? "Education & Learning"
+        : post.id === "9" || lowerTitle.includes("economic") || lowerTitle.includes("livelihood")
+        ? "Livelihood & Skills"
+        : post.id === "10" || lowerTitle.includes("health") || lowerTitle.includes("wellbeing")
+        ? "Community Wellbeing"
+        : modal === "impact"
+        ? "Our Impacts"
+        : "Our Stories";
+
+    const categoryLabel = catName ?? fallbackCategoryName;
 
     return <BlogDetailModal post={enrichedPost} categoryLabel={categoryLabel} onClose={closeModal} />;
   }

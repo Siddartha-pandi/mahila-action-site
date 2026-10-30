@@ -2,6 +2,8 @@
 
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
+import { useSiteData } from "../context/SiteDataContext";
+import { useUserProfile } from "../hooks/useUserProfile";
 import { fraunces, inter, type Page } from "./shared/styleHelpers";
 
 const FOOTER_IMPACT_LINKS: { label: string; id: string }[] = [
@@ -13,10 +15,31 @@ const FOOTER_IMPACT_LINKS: { label: string; id: string }[] = [
 
 export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   const { openModal } = useModal();
+  const siteData = useSiteData();
+  const contact = siteData?.contact;
+  const email = contact?.email || "contact@mahilaction.org";
+  const phone = contact?.phone || "+91 123454321";
+  const userProfile = useUserProfile();
 
   function nav(p: Page) {
     setPage(p);
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleAttendEvents() {
+    if (userProfile) {
+      nav("eventsBlog");
+    } else {
+      openModal("attend");
+    }
+  }
+
+  function handleVolunteer() {
+    if (userProfile) {
+      nav("eventsBlog");
+    } else {
+      openModal("volunteer");
+    }
   }
 
   function openImpact(id: string) {
@@ -82,7 +105,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 className={`${inter()} text-[#f4efe7]/80 text-[13px] flex flex-col gap-2`}
               >
                 <button
-                  onClick={() => openModal("attend")}
+                  onClick={handleAttendEvents}
                   className="text-left hover:text-[#f4efe7] transition-colors cursor-pointer"
                 >
                   Attend Events
@@ -94,7 +117,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                   Partner With Us
                 </button>
                 <button
-                  onClick={() => openModal("volunteer")}
+                  onClick={handleVolunteer}
                   className="text-left hover:text-[#f4efe7] transition-colors cursor-pointer"
                 >
                   Volunteer
@@ -131,12 +154,19 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 className={`${inter()} text-[#f4efe7]/80 text-[13px] flex flex-col gap-2`}
               >
                 <a
-                  href="mailto:contact@mahilaction.org"
+                  href={`mailto:${email}`}
                   className="hover:text-[#f4efe7] transition-colors"
                 >
-                  contact@mahilaction.org
+                  {email}
                 </a>
-                <span>+91 XXXXXXXXX</span>
+                {phone && (
+                  <a
+                    href={`tel:${phone.replace(/\s+/g, "")}`}
+                    className="hover:text-[#f4efe7] transition-colors"
+                  >
+                    {phone}
+                  </a>
+                )}
               </div>
               {/* Social icons */}
               <div className="flex gap-4 mt-4">

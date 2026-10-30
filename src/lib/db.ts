@@ -254,6 +254,16 @@ export async function seedAllData(dbPool: any): Promise<void> {
     ])
   );
 
+  // Self-heal impact posts category IDs if they were previously unassigned/null in database
+  try {
+    await dbPool.query(`
+      UPDATE blog_posts SET category_id = 1 WHERE section = 'impact' AND LOWER(title) LIKE '%women%' AND (category_id IS NULL OR category_id = 0);
+      UPDATE blog_posts SET category_id = 2 WHERE section = 'impact' AND LOWER(title) LIKE '%education%' AND (category_id IS NULL OR category_id = 0);
+      UPDATE blog_posts SET category_id = 3 WHERE section = 'impact' AND (LOWER(title) LIKE '%economic%' OR LOWER(title) LIKE '%livelihood%') AND (category_id IS NULL OR category_id = 0);
+      UPDATE blog_posts SET category_id = 4 WHERE section = 'impact' AND (LOWER(title) LIKE '%health%' OR LOWER(title) LIKE '%wellbeing%') AND (category_id IS NULL OR category_id = 0);
+    `);
+  } catch { }
+
   // Synchronize PostgreSQL SERIAL sequences past manually seeded IDs
   const tablesToSync = ["users", "categories", "events", "blog_posts", "media"];
   // Sent as one batch — statements sent together instead of multiple round trips.

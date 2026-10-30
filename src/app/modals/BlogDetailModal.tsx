@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { marked } from "marked";
 import { type BlogPost } from "@/lib/data";
@@ -31,6 +31,23 @@ export function BlogDetailModal({
   onNavigate?: (dir: -1 | 1) => void;
 }) {
   const [galleryTop, setGalleryTop] = useState(0);
+
+  useEffect(() => {
+    setGalleryTop(0);
+  }, [post.id]);
+
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = origOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
   const gallery = post.gallery ?? [];
   const n = gallery.length;
   const idxTop = n ? galleryTop % n : 0;

@@ -86,6 +86,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (resolvedCategoryId == null && b.section === "impact") {
+      const lower = String(b.title || "").toLowerCase();
+      if (lower.includes("women") || lower.includes("leadership") || String(b.id) === "7") resolvedCategoryId = 1;
+      else if (lower.includes("education") || lower.includes("learning") || String(b.id) === "8") resolvedCategoryId = 2;
+      else if (lower.includes("economic") || lower.includes("livelihood") || lower.includes("skills") || String(b.id) === "9") resolvedCategoryId = 3;
+      else if (lower.includes("health") || lower.includes("wellbeing") || lower.includes("dignity") || String(b.id) === "10") resolvedCategoryId = 4;
+    }
+
     const published = b.published !== undefined ? (b.published !== false && b.published !== 0 && b.published !== "false") : true;
 
     // Determine existing post to update if applicable

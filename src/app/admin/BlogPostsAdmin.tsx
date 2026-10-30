@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Globe, EyeOff } from "lucide-react";
 import { AdminListEditor, GalleryField, ImageField, TagsField, inputBase, labelBase } from "../adminWidgets";
@@ -21,6 +21,12 @@ export function BlogPostsAdmin({
   const active = posts.find((p) => String(p.id) === String(activeId) && p.section === section) ?? filtered[0] ?? null;
   const usesCategories = section === "story" || section === "impact";
   const sectionNoun = section === "story" ? "Story" : section === "impact" ? "Impact page" : "Event blog";
+
+  useEffect(() => {
+    if (!activeId && filtered.length > 0) {
+      setActiveId(String(filtered[0].id));
+    }
+  }, [filtered, activeId]);
 
   function update(patch: Partial<BlogPost>) {
     if (!active) return;
@@ -80,9 +86,15 @@ export function BlogPostsAdmin({
       onDelete={handleDelete}
       itemLabel={(p) => p.title}
       itemSubLabel={(p) => {
-        const catOrDate = usesCategories
-          ? findCategory(categories, p.categoryId)?.name ?? "Uncategorized"
-          : new Date(p.createdAt).toLocaleDateString();
+        let catName = usesCategories ? findCategory(categories, p.categoryId)?.name : null;
+        if (!catName && p.section === "impact") {
+          const lower = (p.title || "").toLowerCase();
+          if (lower.includes("women") || lower.includes("leadership") || String(p.id) === "7") catName = "Women & Leadership";
+          else if (lower.includes("education") || lower.includes("learning") || String(p.id) === "8") catName = "Education & Learning";
+          else if (lower.includes("economic") || lower.includes("livelihood") || lower.includes("skills") || String(p.id) === "9") catName = "Livelihood & Skills";
+          else if (lower.includes("health") || lower.includes("wellbeing") || lower.includes("dignity") || String(p.id) === "10") catName = "Community Wellbeing";
+        }
+        const catOrDate = catName ?? (usesCategories ? "Uncategorized" : new Date(p.createdAt).toLocaleDateString());
         return `${p.published === false ? "⚠️ [Draft] • " : "🟢 "}${catOrDate}`;
       }}
       itemAction={(p) => (
@@ -172,21 +184,61 @@ export function BlogPostsAdmin({
             <label className={labelBase}>Title</label>
             <input value={active.title} onChange={(e) => update({ title: e.target.value })} className={inputBase} />
           </div>
-          {usesCategories && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {usesCategories ? (
+              <div>
+                <label className={labelBase}>Category</label>
+                <select
+                  value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
+                  onChange={(e) => update({ categoryId: e.target.value || null })}
+                  className={`${inputBase} cursor-pointer`}
+                >
+                  <option value="">{section === "impact" ? "Select Impact Category" : "Select a Category"}</option>
+                  {categories.map((c) => (
+                    <option key={String(c.id)} value={String(c.id)}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div />
+            )}
+
             <div>
-              <label className={labelBase}>Category</label>
-              <select
-                value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
-                onChange={(e) => update({ categoryId: e.target.value || null })}
-                className={`${inputBase} cursor-pointer`}
-              >
-                {categories.length === 0 && <option value="">No categories yet</option>}
-                {categories.map((c) => (
-                  <option key={String(c.id)} value={String(c.id)}>{c.name}</option>
-                ))}
-              </select>
+              <label className={labelBase}>Publication Status (Visibility)</label>
+              <div className="inline-flex items-center p-1 rounded-lg bg-gray-100 border border-gray-200 w-full h-[42px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (active.published === false) handleTogglePublish(active);
+                  }}
+                  className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
+                    active.published !== false
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-gray-600 hover:text-black hover:bg-white/60"
+                  }`}
+                  title="Make this published and live on website"
+                >
+                  <Globe size={13} />
+                  <span>Published (Live)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (active.published !== false) handleTogglePublish(active);
+                  }}
+                  className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
+                    active.published === false
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-gray-600 hover:text-black hover:bg-white/60"
+                  }`}
+                  title="Make this draft and hidden from website"
+                >
+                  <EyeOff size={13} />
+                  <span>Draft (Hidden)</span>
+                </button>
+              </div>
             </div>
-          )}
+          </div>
           <div>
             <label className={labelBase}>Card Excerpt (shown on the card, keep it short)</label>
             <textarea value={active.excerpt} onChange={(e) => update({ excerpt: e.target.value })} rows={2} className={`${inputBase} resize-y`} />

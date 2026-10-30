@@ -87,12 +87,23 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     handleClose();
   }, [handleClose]);
 
-  const [step, setStep] = useState<VolAuthStep>(initialStep ?? "login");
-  const [profile, setProfile] = useState<VolunteerProfile | null>(null);
+  const [profile, setProfile] = useState<VolunteerProfile | null>(() => getSavedUserSession());
+  const [step, setStep] = useState<VolAuthStep>(() => {
+    if (initialStep) return initialStep;
+    const existing = getSavedUserSession();
+    return existing ? "dashboard" : "login";
+  });
   const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
 
   useEffect(() => {
     if (initialStep) setStep(initialStep);
+    else {
+      const existing = getSavedUserSession();
+      if (existing) {
+        setProfile(existing);
+        setStep("dashboard");
+      }
+    }
   }, [initialStep]);
 
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");

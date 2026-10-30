@@ -17,3 +17,5 @@ export const IMPACT_CARD_CATEGORY: Record<string, string> = {
   cat_livelihood: "3",
   cat_wellbeing: "4",
 };
+
+export default IMPACT_CARD_CATEGORY;

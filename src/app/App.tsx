@@ -74,6 +74,8 @@ export default function App() {
         navigate({ pathname: "/events", search: `?modal=reserve&id=${encodeURIComponent(slugId)}` }, { replace: true });
       } else if (first === "stories" || first === "story") {
         navigate({ pathname: "/stories", search: `?modal=story&id=${encodeURIComponent(slugId)}` }, { replace: true });
+      } else if (first === "impact" || first === "impacts") {
+        navigate({ pathname: "/home", search: `?modal=impact&id=${encodeURIComponent(slugId)}` }, { replace: true });
       }
     }
   }, [location.pathname, location.search, navigate]);
