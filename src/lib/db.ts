@@ -332,6 +332,7 @@ export async function initDb(): Promise<void> {
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS category_id TEXT",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS max_volunteers INTEGER DEFAULT 0",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT TRUE",
         "DROP TABLE IF EXISTS contact CASCADE",
         "DROP TABLE IF EXISTS cms_contact CASCADE",
         "DROP TABLE IF EXISTS app_meta CASCADE",

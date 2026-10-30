@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   cover_image TEXT,
   gallery TEXT,
   tags TEXT,
+  published BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

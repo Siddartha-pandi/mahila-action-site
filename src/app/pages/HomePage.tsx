@@ -43,7 +43,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
   ];
 
   const storyPosts = [...siteData.blogPosts]
-    .filter(p => p.section === "story")
+    .filter(p => p.section === "story" && p.published !== false)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, MAX_RAIL_ITEMS);
   const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || "", title: p.title, excerpt: p.excerpt }));

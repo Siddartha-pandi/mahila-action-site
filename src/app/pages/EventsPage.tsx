@@ -83,7 +83,7 @@ export function EventsPage() {
       : allEvents.filter((e) => e.categoryId && targetCategoryKeys.has(String(e.categoryId)));
 
   const eventPosts = [...siteData.blogPosts]
-    .filter((p) => p.section === "event")
+    .filter((p) => p.section === "event" && (isAdmin ? true : p.published !== false))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   function handleReserve(ev: EventItem) {

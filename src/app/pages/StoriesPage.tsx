@@ -15,7 +15,7 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const { openModal } = useModal();
 
-  const storyPosts = siteData.blogPosts.filter((p) => p.section === "story");
+  const storyPosts = siteData.blogPosts.filter((p) => p.section === "story" && p.published !== false);
   const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
   const targetCategoryKeys = new Set(
     [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]

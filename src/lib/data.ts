@@ -47,6 +47,7 @@ export interface BlogPost {
   coverImage: string;
   gallery: string[];
   tags: string[];
+  published?: boolean; // true = visible to public, false = unpublished draft
   createdAt: string;
 }
 
@@ -476,6 +477,7 @@ export async function loadSiteData(): Promise<SiteData> {
         coverImage: mediaUrl(r.cover_image || r.coverImage),
         gallery: mediaUrls(r.gallery),
         tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+        published: r.published !== false && r.published !== 0 && r.published !== "false",
         createdAt: r.created_at || r.createdAt || new Date().toISOString(),
       }));
     }
@@ -640,7 +642,7 @@ export async function deleteEvent(id: string): Promise<boolean> {
 export function newBlogPost(section: "story" | "event" | "impact", categoryId: string | null = null): BlogPost {
   return {
     id: uid("post"), section, categoryId, title: "New Post", excerpt: "", content: "",
-    coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString(),
+    coverImage: "", gallery: [], tags: [], published: true, createdAt: new Date().toISOString(),
   };
 }
 
@@ -656,6 +658,9 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
     }
     if (res.data?.id != null) {
       itemToSave.id = String(res.data.id);
+    }
+    if (res.data?.published !== undefined) {
+      itemToSave.published = res.data.published;
     }
   } catch {}
 
