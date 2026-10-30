@@ -13,7 +13,7 @@ import {
   getUserSubmissions, loadUserSubmissions, getSavedUserSession, saveUserSession,
   type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
-import { isEventOpen, type EventItem } from "@/lib/data";
+import { isEventOpen, findCategory, type EventItem } from "@/lib/data";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { setCurrentAdminSession } from "@/lib/permissions";
 import { useModal } from "../hooks/useModal";
@@ -345,7 +345,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       const normTitle = ev.title.trim().toLowerCase();
       const alreadyVolunteer = registeredAsVolunteerTitles.has(normTitle);
       const alreadyAttendee = registeredAsAttendeeTitles.has(normTitle);
-      const catObj = siteData?.categories?.find(c => String(c.id) === String(ev.categoryId) || c.name === ev.categoryId);
+      const catObj = findCategory(siteData?.categories ?? [], ev.categoryId);
       const categoryName = catObj?.name || (typeof (ev as any).category === "string" ? (ev as any).category : "");
 
       return {

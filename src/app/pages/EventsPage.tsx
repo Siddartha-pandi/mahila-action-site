@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { isEventOpen, saveEvent, type EventItem } from "@/lib/data";
+import { isEventOpen, saveEvent, findCategory, type EventItem } from "@/lib/data";
 import { toast } from "sonner";
 import { Shield } from "lucide-react";
 import { BlogDetailModal } from "../modals/BlogDetailModal";
@@ -80,7 +80,14 @@ export function EventsPage() {
   const events =
     activeCategory === ALL
       ? allEvents
-      : allEvents.filter((e) => e.categoryId && targetCategoryKeys.has(String(e.categoryId)));
+      : allEvents.filter((e) => {
+          const eCat = findCategory(siteData.categories, e.categoryId);
+          const actCat = findCategory(siteData.categories, activeCategory);
+          if (eCat && actCat) {
+            return String(eCat.id) === String(actCat.id);
+          }
+          return String(e.categoryId) === String(activeCategory) || e.categoryId === activeCategory;
+        });
 
   const eventPosts = [...siteData.blogPosts]
     .filter((p) => p.section === "event" && (isAdmin ? true : p.published !== false))
@@ -102,7 +109,7 @@ export function EventsPage() {
 
   function categoryName(categoryId: string | null) {
     if (!categoryId) return undefined;
-    return siteData.categories.find((c) => String(c.id) === String(categoryId) || c.name === categoryId)?.name ?? categoryId;
+    return findCategory(siteData.categories, categoryId)?.name ?? categoryId;
   }
 
   return (

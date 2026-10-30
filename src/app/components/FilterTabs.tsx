@@ -44,9 +44,9 @@ export function FilterTabs({
           {allLabel}
         </button>
       )}
-      {options.map((opt) => (
+      {options.map((opt, index) => (
         <button
-          key={opt.id}
+          key={`${opt.id}_${index}`}
           type="button"
           onClick={() => onChange(opt.id)}
           className={pillStyle(activeId === opt.id)}

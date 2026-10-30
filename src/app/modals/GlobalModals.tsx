@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocation } from "react-router";
-import { upcomingOrOpenEvents, type RegKind } from "@/lib/data";
+import { upcomingOrOpenEvents, findCategory, type RegKind } from "@/lib/data";
 import { BlogDetailModal } from "./BlogDetailModal";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
@@ -81,7 +81,16 @@ export function GlobalModals() {
     const impactPosts = siteData.blogPosts.filter(p => p.section === "impact");
     const post =
       modal === "impact"
-        ? impactPosts.find(p => String(p.id) === String(modalId)) ?? impactPosts.find(p => String(p.categoryId) === String(IMPACT_CARD_CATEGORY[modalId]) || String(p.categoryId) === String(modalId))
+        ? impactPosts.find(p => String(p.id) === String(modalId)) ??
+          impactPosts.find(p => {
+            const foundCat = findCategory(siteData.categories, p.categoryId);
+            const targetCat = findCategory(siteData.categories, IMPACT_CARD_CATEGORY[modalId] || modalId);
+            return (
+              String(p.categoryId) === String(IMPACT_CARD_CATEGORY[modalId]) ||
+              String(p.categoryId) === String(modalId) ||
+              (foundCat && targetCat && String(foundCat.id) === String(targetCat.id))
+            );
+          })
         : siteData.blogPosts.find(p => String(p.id) === String(modalId));
     if (!post) return null;
 
@@ -91,7 +100,7 @@ export function GlobalModals() {
       gallery: Array.isArray(post.gallery) ? post.gallery : [],
     };
     const categoryLabel =
-      siteData.categories.find(cat => String(cat.id) === String(post.categoryId))?.name ??
+      findCategory(siteData.categories, post.categoryId)?.name ??
       (modal === "impact" ? "Our Impacts" : "Our Stories");
 
     return <BlogDetailModal post={enrichedPost} categoryLabel={categoryLabel} onClose={closeModal} />;

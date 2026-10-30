@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Globe, EyeOff } from "lucide-react";
 import { AdminListEditor, GalleryField, ImageField, TagsField, inputBase, labelBase } from "../adminWidgets";
 import { BlogContentEditor } from "../BlogContentEditor";
-import { BlogPost, Category, newBlogPost, saveBlogPost, deleteBlogPost } from "../../lib/data";
+import { BlogPost, Category, newBlogPost, saveBlogPost, deleteBlogPost, findCategory } from "../../lib/data";
 
 export function BlogPostsAdmin({
   section,
@@ -17,14 +17,15 @@ export function BlogPostsAdmin({
   onChange: (next: BlogPost[]) => void;
 }) {
   const filtered = posts.filter((p) => p.section === section);
-  const [activeId, setActiveId] = useState<string | null>(filtered[0]?.id ?? null);
-  const active = posts.find((p) => p.id === activeId) ?? null;
+  const [activeId, setActiveId] = useState<string | null>(filtered[0]?.id ? String(filtered[0].id) : null);
+  const active = posts.find((p) => String(p.id) === String(activeId) && p.section === section) ?? filtered[0] ?? null;
   const usesCategories = section === "story" || section === "impact";
   const sectionNoun = section === "story" ? "Story" : section === "impact" ? "Impact page" : "Event blog";
 
   function update(patch: Partial<BlogPost>) {
     if (!active) return;
-    onChange(posts.map((p) => (p.id === active.id ? { ...p, ...patch } : p)));
+    const updated = { ...active, ...patch };
+    onChange(posts.map((p) => (String(p.id) === String(active.id) ? updated : p)));
   }
 
   function handleAdd() {
@@ -35,18 +36,18 @@ export function BlogPostsAdmin({
 
   async function handleDelete(id: string) {
     await deleteBlogPost(id);
-    const next = posts.filter((p) => p.id !== id);
+    const next = posts.filter((p) => String(p.id) !== String(id));
     onChange(next);
-    if (activeId === id) setActiveId(next.filter((p) => p.section === section)[0]?.id ?? null);
+    if (String(activeId) === String(id)) setActiveId(next.filter((p) => p.section === section)[0]?.id ? String(next.filter((p) => p.section === section)[0].id) : null);
     toast.success(`${sectionNoun} deleted successfully.`);
   }
 
   async function handleTogglePublish(targetPost?: BlogPost) {
     const post = targetPost || active;
     if (!post) return;
-    const nextPublished = post.published === false; // toggle: if false -> true, if true/undefined -> false
+    const nextPublished = post.published === false;
     const updated = { ...post, published: nextPublished };
-    update({ published: nextPublished });
+    onChange(posts.map((p) => (String(p.id) === String(post.id) ? updated : p)));
     await saveBlogPost(updated);
     if (nextPublished) {
       toast.success(`"${post.title}" is now Published and live on the website!`);
@@ -61,9 +62,13 @@ export function BlogPostsAdmin({
     if (forcePublished !== undefined) {
       update({ published: forcePublished });
     }
-    await saveBlogPost(postToSave);
+    const ok = await saveBlogPost(postToSave);
     const isPub = postToSave.published !== false;
-    toast.success(`${sectionNoun} saved as ${isPub ? "Published (Live)" : "Draft"}!`);
+    if (ok) {
+      toast.success(`${sectionNoun} saved as ${isPub ? "Published (Live)" : "Draft"}!`);
+    } else {
+      toast.error(`Failed to save ${sectionNoun.toLowerCase()}.`);
+    }
   }
 
   return (
@@ -76,10 +81,28 @@ export function BlogPostsAdmin({
       itemLabel={(p) => p.title}
       itemSubLabel={(p) => {
         const catOrDate = usesCategories
-          ? categories.find((c) => c.id === p.categoryId)?.name ?? "Uncategorized"
+          ? findCategory(categories, p.categoryId)?.name ?? "Uncategorized"
           : new Date(p.createdAt).toLocaleDateString();
         return `${p.published === false ? "⚠️ [Draft] • " : "🟢 "}${catOrDate}`;
       }}
+      itemAction={(p) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleTogglePublish(p);
+          }}
+          className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+            p.published !== false
+              ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+              : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+          }`}
+          title={p.published !== false ? "Live on website. Click to unpublish." : "Draft. Click to publish."}
+        >
+          {p.published !== false ? <Globe size={11} className="text-emerald-600" /> : <EyeOff size={11} className="text-amber-600" />}
+          <span>{p.published !== false ? "Live" : "Draft"}</span>
+        </button>
+      )}
       addLabel={section === "story" ? "Add New Story" : section === "impact" ? "Add New Impact Story" : "Add New Event Blog"}
       emptyLabel="Nothing here yet."
     >
@@ -152,10 +175,14 @@ export function BlogPostsAdmin({
           {usesCategories && (
             <div>
               <label className={labelBase}>Category</label>
-              <select value={active.categoryId ?? ""} onChange={(e) => update({ categoryId: e.target.value || null })} className={`${inputBase} cursor-pointer`}>
+              <select
+                value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
+                onChange={(e) => update({ categoryId: e.target.value || null })}
+                className={`${inputBase} cursor-pointer`}
+              >
                 {categories.length === 0 && <option value="">No categories yet</option>}
                 {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={String(c.id)} value={String(c.id)}>{c.name}</option>
                 ))}
               </select>
             </div>

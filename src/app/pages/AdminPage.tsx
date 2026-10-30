@@ -283,6 +283,20 @@ export function AdminPage({
             </span>
           )}
           <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className={`flex items-center gap-1.5 font-['Inter',sans-serif] text-[11px] sm:text-[13px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-semibold transition-all cursor-pointer disabled:opacity-60 whitespace-nowrap ${
+              isDirty
+                ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 animate-pulse"
+                : "bg-[#f4efe7]/20 hover:bg-[#f4efe7]/30 text-[#f4efe7] border border-[#f4efe7]/40"
+            }`}
+            title="Save all changes and publish live to website"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>{saving ? "Publishing..." : isDirty ? "Publish Changes" : "Saved & Published"}</span>
+          </button>
+          <button
             onClick={handleLogout}
             className="flex items-center gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
           >

@@ -10,6 +10,7 @@ import {
   deleteCategory,
   reassignCategoryPosts,
   deleteCategoryPosts,
+  findCategory,
 } from "../../lib/data";
 
 export function CategoriesAdmin({
@@ -55,7 +56,10 @@ export function CategoriesAdmin({
   }
 
   function postsIn(categoryId: string) {
-    return posts.filter((p) => p.categoryId === categoryId);
+    return posts.filter((p) => {
+      const pCat = findCategory(categories, p.categoryId);
+      return pCat ? String(pCat.id) === String(categoryId) : String(p.categoryId) === String(categoryId);
+    });
   }
 
   async function confirmRemoveMoveAll() {
@@ -91,10 +95,10 @@ export function CategoriesAdmin({
       </button>
 
       <div className="flex flex-col gap-3">
-        {categories.map((c) => {
+        {categories.map((c, idx) => {
           const count = postsIn(c.id).length;
           return (
-            <div key={c.id} className="border border-[#a65a4a]/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div key={`${c.id}_${idx}`} className="border border-[#a65a4a]/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
               <input
                 value={draftFor(c)}
                 onChange={(e) => setNameDraft((d) => ({ ...d, [c.id]: e.target.value }))}
@@ -153,8 +157,8 @@ export function CategoriesAdmin({
                   <label className={labelBase}>Move stories to…</label>
                   <select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)} className={`${inputBase} cursor-pointer`}>
                     <option value="">Choose a category…</option>
-                    {categories.filter((c) => c.id !== removing.id).map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                    {categories.filter((c) => c.id !== removing.id).map((c, idx) => (
+                      <option key={`${c.id}_${idx}`} value={c.id}>{c.name}</option>
                     ))}
                   </select>
                 </div>

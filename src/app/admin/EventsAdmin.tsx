@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { AdminListEditor, ImageField, inputBase, labelBase } from "../adminWidgets";
-import { EventItem, RegKind, Category, isEventOpen, newEvent, saveEvent, deleteEvent } from "../../lib/data";
+import { EventItem, RegKind, Category, isEventOpen, newEvent, saveEvent, deleteEvent, findCategory } from "../../lib/data";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { getSubmissions, loadSubmissions, SubmissionItem } from "../../lib/backend";
 import { categoryOf } from "./SubmissionsAdmin";
@@ -69,7 +69,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
       if (d.volunteer_commitment === "vendor" || cat === "vendor") {
         vendorCount += 1;
         registeredPeople.push({
-          id: item.id,
+          id: `${item.type || "reg"}_${item.id}_${registeredPeople.length}`,
           name,
           email,
           phone,
@@ -81,7 +81,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
       } else if ((d.volunteer_commitment && d.volunteer_commitment !== "") || cat === "volunteer") {
         volunteerCount += 1;
         registeredPeople.push({
-          id: item.id,
+          id: `${item.type || "reg"}_${item.id}_${registeredPeople.length}`,
           name,
           email,
           phone,
@@ -94,7 +94,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
         attendeeCount += 1;
         attendeeSeats += seats;
         registeredPeople.push({
-          id: item.id,
+          id: `${item.type || "reg"}_${item.id}_${registeredPeople.length}`,
           name,
           email,
           phone,
@@ -107,7 +107,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
     } else if (cat === "volunteer" || item.type === "volunteer") {
       volunteerCount += 1;
       registeredPeople.push({
-        id: item.id,
+          id: `${item.type || "reg"}_${item.id}_${registeredPeople.length}`,
         name,
         email,
         phone,
@@ -119,7 +119,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
     } else if (cat === "vendor" || item.type === "vendor") {
       vendorCount += 1;
       registeredPeople.push({
-        id: item.id,
+          id: `${item.type || "reg"}_${item.id}_${registeredPeople.length}`,
         name,
         email,
         phone,
@@ -154,11 +154,13 @@ function EventDetailRegistrationsView({
   submissions,
   categories,
   exportEventCSV,
+  onTogglePublish,
 }: {
   active: EventItem;
   submissions: SubmissionItem[];
   categories: Category[];
   exportEventCSV: (ev: EventItem) => void;
+  onTogglePublish?: (ev: EventItem, publish: boolean) => void;
 }) {
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("all");
@@ -166,7 +168,7 @@ function EventDetailRegistrationsView({
 
   const expStats = getEventStats(active, submissions);
   const isOpen = isEventOpen(active);
-  const catName = categories.find((c) => c.id === active.categoryId)?.name;
+  const catName = findCategory(categories, active.categoryId)?.name;
 
   const filteredMembers = expStats.registeredPeople.filter((p) => {
     if (memberRoleFilter !== "all" && p.role.toLowerCase() !== memberRoleFilter.toLowerCase()) return false;
@@ -207,6 +209,21 @@ function EventDetailRegistrationsView({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">{active.title}</h3>
+              {onTogglePublish && (
+                <button
+                  type="button"
+                  onClick={() => onTogglePublish(active, active.published === false)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer shadow-2xs ${
+                    active.published !== false
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                      : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                  }`}
+                  title={active.published !== false ? "Live on site. Click to unpublish." : "Draft. Click to publish."}
+                >
+                  {active.published !== false ? <Globe size={12} className="text-emerald-600" /> : <EyeOff size={12} className="text-amber-600" />}
+                  <span>{active.published !== false ? "🟢 Live" : "⚠️ Draft"}</span>
+                </button>
+              )}
               {expStats.isFull ? (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
                   <AlertCircle size={12} /> Sold Out
@@ -317,8 +334,8 @@ function EventDetailRegistrationsView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#a65a4a]/10">
-                {paginatedItems.map((p) => (
-                  <tr key={p.id} className="hover:bg-[#a65a4a]/5 transition-colors">
+                {paginatedItems.map((p, idx) => (
+                  <tr key={`${p.id}_${idx}`} className="hover:bg-[#a65a4a]/5 transition-colors">
                     <td className="py-3.5 px-4 font-semibold text-[#1e1e1e]">{p.name}</td>
                     <td className="py-3.5 px-4">
                       <p className="font-medium text-[#1e1e1e]">{p.email}</p>
@@ -466,14 +483,14 @@ export function EventsOverviewTable({
               <th className="py-3 px-2 text-center">Vendors</th>
               <th className="py-3 px-2 text-center">Total</th>
               <th className="py-3 px-3 min-w-[110px]">Occupancy</th>
-              <th className="py-3 px-3 text-right min-w-[210px] whitespace-nowrap sticky right-0 bg-[#faf7f3] z-20 shadow-[-6px_0_12px_-3px_rgba(0,0,0,0.08)] border-l border-[#a65a4a]/15">Actions</th>
+              <th className="py-3 px-3 text-right min-w-[300px] whitespace-nowrap sticky right-0 bg-[#faf7f3] z-20 shadow-[-6px_0_12px_-3px_rgba(0,0,0,0.08)] border-l border-[#a65a4a]/15">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#a65a4a]/10">
             {events.map((ev, index) => {
               const stats = getEventStats(ev, submissions);
               const isOpen = isEventOpen(ev);
-              const catName = categories.find((c) => String(c.id) === String(ev.categoryId) || c.name === ev.categoryId)?.name;
+              const catName = findCategory(categories, ev.categoryId)?.name;
 
               return (
                 <tr
@@ -510,19 +527,39 @@ export function EventsOverviewTable({
                     </div>
                   </td>
                   <td className="py-3 px-3">
-                    {stats.isFull ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
-                        <AlertCircle size={12} /> Sold Out
-                      </span>
-                    ) : isOpen ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
-                        <CheckCircle size={12} /> Open
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
-                        <Clock size={12} /> Closed
-                      </span>
-                    )}
+                    <div className="flex flex-col gap-1.5 items-start">
+                      {/* Direct 1-Click Publish / Draft Toggle */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTogglePublish(ev, ev.published === false);
+                        }}
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer shadow-2xs ${
+                          ev.published !== false
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                            : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                        }`}
+                        title={ev.published !== false ? "Currently Published & Live. Click to Unpublish." : "Currently Draft (Hidden). Click to Publish."}
+                      >
+                        {ev.published !== false ? <Globe size={10} className="text-emerald-600" /> : <EyeOff size={10} className="text-amber-600" />}
+                        <span>{ev.published !== false ? "🟢 Live" : "⚠️ Draft"}</span>
+                      </button>
+
+                      {stats.isFull ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
+                          <AlertCircle size={10} /> Sold Out
+                        </span>
+                      ) : isOpen ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                          <CheckCircle size={10} /> Open
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 border border-gray-200 whitespace-nowrap">
+                          <Clock size={10} /> Closed
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 px-2 text-center font-semibold text-gray-900">
                     {stats.capacity > 0 ? stats.capacity : "Unlimited"}
@@ -586,6 +623,50 @@ export function EventsOverviewTable({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-end gap-2">
+                      
+                      {/* Direct 1-Click Publish / Unpublish Toggle */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTogglePublish(ev, ev.published === false);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all shadow-2xs cursor-pointer shrink-0 border ${
+                          ev.published !== false
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                            : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+                        }`}
+                        title={
+                          ev.published !== false
+                            ? "Currently Published (Live on site). Click to Unpublish."
+                            : "Currently Draft (Hidden from site). Click to Publish."
+                        }
+                      >
+                        {ev.published !== false ? (
+                          <>
+                            <Globe size={13} className="text-emerald-600" />
+                            <span>Published</span>
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff size={13} className="text-amber-600" />
+                            <span>Draft</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditEvent(ev.id);
+                        }}
+                        className="p-1.5 text-[#1e1e1e]/60 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="Edit Event Content"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => onSelectEvent(ev.id)}
@@ -923,7 +1004,11 @@ export function EventsAdmin({
     const stats = getEventStats(e, submissions);
     const isOpen = isEventOpen(e);
 
-    if (filterCategory !== "all" && e.categoryId !== filterCategory) return false;
+    if (filterCategory !== "all") {
+      const evCat = findCategory(categories, e.categoryId);
+      const filterCat = findCategory(categories, filterCategory);
+      if (!evCat || !filterCat || String(evCat.id) !== String(filterCat.id)) return false;
+    }
 
     if (filterStatus !== "all") {
       if (filterStatus === "published" && e.published === false) return false;
@@ -1004,7 +1089,7 @@ export function EventsAdmin({
         )}
 
         <div className="flex items-center gap-2 shrink-0">
-          {viewMode === "event_detail" && active && (
+          {(viewMode === "event_detail" || viewMode === "editor") && active && (
             <>
               <div className="inline-flex items-center p-1 rounded-xl bg-gray-100 border border-gray-200">
                 <button
@@ -1034,12 +1119,14 @@ export function EventsAdmin({
                   <span>Unpublish</span>
                 </button>
               </div>
-              <button
-                onClick={() => setViewMode("editor")}
-                className="inline-flex items-center gap-1.5 border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a]/10 text-[13px] font-semibold px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
-              >
-                <Edit3 size={15} /> Edit Event Content
-              </button>
+              {viewMode === "event_detail" && (
+                <button
+                  onClick={() => setViewMode("editor")}
+                  className="inline-flex items-center gap-1.5 border border-[#a65a4a]/30 text-[#a65a4a] hover:bg-[#a65a4a]/10 text-[13px] font-semibold px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Edit3 size={15} /> Edit Event Content
+                </button>
+              )}
             </>
           )}
           {canEdit && (
@@ -1059,6 +1146,7 @@ export function EventsAdmin({
           submissions={submissions}
           categories={categories}
           exportEventCSV={exportEventCSV}
+          onTogglePublish={handleSetPublish}
         />
       ) : viewMode === "overview" ? (
         <div className="flex flex-col gap-6">
@@ -1197,6 +1285,24 @@ export function EventsAdmin({
           onSelect={setActiveId}
           onAdd={handleAdd}
           onDelete={handleDelete}
+          itemAction={(ev) => (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSetPublish(ev, ev.published === false);
+              }}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                ev.published !== false
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100"
+                  : "bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
+              }`}
+              title={ev.published !== false ? "Live on website. Click to unpublish." : "Draft. Click to publish."}
+            >
+              {ev.published !== false ? <Globe size={11} className="text-emerald-600" /> : <EyeOff size={11} className="text-amber-600" />}
+              <span>{ev.published !== false ? "Live" : "Draft"}</span>
+            </button>
+          )}
           itemLabel={(e) => e.title}
           itemSubLabel={(e) => `${e.published === false ? "📝 Draft • " : "🌐 Published • "}${isEventOpen(e) ? "Open" : "Closed"}`}
           addLabel="Add New Event"
@@ -1238,30 +1344,27 @@ export function EventsAdmin({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleSetPublish(active, true)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer shadow-xs ${
-                      active.published !== false
-                        ? "bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/30"
-                        : "bg-white text-gray-700 border border-gray-300 hover:bg-emerald-50 hover:text-emerald-800"
-                    }`}
-                  >
-                    <Globe size={14} />
-                    <span>Publish Event</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetPublish(active, false)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold transition-all cursor-pointer shadow-xs ${
-                      active.published === false
-                        ? "bg-amber-600 text-white shadow-xs ring-2 ring-amber-600/30"
-                        : "bg-white text-gray-700 border border-gray-300 hover:bg-amber-50 hover:text-amber-800"
-                    }`}
-                  >
-                    <EyeOff size={14} />
-                    <span>Unpublish Event</span>
-                  </button>
+                  {active.published !== false ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSetPublish(active, false)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-medium bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs"
+                      title="Unpublish this event to hide it from visitors"
+                    >
+                      <EyeOff size={14} className="text-amber-700" />
+                      <span>Unpublish Event (Draft)</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSetPublish(active, true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer shadow-xs"
+                      title="Publish this event to make it live for visitors"
+                    >
+                      <Globe size={14} />
+                      <span>Publish Event (Live)</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1300,7 +1403,11 @@ export function EventsAdmin({
               <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} />
               <div>
                 <label className={labelBase}>Category (shown as the badge on the event image)</label>
-                <select value={active.categoryId ? String(active.categoryId) : ""} onChange={(e) => update({ categoryId: e.target.value || null })} className={`${inputBase} cursor-pointer`}>
+                <select
+                  value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
+                  onChange={(e) => update({ categoryId: e.target.value || null })}
+                  className={`${inputBase} cursor-pointer`}
+                >
                   <option value="">No category</option>
                   {categories.map((c) => (
                     <option key={c.id} value={String(c.id)}>{c.name}</option>
@@ -1391,7 +1498,7 @@ export function EventsAdmin({
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 pt-2">
+              <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-gray-200 mt-2">
                 <button
                   type="button"
                   onClick={handleSave}
@@ -1399,32 +1506,30 @@ export function EventsAdmin({
                 >
                   Save Changes
                 </button>
-                <div className="inline-flex items-center p-1 rounded-full bg-gray-100 border border-gray-200">
+
+                {active.published === false ? (
                   <button
                     type="button"
-                    onClick={() => handleSetPublish(active, true)}
-                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
-                      active.published !== false
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "text-gray-600 hover:bg-white hover:text-black"
-                    }`}
+                    onClick={async () => {
+                      await handleSetPublish(active, true);
+                    }}
+                    className="inline-flex items-center gap-2 bg-emerald-600 text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm"
                   >
-                    <Globe size={14} />
-                    <span>Publish Event</span>
+                    <Globe size={15} />
+                    <span>Publish & Save (Make Live)</span>
                   </button>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => handleSetPublish(active, false)}
-                    className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold transition-all cursor-pointer ${
-                      active.published === false
-                        ? "bg-amber-600 text-white shadow-xs"
-                        : "text-gray-600 hover:bg-white hover:text-black"
-                    }`}
+                    onClick={async () => {
+                      await handleSetPublish(active, false);
+                    }}
+                    className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-300 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer"
                   >
-                    <EyeOff size={14} />
-                    <span>Unpublish Event</span>
+                    <EyeOff size={14} className="text-amber-700" />
+                    <span>Unpublish (Move to Draft)</span>
                   </button>
-                </div>
+                )}
               </div>
             </div>
           )}

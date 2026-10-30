@@ -104,8 +104,10 @@ export function SubmissionsAdmin() {
         // list doesn't contain them. Merging them back in stops every Refresh
         // from wiping those requests off the panel.
         const localOnly = getSubmissions().filter(s => LOCAL_ONLY_SUBMISSION_TYPES.includes(s.type));
+        const remoteKeys = new Set(remote.map(r => `${r.type}_${r.id}`));
+        const dedupedLocal = localOnly.filter(l => !remoteKeys.has(`${l.type}_${l.id}`));
         setSubmissions(
-          [...remote, ...localOnly].sort(
+          [...remote, ...dedupedLocal].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
         );
@@ -684,7 +686,7 @@ export function SubmissionsAdmin() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#a65a4a]/10">
-                  {paginatedItems.map(item => {
+                  {paginatedItems.map((item, index) => {
                     const isSel = selectedItem?.id === item.id && selectedItem?.type === item.type;
                     const isAnon =
                       categoryOf(item) === "donation" &&
@@ -700,7 +702,7 @@ export function SubmissionsAdmin() {
 
                     return (
                       <tr
-                        key={`${item.type}_${item.id}`}
+                        key={`${item.type}_${item.id}_${index}`}
                         onClick={() => setSelectedItem(item)}
                         className={`hover:bg-[#a65a4a]/5 cursor-pointer transition-colors ${isSel ? "bg-[#a65a4a]/10" : ""}`}
                       >

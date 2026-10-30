@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowRight, Users, BookOpen, Briefcase, Heart } from "lucide-react";
-import { upcomingOrOpenEvents, isEventOpen, type EventItem } from "@/lib/data";
+import { upcomingOrOpenEvents, isEventOpen, findCategory, type EventItem } from "@/lib/data";
 import { SafeImage } from "../components/SafeImage";
 import { imgImpact1, imgImpact2, imgImpact3, imgImpact4, imgEvent, imgHeroCard, imgHeroMain, imgHeroSide, heroSvg, statsSvg } from "../constants/images";
 import { useContent } from "../context/ContentContext";
@@ -70,7 +70,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   function categoryName(categoryId: string | null) {
     if (!categoryId) return undefined;
-    return siteData.categories.find((c) => String(c.id) === String(categoryId) || c.name === categoryId)?.name;
+    return findCategory(siteData.categories, categoryId)?.name;
   }
 
   return (

@@ -9,6 +9,7 @@ import { FilterTabs } from "../components/FilterTabs";
 import { StoryCard } from "../components/StoryCard";
 import { EmptyState } from "../components/ui/EmptyState";
 import { type Page } from "../components/shared/styleHelpers";
+import { findCategory } from "@/lib/data";
 
 export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
@@ -16,15 +17,18 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
   const { openModal } = useModal();
 
   const storyPosts = siteData.blogPosts.filter((p) => p.section === "story" && p.published !== false);
-  const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
-  const targetCategoryKeys = new Set(
-    [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]
-  );
 
   const filtered =
     activeCategory === "All"
       ? storyPosts
-      : storyPosts.filter((s) => s.categoryId && targetCategoryKeys.has(s.categoryId));
+      : storyPosts.filter((s) => {
+          const sCat = findCategory(siteData.categories, s.categoryId);
+          const actCat = findCategory(siteData.categories, activeCategory);
+          if (sCat && actCat) {
+            return String(sCat.id) === String(actCat.id);
+          }
+          return String(s.categoryId) === String(activeCategory) || s.categoryId === activeCategory;
+        });
 
   const activeCategoryHasNoPosts = activeCategory !== "All" && filtered.length === 0;
 

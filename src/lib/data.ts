@@ -139,11 +139,56 @@ function daysFromNow(n: number) {
 }
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: "cat_women", name: "Women & Leadership" },
-  { id: "cat_education", name: "Education & Learning" },
-  { id: "cat_livelihood", name: "Livelihood & Skills" },
-  { id: "cat_wellbeing", name: "Community Wellbeing" },
+  { id: "1", name: "Women & Leadership" },
+  { id: "2", name: "Education & Learning" },
+  { id: "3", name: "Livelihood & Skills" },
+  { id: "4", name: "Community Wellbeing" },
 ];
+
+export function findCategory(
+  categories: Category[],
+  catIdOrSlugOrName: string | number | null | undefined
+): Category | undefined {
+  if (catIdOrSlugOrName == null || catIdOrSlugOrName === "") return undefined;
+  const target = String(catIdOrSlugOrName).trim();
+  const lower = target.toLowerCase();
+
+  const ALIAS_MAP: Record<string, string> = {
+    cat_women: "1",
+    cat_education: "2",
+    cat_livelihood: "3",
+    cat_wellbeing: "4",
+    "women-leadership": "1",
+    education: "2",
+    livelihood: "3",
+    wellbeing: "4",
+    "women & leadership": "1",
+    "education & learning": "2",
+    "livelihood & skills": "3",
+    "community wellbeing": "4",
+  };
+  const resolvedId = ALIAS_MAP[lower];
+
+  return categories.find((c) => {
+    const cId = String(c.id).trim();
+    const cName = c.name.trim().toLowerCase();
+    return (
+      cId === target ||
+      cId.toLowerCase() === lower ||
+      (resolvedId && cId === resolvedId) ||
+      cName === lower
+    );
+  });
+}
+
+export function resolveCategoryId(
+  categories: Category[],
+  catIdOrSlugOrName: string | number | null | undefined
+): string | null {
+  if (catIdOrSlugOrName == null || catIdOrSlugOrName === "") return null;
+  const found = findCategory(categories, catIdOrSlugOrName);
+  return found ? String(found.id) : String(catIdOrSlugOrName);
+}
 
 export const DEFAULT_EVENTS: EventItem[] = [
   {
@@ -160,24 +205,24 @@ export const DEFAULT_EVENTS: EventItem[] = [
       { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18) },
       { kind: "donor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(10) },
     ],
-    categoryId: "cat_women",
+    categoryId: "1",
     published: true,
     createdAt: new Date().toISOString(),
   },
 ];
 
 export const DEFAULT_BLOG_POSTS: BlogPost[] = [
-  { id: "story_she_found_voice", section: "story", categoryId: "cat_women", title: "She Found Her Voice", excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", content: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 5 * 86400000).toISOString() },
-  { id: "story_new_dawn_priya", section: "story", categoryId: "cat_education", title: "A New Dawn for Priya", excerpt: "Access to education transformed one family's future across three generations.", content: "Access to education transformed one family's future across three generations.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 4 * 86400000).toISOString() },
-  { id: "story_building_futures", section: "story", categoryId: "cat_livelihood", title: "Building Futures Together", excerpt: "How a community cooperative changed the economic landscape of an entire village.", content: "How a community cooperative changed the economic landscape of an entire village.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 3 * 86400000).toISOString() },
-  { id: "story_health_all", section: "story", categoryId: "cat_wellbeing", title: "Health for All", excerpt: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", content: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-  { id: "story_first_sarpanch", section: "story", categoryId: "cat_women", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
-  { id: "story_breaking_cycle", section: "story", categoryId: "cat_education", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
+  { id: "1", section: "story", categoryId: "1", title: "She Found Her Voice", excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", content: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 5 * 86400000).toISOString() },
+  { id: "2", section: "story", categoryId: "2", title: "A New Dawn for Priya", excerpt: "Access to education transformed one family's future across three generations.", content: "Access to education transformed one family's future across three generations.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 4 * 86400000).toISOString() },
+  { id: "3", section: "story", categoryId: "3", title: "Building Futures Together", excerpt: "How a community cooperative changed the economic landscape of an entire village.", content: "How a community cooperative changed the economic landscape of an entire village.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 3 * 86400000).toISOString() },
+  { id: "4", section: "story", categoryId: "4", title: "Health for All", excerpt: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", content: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
+  { id: "5", section: "story", categoryId: "1", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
+  { id: "6", section: "story", categoryId: "2", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
 
   {
-    id: "women-leadership",
+    id: "7",
     section: "impact",
-    categoryId: "cat_women",
+    categoryId: "1",
     title: "When Women Rise, Communities Thrive.",
     excerpt: "Women & Leadership — grassroots training, civic engagement, and mentorship that puts women in decision-making roles.",
     content: "<p>Mahila Action's Women &amp; Leadership programme has been transforming the civic and economic landscape of rural Telangana for over two decades. We believe lasting change begins when women take their rightful place as decision-makers in their homes, communities, and institutions.</p><h2>1. Grassroots Leadership Training</h2><p>Our flagship 12-week leadership training immerses women in modules covering public speaking, conflict resolution, rights awareness, and community organising. Over 3,000 women have completed the programme since 2005, with 500+ now holding elected positions in local governance.</p><h2>2. Civic Engagement &amp; Panchayat Access</h2><p>We prepare women to actively engage with panchayat processes — from attending gram sabhas to filing RTI applications. Our legal literacy workshops have helped over 1,200 women access entitlements they previously didn't know existed.</p><h2>3. Mentorship Networks</h2><p>We connect emerging women leaders with experienced advocates who guide them through the challenges of public life. These networks have proven to be one of the most powerful tools for sustained participation and confidence-building.</p><h2>4. Young Women's Councils</h2><p>Recognising that leadership starts early, we run Young Women's Councils in 45 schools across Nalgonda and Warangal districts — giving girls a safe space to practise leadership, debate, and civic advocacy.</p><h2>5. Impact in Numbers</h2><p>500+ women in elected leadership positions · 3,000+ trained leaders · 1,200+ RTI applications filed successfully · 45 Young Women's Councils active in schools.</p>",
@@ -187,9 +232,9 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     createdAt: new Date(Date.now() - 9 * 86400000).toISOString(),
   },
   {
-    id: "education",
+    id: "8",
     section: "impact",
-    categoryId: "cat_education",
+    categoryId: "2",
     title: "Education Opens New Possibilities.",
     excerpt: "Education & Learning — community centres, adult literacy, and scholarships that keep girls in school.",
     content: "<p>Access to quality education remains one of the most persistent inequities facing women and children in rural India. Mahila Action's Education &amp; Learning programmes work at every stage — from early childhood literacy to adult continuing education.</p><h2>1. Community Learning Centres</h2><p>We operate 38 community learning centres serving over 12,000 students annually. Located in brick-kiln colonies, tribal hamlets, and urban slums, these centres provide remedial tutoring, life skills, and a safe after-school environment.</p><h2>2. Adult Literacy Circles</h2><p>Our adult literacy programme — where Mahila Action began in 1995 — continues to run literacy circles for women who never had the opportunity to complete schooling. To date, we have helped over 8,000 women achieve functional literacy.</p><h2>3. Scholarships &amp; Retention Support</h2><p>We provide annual scholarships to 400 girls at risk of school dropout due to economic pressure or early marriage. Our retention coordinators follow up monthly with families to resolve barriers and keep girls in school.</p><h2>4. Teacher Training &amp; Curriculum</h2><p>We work with government school teachers to improve pedagogy around girls' education. Our supplemental curriculum on gender equality has been adopted by 120 government schools across four districts.</p><h2>5. Impact in Numbers</h2><p>38 community learning centres · 12,000+ students served annually · 8,000+ adult women made literate · 400 scholarships awarded each year.</p>",
@@ -199,9 +244,9 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     createdAt: new Date(Date.now() - 8 * 86400000).toISOString(),
   },
   {
-    id: "livelihood",
+    id: "9",
     section: "impact",
-    categoryId: "cat_livelihood",
+    categoryId: "3",
     title: "Building Economic Independence Together.",
     excerpt: "Livelihood & Skills — vocational training, SHG networks, and market access that build lasting income.",
     content: "<p>Economic dependency is one of the primary barriers to women's freedom and dignity. Mahila Action's Livelihood &amp; Skills programmes build sustainable income pathways through vocational training, micro-enterprise support, and access to financial services.</p><h2>1. Vocational Skills Training</h2><p>We offer certified vocational programmes in tailoring, food processing, beauty therapy, construction trades, and digital skills. Over 6,000 women have completed vocational training, with 78% reporting increased household income within six months.</p><h2>2. Micro-Finance &amp; SHG Networks</h2><p>Our self-help group (SHG) federation connects over 4,200 women in 210 SHGs across 14 districts. Members access affordable credit, savings facilities, and insurance products tailored to their needs.</p><h2>3. Market Linkages &amp; Entrepreneurship</h2><p>We connect trained women with market opportunities — from e-commerce platforms to B2B buyers and government procurement programmes. Our annual Livelihood Skills Fair brings together 500+ women entrepreneurs with corporate buyers and mentors.</p><h2>4. Digital Financial Literacy</h2><p>In partnership with banking institutions, we have trained 5,000+ women in mobile banking, UPI transactions, and digital record-keeping — enabling them to manage businesses and savings with greater confidence.</p><h2>5. Impact in Numbers</h2><p>6,000+ women trained in vocational skills · 4,200 women in 210 SHGs · 78% report income increase post-training · ₹12 crore in micro-credit disbursed annually.</p>",
@@ -211,9 +256,9 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
   },
   {
-    id: "wellbeing",
+    id: "10",
     section: "impact",
-    categoryId: "cat_wellbeing",
+    categoryId: "4",
     title: "Health and Dignity for Every Family.",
     excerpt: "Community Wellbeing — mobile health camps, nutrition, and survivor support for women and families.",
     content: "<p>True empowerment requires physical safety and good health. Mahila Action's Community Wellbeing programmes address the healthcare access gap facing women and children through mobile clinics, health education, and survivor support services.</p><h2>1. Mobile Health Camps</h2><p>Our fleet of mobile health units visits 80 remote villages and urban slums every quarter, offering free screenings for anaemia, malnutrition, cervical cancer, and maternal health. Over 25,000 consultations are conducted annually.</p><h2>2. Maternal &amp; Child Nutrition</h2><p>We partner with government ASHA workers to identify and support malnourished children and pregnant women. Our nutrition programme has contributed to a 42% reduction in severe malnutrition in targeted communities over five years.</p><h2>3. Domestic Violence Support</h2><p>Our trauma-informed support services provide counselling, legal aid, and safe shelter referrals to survivors of gender-based violence. Last year, we supported 1,100 women across all four districts we operate in.</p><h2>4. Mental Health Awareness</h2><p>Following COVID-19, we launched community mental health awareness sessions and trained 350 community health volunteers in psychological first aid and suicide prevention protocols.</p><h2>5. Impact in Numbers</h2><p>25,000+ health consultations annually · 42% reduction in severe malnutrition in target areas · 1,100 GBV survivors supported · 350 mental health volunteers trained.</p>",
@@ -456,7 +501,7 @@ export async function loadSiteData(): Promise<SiteData> {
           totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
           maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
           windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
-          categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
+          categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
           published: r.published !== false && r.published !== 0 && r.published !== "false",
           createdAt: r.created_at || r.createdAt || new Date().toISOString(),
         }));
@@ -468,9 +513,9 @@ export async function loadSiteData(): Promise<SiteData> {
 
     if (Array.isArray(postRows) && postRows.length > 0) {
       blogPosts = postRows.map((r: any) => ({
-        id: r.id,
+        id: String(r.id),
         section: r.section,
-        categoryId: r.category_id || r.categoryId || null,
+        categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
         title: r.title,
         excerpt: r.excerpt || "",
         content: r.content || "",
@@ -647,7 +692,7 @@ export function newBlogPost(section: "story" | "event" | "impact", categoryId: s
 }
 
 export async function saveBlogPost(p: BlogPost): Promise<boolean> {
-  let itemToSave = { ...p };
+  let itemToSave = { ...p, id: String(p.id) };
   try {
     const res = await api.post<any>(ENDPOINTS.blogPosts, p);
     if (res.data?.coverImage) {
@@ -659,6 +704,9 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
     if (res.data?.id != null) {
       itemToSave.id = String(res.data.id);
     }
+    if (res.data?.categoryId != null) {
+      itemToSave.categoryId = String(res.data.categoryId);
+    }
     if (res.data?.published !== undefined) {
       itemToSave.published = res.data.published;
     }
@@ -666,7 +714,7 @@ export async function saveBlogPost(p: BlogPost): Promise<boolean> {
 
   const current = getLocalSiteData();
   const blogPosts = current.blogPosts ?? DEFAULT_BLOG_POSTS;
-  const idx = blogPosts.findIndex((item) => item.id === p.id || item.id === itemToSave.id);
+  const idx = blogPosts.findIndex((item) => String(item.id) === String(p.id) || String(item.id) === String(itemToSave.id));
   const updated = idx >= 0 ? blogPosts.map((item, i) => (i === idx ? itemToSave : item)) : [...blogPosts, itemToSave];
   saveLocalSiteData({ blogPosts: updated });
   return true;
@@ -740,19 +788,36 @@ export async function deleteCategory(id: string): Promise<boolean> {
 }
 
 export async function reassignCategoryPosts(posts: BlogPost[], fromCategoryId: string, toCategoryId: string | null) {
-  const affected = posts.filter((p) => p.categoryId === fromCategoryId);
+  const fromCat = String(fromCategoryId);
+  const toCat = toCategoryId != null ? String(toCategoryId) : null;
+  const affected = posts.filter((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    return pCat === fromCat || (fromCat === "1" && pCat === "cat_women") || (fromCat === "2" && pCat === "cat_education") || (fromCat === "3" && pCat === "cat_livelihood") || (fromCat === "4" && pCat === "cat_wellbeing");
+  });
   for (const p of affected) {
-    await saveBlogPost({ ...p, categoryId: toCategoryId });
+    await saveBlogPost({ ...p, categoryId: toCat });
   }
-  return posts.map((p) => (p.categoryId === fromCategoryId ? { ...p, categoryId: toCategoryId } : p));
+  return posts.map((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    const matches = pCat === fromCat || (fromCat === "1" && pCat === "cat_women") || (fromCat === "2" && pCat === "cat_education") || (fromCat === "3" && pCat === "cat_livelihood") || (fromCat === "4" && pCat === "cat_wellbeing");
+    return matches ? { ...p, categoryId: toCat } : p;
+  });
 }
 
 export async function deleteCategoryPosts(posts: BlogPost[], categoryId: string) {
-  const affected = posts.filter((p) => p.categoryId === categoryId);
+  const cat = String(categoryId);
+  const affected = posts.filter((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    return pCat === cat || (cat === "1" && pCat === "cat_women") || (cat === "2" && pCat === "cat_education") || (cat === "3" && pCat === "cat_livelihood") || (cat === "4" && pCat === "cat_wellbeing");
+  });
   for (const p of affected) {
     await deleteBlogPost(p.id);
   }
-  return posts.filter((p) => p.categoryId !== categoryId);
+  return posts.filter((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    const matches = pCat === cat || (cat === "1" && pCat === "cat_women") || (cat === "2" && pCat === "cat_education") || (cat === "3" && pCat === "cat_livelihood") || (cat === "4" && pCat === "cat_wellbeing");
+    return !matches;
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

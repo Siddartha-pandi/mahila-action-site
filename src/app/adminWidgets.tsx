@@ -446,6 +446,7 @@ export function AdminListEditor<T extends { id: string }>({
   onDelete,
   itemLabel,
   itemSubLabel,
+  itemAction,
   addLabel,
   emptyLabel,
   children,
@@ -457,6 +458,7 @@ export function AdminListEditor<T extends { id: string }>({
   onDelete?: (id: string) => void;
   itemLabel: (item: T) => string;
   itemSubLabel?: (item: T) => string;
+  itemAction?: (item: T) => React.ReactNode;
   addLabel?: string;
   emptyLabel: string;
   children: React.ReactNode;
@@ -521,12 +523,12 @@ export function AdminListEditor<T extends { id: string }>({
         )}
 
         <div className="flex flex-col gap-1.5 max-h-[460px] overflow-y-auto pr-1">
-          {paginatedItems.map((item) => (
+          {paginatedItems.map((item, index) => (
             <div
-              key={item.id}
-              onClick={() => onSelect(item.id)}
+              key={`${item.id}_${index}`}
+              onClick={() => onSelect(String(item.id))}
               className={`group flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg cursor-pointer border transition-colors ${
-                activeId === item.id
+                String(activeId) === String(item.id)
                   ? "bg-[#a65a4a]/10 border-[#a65a4a]"
                   : "bg-white border-[#a65a4a]/15 hover:border-[#a65a4a]/40"
               }`}
@@ -536,6 +538,7 @@ export function AdminListEditor<T extends { id: string }>({
                 {itemSubLabel && <p className="font-['Inter',sans-serif] text-[11px] text-[#1e1e1e]/45 truncate">{itemSubLabel(item)}</p>}
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {itemAction && itemAction(item)}
                 <Pencil size={13} className="text-[#a65a4a]/50" />
                 {onDelete && (
                   <button
