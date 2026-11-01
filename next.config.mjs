@@ -32,17 +32,32 @@ const nextConfig = {
   },
   compress: true,
   poweredByHeader: false,
-  headers: async () => [
-    {
-      source: "/:all*(svg|jpg|png|webp|avif|css|js)",
-      headers: [
+  headers: async () => {
+    if (process.env.NODE_ENV === "development") {
+      return [
         {
-          key: "Cache-Control",
-          value: "public, max-age=31536000, immutable",
+          source: "/:path*",
+          headers: [
+            {
+              key: "Cache-Control",
+              value: "no-store, no-cache, must-revalidate, proxy-revalidate",
+            },
+          ],
         },
-      ],
-    },
-  ],
+      ];
+    }
+    return [
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
   webpack: (config) => {
     config.resolve.alias["@"] = path.resolve(process.cwd(), "src");
     return config;

@@ -504,7 +504,7 @@ export function EventsOverviewTable({
               return (
                 <tr
                   key={ev.id}
-                  className={`hover:bg-[#a65a4a]/5 transition-colors relative ${
+                  className={`group hover:bg-[#faf4f0] transition-colors relative ${
                     menuOpenId === ev.id ? "z-40" : "z-auto"
                   }`}
                 >
@@ -519,7 +519,7 @@ export function EventsOverviewTable({
                       )}
                       <div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-semibold text-[#1e1e1e]">{ev.title}</p>
+                          <p className="font-semibold text-[#1e1e1e] group-hover:text-[#a65a4a] transition-colors">{ev.title}</p>
                           {ev.published === false && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
                               <EyeOff size={10} /> Draft
@@ -619,7 +619,7 @@ export function EventsOverviewTable({
                     )}
                   </td>
                   <td
-                    className={`py-3 px-3 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-[#fbf7f4] ${
+                    className={`py-3 px-3 text-right whitespace-nowrap sticky right-0 bg-white group-hover:bg-[#faf4f0] transition-colors ${
                       menuOpenId === ev.id ? "z-40" : "z-10"
                     }`}
                     onClick={(e) => e.stopPropagation()}
@@ -1380,52 +1380,18 @@ export function EventsAdmin({
                 <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={3} className={`${inputBase} resize-y`} />
               </div>
               <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelBase}>Category (shown as badge on event)</label>
-                  <select
-                    value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
-                    onChange={(e) => update({ categoryId: e.target.value || null })}
-                    className={`${inputBase} cursor-pointer`}
-                  >
-                    <option value="">No category</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={String(c.id)}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className={labelBase}>Publication Status (Visibility)</label>
-                  <div className="inline-flex items-center p-1 rounded-lg bg-gray-100 border border-gray-200 w-full h-[42px]">
-                    <button
-                      type="button"
-                      onClick={() => handleSetPublish(active, true)}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
-                        active.published !== false
-                          ? "bg-emerald-600 text-white shadow-xs"
-                          : "text-gray-600 hover:text-black hover:bg-white/60"
-                      }`}
-                      title="Make this event published and live on website"
-                    >
-                      <Globe size={13} />
-                      <span>Published (Live)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetPublish(active, false)}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
-                        active.published === false
-                          ? "bg-amber-600 text-white shadow-xs"
-                          : "text-gray-600 hover:text-black hover:bg-white/60"
-                      }`}
-                      title="Make this event unpublished (draft) and hidden from website"
-                    >
-                      <EyeOff size={13} />
-                      <span>Draft (Hidden)</span>
-                    </button>
-                  </div>
-                </div>
+              <div>
+                <label className={labelBase}>Category (shown as the badge on the event image)</label>
+                <select
+                  value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
+                  onChange={(e) => update({ categoryId: e.target.value || null })}
+                  className={`${inputBase} cursor-pointer`}
+                >
+                  <option value="">No category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -57,6 +57,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const b = await req.json();
+
+    // Handle batch reorder / update
+    if (Array.isArray(b)) {
+      const list = b.map((item, index) => ({
+        ...item,
+        id: String(item.id),
+        order: index,
+        order_index: index,
+      }));
+      await writeTimeline(list);
+      return NextResponse.json({ ok: true, count: list.length });
+    }
+
     const orderIndex = Number(b.order ?? b.order_index ?? 0);
     const list = await readTimeline();
 

@@ -1050,6 +1050,18 @@ export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
   return true;
 }
 
+export async function saveTimelineOrder(items: TimelineEntry[]): Promise<boolean> {
+  const normalized = items.map((t, idx) => ({
+    ...t,
+    order: idx,
+  }));
+  try {
+    await api.post<any>(ENDPOINTS.timeline, normalized);
+  } catch {}
+  saveLocalSiteData({ timeline: normalized });
+  return true;
+}
+
 export async function deleteTimelineEntry(id: string): Promise<boolean> {
   const current = getLocalSiteData();
   const allTimeline = current.timeline ?? DEFAULT_TIMELINE;

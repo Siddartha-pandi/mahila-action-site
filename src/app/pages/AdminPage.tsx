@@ -82,9 +82,49 @@ export function AdminPage({
   const [signingIn, setSigningIn] = useState(false);
   const [draft, setDraft] = useState<ContentMap>({ ...existing });
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>("submissions");
+  const [activeSection, setActiveSection] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabFromUrl = urlParams.get("tab") || urlParams.get("section");
+      if (tabFromUrl && CUSTOM_TABS.some((t) => t.id === tabFromUrl)) {
+        return tabFromUrl;
+      }
+      try {
+        const savedTab = localStorage.getItem("mahila_admin_active_tab");
+        if (savedTab && CUSTOM_TABS.some((t) => t.id === savedTab)) {
+          return savedTab;
+        }
+      } catch {}
+    }
+    return "submissions";
+  });
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => getCurrentAdminSession());
   const [trashCount, setTrashCount] = useState<number>(() => getTrashItems().length);
+
+  useEffect(() => {
+    if (!activeSection || typeof window === "undefined") return;
+    try {
+      localStorage.setItem("mahila_admin_active_tab", activeSection);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("tab") !== activeSection) {
+        url.searchParams.set("tab", activeSection);
+        window.history.replaceState({}, "", url.toString());
+      }
+    } catch {}
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handlePopState = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get("tab") || urlParams.get("section");
+      if (tab && CUSTOM_TABS.some((t) => t.id === tab)) {
+        setActiveSection(tab);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     function syncTrash() {

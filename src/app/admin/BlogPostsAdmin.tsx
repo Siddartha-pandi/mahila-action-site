@@ -184,61 +184,21 @@ export function BlogPostsAdmin({
             <label className={labelBase}>Title</label>
             <input value={active.title} onChange={(e) => update({ title: e.target.value })} className={inputBase} />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {usesCategories ? (
-              <div>
-                <label className={labelBase}>Category</label>
-                <select
-                  value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
-                  onChange={(e) => update({ categoryId: e.target.value || null })}
-                  className={`${inputBase} cursor-pointer`}
-                >
-                  <option value="">{section === "impact" ? "Select Impact Category" : "Select a Category"}</option>
-                  {categories.map((c) => (
-                    <option key={String(c.id)} value={String(c.id)}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div />
-            )}
-
+          {usesCategories && (
             <div>
-              <label className={labelBase}>Publication Status (Visibility)</label>
-              <div className="inline-flex items-center p-1 rounded-lg bg-gray-100 border border-gray-200 w-full h-[42px]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (active.published === false) handleTogglePublish(active);
-                  }}
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
-                    active.published !== false
-                      ? "bg-emerald-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-black hover:bg-white/60"
-                  }`}
-                  title="Make this published and live on website"
-                >
-                  <Globe size={13} />
-                  <span>Published (Live)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (active.published !== false) handleTogglePublish(active);
-                  }}
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[12px] font-bold transition-all cursor-pointer ${
-                    active.published === false
-                      ? "bg-amber-600 text-white shadow-xs"
-                      : "text-gray-600 hover:text-black hover:bg-white/60"
-                  }`}
-                  title="Make this draft and hidden from website"
-                >
-                  <EyeOff size={13} />
-                  <span>Draft (Hidden)</span>
-                </button>
-              </div>
+              <label className={labelBase}>Category</label>
+              <select
+                value={findCategory(categories, active.categoryId)?.id ?? (active.categoryId ? String(active.categoryId) : "")}
+                onChange={(e) => update({ categoryId: e.target.value || null })}
+                className={`${inputBase} cursor-pointer`}
+              >
+                <option value="">{section === "impact" ? "Select Impact Category" : "Select a Category"}</option>
+                {categories.map((c) => (
+                  <option key={String(c.id)} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
             </div>
-          </div>
+          )}
           <div>
             <label className={labelBase}>Card Excerpt (shown on the card, keep it short)</label>
             <textarea value={active.excerpt} onChange={(e) => update({ excerpt: e.target.value })} rows={2} className={`${inputBase} resize-y`} />
