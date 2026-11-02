@@ -31,8 +31,10 @@ import {
   AlertTriangle,
   Lock,
   Trash2,
+  HeartHandshake,
 } from "lucide-react";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
+import { DonationsAdmin } from "@/app/admin/DonationsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
 import { EventsAdmin } from "@/app/admin/EventsAdmin";
 import { BlogPostsAdmin } from "@/app/admin/BlogPostsAdmin";
@@ -50,6 +52,7 @@ import { AdminSidebar } from "@/app/admin/AdminSidebar";
 
 const CUSTOM_TABS = [
   { id: "submissions", label: "Form Submissions & Applications", icon: Inbox },
+  { id: "donations", label: "Donations & Contributions", icon: HeartHandshake },
   { id: "events", label: "Upcoming Events", icon: Calendar },
   { id: "stories", label: "Community Stories", icon: BookOpen },
   { id: "impactStories", label: "Our Impact Pages", icon: Sparkles },
@@ -406,6 +409,9 @@ export function AdminPage({
               )}
               {activeSection === "submissions" && (
                 <SubmissionsAdmin />
+              )}
+              {activeSection === "donations" && (
+                <DonationsAdmin />
               )}
               {activeSection === "contentTypeBuilder" && (
                 <ContentTypeBuilderAdmin />

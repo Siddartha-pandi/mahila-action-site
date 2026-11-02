@@ -196,6 +196,7 @@ export function EventRegistrationModal({
         name, email, phone,
         seats: Number(volunteerParty.count),
         event_name: event.title,
+        event_id: event.id,
         volunteer_commitment: commitment,
         companions: volunteerParty.companions,
       });
@@ -217,6 +218,7 @@ export function EventRegistrationModal({
       name, email, phone,
       seats: Number(attendeeParty.count),
       event_name: event.title,
+      event_id: event.id,
       companions: attendeeParty.companions,
     });
     if (!res.ok) return fail(res.error || "Something went wrong reserving your seat — please try again.");
@@ -468,9 +470,27 @@ export function EventRegistrationModal({
                   {role === "attendee" && (
                     <>
                       <div>
-                        <label className={reserveLabelClass}>No. of Members Attending</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className={reserveLabelClass}>No. of Members Attending</label>
+                          {event.totalSeats > 0 && (
+                            <span className="text-[11px] font-semibold text-emerald-700">
+                              {event.availableSeats !== undefined
+                                ? `${event.availableSeats} available`
+                                : `${Math.max(0, event.totalSeats - (event.bookedSeats ?? 0))} available`}
+                              {Number(event.bookedSeats) > 0 && ` (${event.bookedSeats} booked)`}
+                            </span>
+                          )}
+                        </div>
                         <select value={attendeeParty.count} onChange={e => attendeeParty.setCountAndRows(e.target.value)} className={`${reserveInputClass} cursor-pointer`}>
-                          {["1", "2", "3", "4", "5", "6"].map(n => <option key={n} value={n}>{n} member{Number(n) > 1 ? "s" : ""}</option>)}
+                          {(() => {
+                            const avail = event.availableSeats !== undefined
+                              ? Number(event.availableSeats)
+                              : (event.totalSeats ? Math.max(0, event.totalSeats - (event.bookedSeats ?? 0)) : 6);
+                            const maxOptions = Math.min(6, Math.max(1, avail));
+                            return Array.from({ length: maxOptions }, (_, i) => String(i + 1)).map(n => (
+                              <option key={n} value={n}>{n} member{Number(n) > 1 ? "s" : ""}</option>
+                            ));
+                          })()}
                         </select>
                       </div>
                       <CompanionFields
@@ -480,12 +500,21 @@ export function EventRegistrationModal({
                         onChange={attendeeParty.update}
                       />
                       {event.totalSeats > 0 && (
-                        <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center gap-2.5">
-                          <span className="relative flex size-2">
-                            <span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex size-2 rounded-full bg-red-500" />
-                          </span>
-                          <p className="font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold">{event.totalSeats} seats total — reserve yours now!</p>
+                        <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="relative flex size-2">
+                              <span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" />
+                              <span className="relative inline-flex size-2 rounded-full bg-red-500" />
+                            </span>
+                            <p className="font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold">
+                              {Number(event.bookedSeats) > 0
+                                ? `${event.availableSeats ?? Math.max(0, event.totalSeats - (event.bookedSeats ?? 0))} of ${event.totalSeats} seats available — reserve yours now!`
+                                : `${event.totalSeats} seats total — reserve yours now!`}
+                            </p>
+                          </div>
+                          {Number(event.bookedSeats) > 0 && (
+                            <span className="text-[11px] text-[#a65a4a]/80 font-medium">({event.bookedSeats} booked)</span>
+                          )}
                         </div>
                       )}
                     </>

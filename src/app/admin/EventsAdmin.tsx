@@ -32,6 +32,7 @@ const KIND_LABEL: Record<RegKind, string> = { volunteer: "Volunteer", vendor: "V
 
 function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
   const normTitle = ev.title.trim().toLowerCase();
+  const evNumericId = String(ev.id).replace(/^evt_/, "");
 
   let attendeeSeats = 0;
   let attendeeCount = 0;
@@ -56,7 +57,11 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
       ? d.selected_events.map((s: any) => String(s).trim().toLowerCase())
       : [];
 
-    const matches = evName === normTitle || selEvents.includes(normTitle);
+    const itemEvId = d.event_id != null ? String(d.event_id).replace(/^evt_/, "") : "";
+    const matchesId = Boolean(itemEvId && evNumericId && itemEvId === evNumericId);
+    const matchesTitle = evName === normTitle || selEvents.includes(normTitle);
+
+    const matches = matchesId || matchesTitle;
     if (!matches) continue;
 
     const cat = categoryOf(item);
@@ -133,6 +138,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
 
   const totalMembers = attendeeCount + volunteerCount + vendorCount;
   const capacity = Number(ev.totalSeats) || 0;
+  const availableSeats = Math.max(0, capacity - attendeeSeats);
   const percentUsed = capacity > 0 ? Math.min(100, Math.round((attendeeSeats / capacity) * 100)) : 0;
   const isFull = capacity > 0 && attendeeSeats >= capacity;
 
@@ -144,6 +150,7 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
     totalMembers,
     registeredPeople,
     capacity,
+    availableSeats,
     percentUsed,
     isFull,
   };
@@ -165,6 +172,7 @@ function EventDetailRegistrationsView({
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("all");
   const [memberStatusFilter, setMemberStatusFilter] = useState("all");
+  const [selectedMemberKeys, setSelectedMemberKeys] = useState<Set<string>>(new Set());
 
   const expStats = getEventStats(active, submissions);
   const isOpen = isEventOpen(active);
@@ -193,6 +201,65 @@ function EventDetailRegistrationsView({
     setPage,
     setPageSize,
   } = usePagination(filteredMembers, { initialPageSize: 10 });
+
+  const isAllMembersPageSelected =
+    paginatedItems.length > 0 &&
+    paginatedItems.every((p, idx) => selectedMemberKeys.has(`${p.id}_${p.email}_${p.role}_${idx}`));
+  const isSomeMembersPageSelected =
+    paginatedItems.some((p, idx) => selectedMemberKeys.has(`${p.id}_${p.email}_${p.role}_${idx}`)) &&
+    !isAllMembersPageSelected;
+
+  const toggleSelectAllMembers = () => {
+    if (isAllMembersPageSelected) {
+      setSelectedMemberKeys((prev) => {
+        const next = new Set(prev);
+        paginatedItems.forEach((p, idx) => next.delete(`${p.id}_${p.email}_${p.role}_${idx}`));
+        return next;
+      });
+    } else {
+      setSelectedMemberKeys((prev) => {
+        const next = new Set(prev);
+        paginatedItems.forEach((p, idx) => next.add(`${p.id}_${p.email}_${p.role}_${idx}`));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectMember = (key: string) => {
+    setSelectedMemberKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const exportSelectedMembersCSV = () => {
+    const selectedList = expStats.registeredPeople.filter((p, idx) =>
+      selectedMemberKeys.has(`${p.id}_${p.email}_${p.role}_${idx}`)
+    );
+    if (!selectedList.length) return toast.error("No members selected to export");
+
+    const headers = ["Member Name", "Email", "Phone", "Role", "Seats", "Date", "Status"];
+    const rows = selectedList.map((p) => [
+      `"${p.name.replace(/"/g, '""')}"`,
+      `"${p.email.replace(/"/g, '""')}"`,
+      `"${(p.phone || "").replace(/"/g, '""')}"`,
+      `"${p.role}"`,
+      p.seats,
+      `"${new Date(p.date).toLocaleString()}"`,
+      `"${p.status}"`,
+    ]);
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${active.title.toLowerCase().replace(/\s+/g, "_")}_selected_members.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedList.length} member registrations to CSV`);
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -240,8 +307,13 @@ function EventDetailRegistrationsView({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 border-t md:border-t-0 md:border-l border-[#a65a4a]/15 pt-3 md:pt-0 md:pl-5 shrink-0">
+          <div className="bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl text-center">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Available Seats</span>
+            <span className="text-[18px] font-bold text-emerald-900">{expStats.availableSeats}</span>
+            <span className="text-[10px] text-emerald-700 block">of {expStats.capacity > 0 ? expStats.capacity : "∞"} total</span>
+          </div>
           <div className="bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl text-center">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">Attendee Seats</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">Booked Seats</span>
             <span className="text-[18px] font-bold text-amber-900">{expStats.attendeeSeats}</span>
             <span className="text-[10px] text-amber-700 block">({expStats.attendeeCount} bookings)</span>
           </div>
@@ -309,6 +381,31 @@ function EventDetailRegistrationsView({
 
       {/* Members Registration Table */}
       <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
+        {/* Bulk Selection Toolbar */}
+        {selectedMemberKeys.size > 0 && (
+          <div className="bg-[#fcf8f5] border-b border-[#a65a4a]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[13px] animate-in fade-in duration-150">
+            <div className="flex items-center gap-3">
+              <span className="bg-[#a65a4a] text-white font-bold text-[11px] px-2.5 py-1 rounded-full">
+                {selectedMemberKeys.size} Selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exportSelectedMembersCSV}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-[#a65a4a] text-white hover:bg-[#993925] transition-colors cursor-pointer"
+              >
+                <Download size={13} /> Export Selected ({selectedMemberKeys.size}) CSV
+              </button>
+              <button
+                onClick={() => setSelectedMemberKeys(new Set())}
+                className="px-3 py-1 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
         {!filteredMembers.length ? (
           <div className="p-12 text-center">
             <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/50">
@@ -320,6 +417,18 @@ function EventDetailRegistrationsView({
             <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
               <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
                 <tr>
+                  <th className="py-3.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllMembersPageSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeMembersPageSelected;
+                      }}
+                      onChange={toggleSelectAllMembers}
+                      className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                      title={isAllMembersPageSelected ? "Deselect page" : "Select entire page"}
+                    />
+                  </th>
                   <th className="py-3.5 px-4">Member Name</th>
                   <th className="py-3.5 px-4">Contact Details</th>
                   <th className="py-3.5 px-4">Role</th>
@@ -329,9 +438,27 @@ function EventDetailRegistrationsView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#a65a4a]/10">
-                {paginatedItems.map((p, idx) => (
-                  <tr key={`${p.id}_${idx}`} className="hover:bg-[#a65a4a]/5 transition-colors">
-                    <td className="py-3.5 px-4 font-semibold text-[#1e1e1e]">{p.name}</td>
+                {paginatedItems.map((p, idx) => {
+                  const mKey = `${p.id}_${p.email}_${p.role}_${idx}`;
+                  const isSelected = selectedMemberKeys.has(mKey);
+
+                  return (
+                    <tr
+                      key={mKey}
+                      onClick={() => toggleSelectMember(mKey)}
+                      className={`hover:bg-[#a65a4a]/5 transition-colors cursor-pointer ${
+                        isSelected ? "bg-amber-50/80 hover:bg-amber-100/60" : ""
+                      }`}
+                    >
+                      <td className="py-3.5 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectMember(mKey)}
+                          className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                        />
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-[#1e1e1e]">{p.name}</td>
                     <td className="py-3.5 px-4">
                       <p className="font-medium text-[#1e1e1e]">{p.email}</p>
                       {p.phone && <p className="text-[12px] text-[#1e1e1e]/50">{p.phone}</p>}
@@ -375,7 +502,7 @@ function EventDetailRegistrationsView({
                       </span>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
             <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">
@@ -445,6 +572,45 @@ export function EventsOverviewTable({
 }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+
+  const isAllEventsSelected = events.length > 0 && events.every(e => selectedEventIds.has(String(e.id)));
+  const isSomeEventsSelected = events.some(e => selectedEventIds.has(String(e.id))) && !isAllEventsSelected;
+
+  const toggleSelectAllEvents = () => {
+    if (isAllEventsSelected) {
+      setSelectedEventIds(new Set());
+    } else {
+      setSelectedEventIds(new Set(events.map(e => String(e.id))));
+    }
+  };
+
+  const toggleSelectEvent = (id: string) => {
+    setSelectedEventIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchPublish = (publish: boolean) => {
+    const targets = events.filter(e => selectedEventIds.has(String(e.id)));
+    if (!targets.length) return;
+    targets.forEach(ev => onTogglePublish(ev, publish));
+    toast.success(`${publish ? "Published" : "Unpublished"} ${targets.length} event(s)`);
+    setSelectedEventIds(new Set());
+  };
+
+  const handleBatchDelete = () => {
+    if (!canDelete) return toast.error("Permission denied to delete events.");
+    const targets = events.filter(e => selectedEventIds.has(String(e.id)));
+    if (!targets.length) return;
+    if (!confirm(`Are you sure you want to move ${targets.length} event(s) to the Recycle Bin?`)) return;
+    targets.forEach(ev => onDeleteEvent(String(ev.id)));
+    toast.success(`Moved ${targets.length} event(s) to Recycle Bin`);
+    setSelectedEventIds(new Set());
+  };
 
   useEffect(() => {
     if (!menuOpenId) return;
@@ -480,14 +646,64 @@ export function EventsOverviewTable({
 
   return (
     <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden h-auto">
+      {/* Bulk Selection Toolbar */}
+      {selectedEventIds.size > 0 && (
+        <div className="bg-[#fcf8f5] border-b border-[#a65a4a]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[13px] animate-in fade-in duration-150">
+          <div className="flex items-center gap-3">
+            <span className="bg-[#a65a4a] text-white font-bold text-[11px] px-2.5 py-1 rounded-full">
+              {selectedEventIds.size} Selected
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => handleBatchPublish(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer border border-emerald-300"
+            >
+              <Globe size={13} /> Publish (Live)
+            </button>
+            <button
+              onClick={() => handleBatchPublish(false)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-800 hover:bg-amber-600 hover:text-white transition-colors cursor-pointer border border-amber-300"
+            >
+              <EyeOff size={13} /> Unpublish (Draft)
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300"
+            >
+              <Trash2 size={13} /> Move to Trash
+            </button>
+            <button
+              onClick={() => setSelectedEventIds(new Set())}
+              className="px-3 py-1 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto overflow-y-auto max-h-[345px]">
         <table className="w-full text-left font-['Inter',sans-serif] text-[13px] border-collapse">
           <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55 sticky top-0 z-20 shadow-2xs">
             <tr>
+              <th className="py-3 px-3 w-10 text-center sticky top-0 left-0 bg-[#faf7f3] z-30 shadow-2xs">
+                <input
+                  type="checkbox"
+                  checked={isAllEventsSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = isSomeEventsSelected;
+                  }}
+                  onChange={toggleSelectAllEvents}
+                  className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                  title={isAllEventsSelected ? "Deselect all" : "Select all"}
+                />
+              </th>
               <th className="py-3 px-3">Event Details</th>
               <th className="py-3 px-3">Status</th>
               <th className="py-3 px-2 text-center">Capacity</th>
-              <th className="py-3 px-2 text-center">Attendees</th>
+              <th className="py-3 px-2 text-center">Booked</th>
+              <th className="py-3 px-2 text-center">Available</th>
               <th className="py-3 px-2 text-center">Volunteers</th>
               <th className="py-3 px-2 text-center">Vendors</th>
               <th className="py-3 px-2 text-center">Total</th>
@@ -500,14 +716,23 @@ export function EventsOverviewTable({
               const stats = getEventStats(ev, submissions);
               const isOpen = isEventOpen(ev);
               const catName = findCategory(categories, ev.categoryId)?.name;
+              const isSelected = selectedEventIds.has(String(ev.id));
 
               return (
                 <tr
                   key={ev.id}
-                  className={`group hover:bg-[#faf4f0] transition-colors relative ${
-                    menuOpenId === ev.id ? "z-40" : "z-auto"
-                  }`}
+                  className={`group transition-colors relative ${
+                    isSelected ? "bg-amber-50/80 hover:bg-amber-100/60" : "hover:bg-[#faf4f0]"
+                  } ${menuOpenId === ev.id ? "z-40" : "z-auto"}`}
                 >
+                  <td className="py-3 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelectEvent(String(ev.id))}
+                      className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                    />
+                  </td>
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-2.5">
                       {ev.image ? (
@@ -569,6 +794,15 @@ export function EventsOverviewTable({
                   <td className="py-3 px-2 text-center">
                     <span className="font-bold text-amber-700">{stats.attendeeSeats}</span>
                     <span className="text-[10px] text-gray-400 block">({stats.attendeeCount} bkg)</span>
+                  </td>
+                  <td className="py-3 px-2 text-center">
+                    {stats.capacity > 0 ? (
+                      <span className={`font-bold ${stats.availableSeats === 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                        {stats.availableSeats}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">Open</span>
+                    )}
                   </td>
                   <td className="py-3 px-2 text-center">
                     {(() => {
@@ -831,8 +1065,19 @@ export function EventsAdmin({
         }
       })
       .catch(() => {});
+
+    function handleSubmissionsChanged() {
+      loadSubmissions()
+        .then((data) => {
+          if (mounted && Array.isArray(data)) setSubmissions(data);
+        })
+        .catch(() => {});
+    }
+    window.addEventListener("mahila_submissions_changed", handleSubmissionsChanged);
+
     return () => {
       mounted = false;
+      window.removeEventListener("mahila_submissions_changed", handleSubmissionsChanged);
     };
   }, []);
 
@@ -897,12 +1142,47 @@ export function EventsAdmin({
       }
     }
 
+    const currentStats = getEventStats(active, submissions);
+    if (currentStats.attendeeSeats > 0 && Number(active.totalSeats) < currentStats.attendeeSeats) {
+      return toast.error(
+        `Total capacity (${active.totalSeats}) cannot be lower than the ${currentStats.attendeeSeats} already registered seats.`
+      );
+    }
+
+    const oldTitle = active.title;
     const result = await saveEvent(active);
     if (result.ok) {
       const savedId = result.id || active.id;
-      const updatedActive = { ...active, id: savedId };
+      const updatedActive: EventItem = {
+        ...active,
+        id: savedId,
+        bookedSeats: currentStats.attendeeSeats,
+        availableSeats: Math.max(0, (Number(active.totalSeats) || 0) - currentStats.attendeeSeats),
+      };
       setActiveId(savedId);
       onChange(events.map((e) => (String(e.id) === String(active.id) ? updatedActive : e)));
+
+      // Synchronize in-memory & localStorage submissions so the newly saved title/id keeps all registered members linked!
+      setSubmissions((prev) => {
+        const next = prev.map((sub) => {
+          const d = sub.data;
+          const subId = d?.event_id != null ? String(d.event_id).replace(/^evt_/, "") : "";
+          const targetId = String(savedId).replace(/^evt_/, "");
+          const matchesId = Boolean(subId && targetId && subId === targetId);
+          const matchesTitle = String(d?.event_name || "").trim().toLowerCase() === oldTitle.trim().toLowerCase();
+          if (matchesId || matchesTitle) {
+            return { ...sub, data: { ...d, event_name: updatedActive.title, event_id: savedId } };
+          }
+          return sub;
+        });
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem("mahila_submissions_v2", JSON.stringify(next));
+          }
+        } catch {}
+        return next;
+      });
+
       toast.success("Event saved successfully!");
     } else {
       toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
@@ -1355,7 +1635,7 @@ export function EventsAdmin({
                     <div>
                       <p className="font-semibold text-[13px] text-[#1e1e1e]">Member Registration Summary</p>
                       <p className="text-[12px] text-[#1e1e1e]/60">
-                        {activeStats.attendeeSeats} seats booked ({activeStats.attendeeCount} bookings) • {activeStats.volunteerCount} volunteers • {activeStats.vendorCount} vendors
+                        {activeStats.attendeeSeats} seats booked ({activeStats.attendeeCount} bookings) • <span className="text-emerald-700 font-semibold">{activeStats.availableSeats} available</span> • {activeStats.volunteerCount} volunteers • {activeStats.vendorCount} vendors
                       </p>
                     </div>
                     <button
@@ -1411,8 +1691,45 @@ export function EventsAdmin({
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelBase}>Total Seats (Attendees)</label>
-                  <input type="number" min={0} value={active.totalSeats} onChange={(e) => update({ totalSeats: Number(e.target.value) })} className={inputBase} />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelBase}>Total Seats (Capacity)</label>
+                    {(() => {
+                      const activeStats = getEventStats(active, submissions);
+                      if (activeStats.attendeeSeats > 0) {
+                        return (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            {activeStats.availableSeats} Available ({activeStats.attendeeSeats} Booked)
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <input
+                    type="number"
+                    min={(() => {
+                      const activeStats = getEventStats(active, submissions);
+                      return activeStats.attendeeSeats;
+                    })()}
+                    value={active.totalSeats}
+                    onChange={(e) => update({ totalSeats: Number(e.target.value) })}
+                    className={inputBase}
+                  />
+                  {(() => {
+                    const activeStats = getEventStats(active, submissions);
+                    if (activeStats.attendeeSeats > 0) {
+                      const avail = Math.max(0, (Number(active.totalSeats) || 0) - activeStats.attendeeSeats);
+                      const isUnder = (Number(active.totalSeats) || 0) < activeStats.attendeeSeats;
+                      return (
+                        <p className={`text-[11px] mt-1 font-medium ${isUnder ? "text-rose-700" : "text-amber-800"}`}>
+                          {isUnder
+                            ? `⚠️ Capacity cannot be less than ${activeStats.attendeeSeats} already booked seats!`
+                            : `ℹ️ ${activeStats.attendeeSeats} seat${activeStats.attendeeSeats > 1 ? "s are" : " is"} already registered. Remaining available seats: ${avail}.`}
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div>
                   <label className={labelBase}>Max Volunteers <span className="text-[#1e1e1e]/40 normal-case font-normal">(0 = unlimited)</span></label>

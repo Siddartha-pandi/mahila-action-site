@@ -1,5 +1,6 @@
 export type AdminModule =
   | "submissions"
+  | "donations"
   | "events"
   | "contentTypeBuilder"
   | "stories"
@@ -45,6 +46,7 @@ export interface AdminUser {
 
 export const MODULE_LABELS: Record<AdminModule, string> = {
   submissions: "Form Submissions & Applications",
+  donations: "Donations & Campaign Contributions",
   events: "Upcoming Events",
   contentTypeBuilder: "Content-Type Builder",
   stories: "Community Stories",
@@ -61,6 +63,7 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
 
 const FULL_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: true, delete: true },
+  donations: { view: true, edit: true, delete: true },
   events: { view: true, edit: true, delete: true },
   contentTypeBuilder: { view: true, edit: true, delete: true },
   stories: { view: true, edit: true, delete: true },
@@ -75,6 +78,7 @@ const FULL_PERMISSIONS: PermissionMatrix = {
 
 const ADMIN_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: true, delete: true },
+  donations: { view: true, edit: true, delete: true },
   events: { view: true, edit: true, delete: true },
   contentTypeBuilder: { view: true, edit: true, delete: true },
   stories: { view: true, edit: true, delete: true },
@@ -89,6 +93,7 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
 
 const STAFF_PERMISSIONS: PermissionMatrix = {
   submissions: { view: true, edit: false, delete: false },
+  donations: { view: true, edit: false, delete: false },
   events: { view: true, edit: false, delete: false },
   contentTypeBuilder: { view: true, edit: false, delete: false },
   stories: { view: true, edit: false, delete: false },
@@ -103,6 +108,7 @@ const STAFF_PERMISSIONS: PermissionMatrix = {
 
 const USER_PERMISSIONS: PermissionMatrix = {
   submissions: { view: false, edit: false, delete: false },
+  donations: { view: false, edit: false, delete: false },
   events: { view: false, edit: false, delete: false },
   contentTypeBuilder: { view: false, edit: false, delete: false },
   stories: { view: false, edit: false, delete: false },
@@ -401,7 +407,12 @@ export function hasPermission(
   // Fallback to role-level matrix permission
   const role = getRoleById(roleId);
   const modulePerms = role.permissions?.[module];
-  if (!modulePerms) return false;
+  if (!modulePerms) {
+    if (module === "donations") {
+      return Boolean(role.permissions?.submissions?.[action]);
+    }
+    return false;
+  }
 
   return Boolean(modulePerms[action]);
 }

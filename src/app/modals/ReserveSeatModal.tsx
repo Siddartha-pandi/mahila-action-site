@@ -56,6 +56,7 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
     if (invalid) return toast.error(invalid);
     const res = await saveReservation({
       name, email, phone, seats: Number(seats), event_name: event.title,
+      event_id: event.id,
       volunteer_commitment: commitment, companions,
     });
     if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
@@ -143,10 +144,19 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
         </div>
       )}
 
-      <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center gap-2.5">
-        <span className="relative flex size-2"><span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex size-2 rounded-full bg-red-500" /></span>
-        <p className={`font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold`}>{event.totalSeats} seats total — reserve yours now!</p>
-      </div>
+      {event.totalSeats > 0 && (
+        <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
+            <span className="relative flex size-2"><span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex size-2 rounded-full bg-red-500" /></span>
+            <p className={`font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold`}>
+              {event.bookedSeats ? `${event.availableSeats ?? Math.max(0, event.totalSeats - event.bookedSeats)} of ${event.totalSeats} seats available` : `${event.totalSeats} seats total`} — reserve yours now!
+            </p>
+          </div>
+          {Number(event.bookedSeats) > 0 && (
+            <span className="text-[11px] text-[#a65a4a]/80 font-medium">({event.bookedSeats} booked)</span>
+          )}
+        </div>
+      )}
       <button type="submit" className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}>
         Confirm Reservation
       </button>
@@ -294,7 +304,9 @@ export function AttendEventForm({
     if (invalid) return toast.error(invalid);
     const res = await saveReservation({
       name, email, phone, seats: Number(members),
-      event_name: selectedEvent.title, companions,
+      event_name: selectedEvent.title,
+      event_id: selectedEvent.id,
+      companions,
     });
     if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
     setSubmitted(true);
@@ -347,9 +359,27 @@ export function AttendEventForm({
         </select>
       </div>
       <div>
-        <label className={reserveLabelClass}>No. of Members Attending</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className={reserveLabelClass}>No. of Members Attending</label>
+          {selectedEvent && selectedEvent.totalSeats > 0 && (
+            <span className="text-[11px] font-semibold text-emerald-700">
+              {selectedEvent.availableSeats !== undefined
+                ? `${selectedEvent.availableSeats} available`
+                : `${Math.max(0, selectedEvent.totalSeats - (selectedEvent.bookedSeats ?? 0))} available`}
+              {Number(selectedEvent.bookedSeats) > 0 && ` (${selectedEvent.bookedSeats} booked)`}
+            </span>
+          )}
+        </div>
         <select value={members} onChange={e => handleMembersChange(e.target.value)} className={`${reserveInputClass} cursor-pointer`}>
-          {["1", "2", "3", "4", "5", "6"].map(n => <option key={n} value={n}>{n} member{Number(n) > 1 ? "s" : ""}</option>)}
+          {(() => {
+            const avail = selectedEvent?.availableSeats !== undefined
+              ? Number(selectedEvent.availableSeats)
+              : (selectedEvent?.totalSeats ? Math.max(0, selectedEvent.totalSeats - (selectedEvent.bookedSeats ?? 0)) : 6);
+            const maxOptions = Math.min(6, Math.max(1, avail));
+            return Array.from({ length: maxOptions }, (_, i) => String(i + 1)).map(n => (
+              <option key={n} value={n}>{n} member{Number(n) > 1 ? "s" : ""}</option>
+            ));
+          })()}
         </select>
       </div>
 

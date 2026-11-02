@@ -92,13 +92,30 @@ export function EventCard({
           {categoryName || "Community Event"}
         </span>
         {open && !onTogglePublish ? (
-          <span className={`${inter()} bg-[#ebc2c2] border-2 border-[#8f6969] text-[#dc0f0f] text-[10px] font-medium px-4 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap`}>
-            <span className="relative flex size-1.5">
-              <span className="absolute inline-flex size-full rounded-full bg-red-500 animate-ping" />
-              <span className="relative inline-flex size-1.5 rounded-full bg-red-500" />
-            </span>
-            {event.totalSeats ? `${event.totalSeats} Seats — Open` : "Open"}
-          </span>
+          (() => {
+            const booked = Number(event.bookedSeats ?? 0);
+            const total = Number(event.totalSeats ?? 0);
+            const available = event.availableSeats !== undefined ? Number(event.availableSeats) : Math.max(0, total - booked);
+            const isSoldOut = total > 0 && available <= 0;
+
+            if (isSoldOut) {
+              return (
+                <span className={`${inter()} bg-rose-900/85 border-2 border-rose-400 text-rose-100 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap shadow-xs`}>
+                  Sold Out ({total}/{total})
+                </span>
+              );
+            }
+
+            return (
+              <span className={`${inter()} bg-[#ebc2c2] border-2 border-[#8f6969] text-[#dc0f0f] text-[10px] font-medium px-4 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap`}>
+                <span className="relative flex size-1.5">
+                  <span className="absolute inline-flex size-full rounded-full bg-red-500 animate-ping" />
+                  <span className="relative inline-flex size-1.5 rounded-full bg-red-500" />
+                </span>
+                {total > 0 ? (booked > 0 ? `${available} Seats Left — Open` : `${total} Seats — Open`) : "Open"}
+              </span>
+            );
+          })()
         ) : (
           <span className={`${inter()} bg-[#1e1e1e]/50 border-2 border-[#f4efe7]/30 text-[#f4efe7] text-[10px] font-semibold px-4 py-1 rounded-full whitespace-nowrap`}>
             Past Event

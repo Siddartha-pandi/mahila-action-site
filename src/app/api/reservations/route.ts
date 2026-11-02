@@ -74,15 +74,55 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const rawEventId = body.event_id != null ? String(body.event_id).replace(/^evt_/, "") : null;
+    let numericEventId = rawEventId && !isNaN(Number(rawEventId)) ? Number(rawEventId) : null;
+
+    let eventRow: any = null;
+    if (numericEventId) {
+      const evLookup = await queryDb("SELECT id, title, total_seats FROM events WHERE id = $1 LIMIT 1", [numericEventId]);
+      if (evLookup.rows.length > 0) {
+        eventRow = evLookup.rows[0];
+      }
+    }
+    if (!eventRow && body.event_name) {
+      const evLookup = await queryDb("SELECT id, title, total_seats FROM events WHERE LOWER(title) = LOWER($1) LIMIT 1", [String(body.event_name).trim()]);
+      if (evLookup.rows.length > 0) {
+        eventRow = evLookup.rows[0];
+        numericEventId = eventRow.id;
+      }
+    }
+
+    const requestedSeats = Number(body.seats) || 1;
+
+    // Check capacity if attendee booking
+    if (!isVolunteerSignup && eventRow && Number(eventRow.total_seats) > 0) {
+      const bookedRes = await queryDb(
+        `SELECT COALESCE(SUM(seats), 0)::int AS booked
+         FROM event_reservations
+         WHERE (event_id = $1 OR LOWER(event_name) = LOWER($2))
+           AND (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee')`,
+        [eventRow.id, eventRow.title]
+      );
+      const booked = Number(bookedRes.rows[0]?.booked || 0);
+      const available = Math.max(0, Number(eventRow.total_seats) - booked);
+      if (requestedSeats > available) {
+        if (available <= 0) {
+          return NextResponse.json({ error: `This event is already fully booked (${booked}/${eventRow.total_seats} seats taken).` }, { status: 409 });
+        }
+        return NextResponse.json({ error: `Only ${available} seat${available > 1 ? "s are" : " is"} available for ${eventRow.title}.` }, { status: 409 });
+      }
+    }
+
     const insertRes = await queryDb(
-      `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      `INSERT INTO event_reservations (event_id, event_name, name, email, phone, seats, volunteer_commitment, companions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
       [
+        numericEventId,
         body.event_name,
         body.name,
         body.email,
         body.phone,
-        Number(body.seats) || 1,
+        requestedSeats,
         body.volunteer_commitment || null,
         JSON.stringify(body.companions || []),
       ]

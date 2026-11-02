@@ -27,7 +27,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const { id } = await params;
-    const { status, amount, name, email, phone, donation_type } = (await req.json()) || {};
+    const {
+      status,
+      amount,
+      name,
+      email,
+      phone,
+      donation_type,
+      pan_number,
+      address,
+      payment_method,
+      transaction_id,
+      receipt_number,
+      notes,
+    } = (await req.json()) || {};
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -59,6 +72,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (donation_type !== undefined) {
       updates.push(`donation_type = $${idx++}`);
       values.push(String(donation_type).trim());
+    }
+    if (pan_number !== undefined) {
+      updates.push(`pan_number = $${idx++}`);
+      values.push(pan_number ? String(pan_number).trim().toUpperCase() : null);
+    }
+    if (address !== undefined) {
+      updates.push(`address = $${idx++}`);
+      values.push(address ? String(address).trim() : null);
+    }
+    if (payment_method !== undefined) {
+      updates.push(`payment_method = $${idx++}`);
+      values.push(String(payment_method).trim().toLowerCase());
+    }
+    if (transaction_id !== undefined) {
+      updates.push(`transaction_id = $${idx++}`);
+      values.push(transaction_id ? String(transaction_id).trim() : null);
+    }
+    if (receipt_number !== undefined) {
+      updates.push(`receipt_number = $${idx++}`);
+      values.push(receipt_number ? String(receipt_number).trim() : null);
+    }
+    if (notes !== undefined) {
+      updates.push(`notes = $${idx++}`);
+      values.push(notes ? String(notes).trim() : null);
     }
 
     if (updates.length === 0) {

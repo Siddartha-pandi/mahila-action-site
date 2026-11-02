@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   X, CheckCircle, AlertCircle, LogIn, LogOut, Calendar, MapPin, Heart, Clock,
-  UserCheck, Plus, UserPlus,
+  UserCheck, Plus, UserPlus, FileText, ExternalLink,
 } from "lucide-react";
 import {
   saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer,
@@ -115,10 +115,19 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   useEffect(() => {
     if (!profile?.email && !profile?.phone) return;
-    // Fetch from server so we catch registrations from other devices/browsers.
-    loadUserSubmissions(profile.email, profile.phone)
-      .then(subs => setUserSubmissions(subs))
-      .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
+    const fetchSubs = () => {
+      loadUserSubmissions(profile.email, profile.phone)
+        .then(subs => setUserSubmissions(subs))
+        .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
+    };
+    fetchSubs();
+
+    window.addEventListener("mahila_submissions_changed", fetchSubs);
+    window.addEventListener("mahila_user_session_changed", fetchSubs);
+    return () => {
+      window.removeEventListener("mahila_submissions_changed", fetchSubs);
+      window.removeEventListener("mahila_user_session_changed", fetchSubs);
+    };
   }, [profile, step, confirmed]);
 
   function handleSignOut() {
@@ -447,10 +456,12 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
-        amount: s.data?.amount || 0,
+        amount: Number(s.data?.amount) || 0,
         cause: s.data?.campaign_name || s.data?.event_name || "General Empowerment Support",
         date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: s.status || "Completed",
+        receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
+        paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
       }));
   }, [userSubmissions, profile]);
 
@@ -795,7 +806,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                   {userDonationList.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {userDonationList.map((d) => (
-                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
@@ -806,10 +817,20 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                               </span>
                             </div>
                             <h5 className="font-['Inter',sans-serif] font-bold text-[15px] text-[#1e1e1e] mt-1">{d.cause}</h5>
+                            <p className="text-[11px] text-[#1e1e1e]/60 font-mono mt-1.5">
+                              Receipt: <strong className="text-[#1e1e1e]">{d.receiptNumber}</strong> • {d.paymentMethod}
+                            </p>
                           </div>
                           <div className="border-t border-[#a65a4a]/10 pt-3 mt-4 flex items-center justify-between text-[12px] text-[#1e1e1e]/50 font-['Inter',sans-serif]">
                             <span className="flex items-center gap-1"><Clock size={12} /> {d.date}</span>
-                            <span className="bg-[#f4efe7] text-[#a65a4a] px-2.5 py-0.5 rounded text-[11px] font-medium">80G Tax Exempt</span>
+                            <a
+                              href={`/api/donations/${d.id}/receipt`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                            >
+                              <FileText size={12} /> Receipt <ExternalLink size={10} />
+                            </a>
                           </div>
                         </div>
                       ))}

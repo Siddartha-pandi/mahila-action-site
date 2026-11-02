@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS users (
   reset_token_hash TEXT,
   reset_token_expires TIMESTAMPTZ,
   status TEXT NOT NULL DEFAULT 'New',
+  pan_number TEXT,
+  address TEXT,
+  payment_method TEXT DEFAULT 'upi',
+  transaction_id TEXT,
+  receipt_number TEXT,
+  notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -74,6 +80,7 @@ CREATE TABLE IF NOT EXISTS donations (
 -- 6. Event reservations table (seat bookings, volunteers, vendors)
 CREATE TABLE IF NOT EXISTS event_reservations (
   id SERIAL PRIMARY KEY,
+  event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
   event_name TEXT NOT NULL,
   name TEXT NOT NULL,
   email TEXT NOT NULL,

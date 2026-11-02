@@ -358,41 +358,77 @@ export async function sendDonationReceiptEmail(
   name: string,
   amount: number,
   campaignName?: string,
-  isMonthly = false
+  isMonthly = false,
+  receiptMeta?: {
+    receiptNumber?: string;
+    panNumber?: string;
+    address?: string;
+    paymentMethod?: string;
+    transactionId?: string;
+    donationId?: string | number;
+  }
 ) {
   const greeting = name ? `Hi ${esc(name)},` : "Dear Supporter,";
   const formatted = `₹${Number(amount).toLocaleString("en-IN")}`;
   const towards = campaignName ? ` towards <strong>${esc(campaignName)}</strong>` : "";
   const cadence = isMonthly ? " monthly" : "";
+  const siteUrl = getSiteUrl();
+
+  const receiptNum = receiptMeta?.receiptNumber || `MA-REC-${new Date().getFullYear()}-0000`;
+  const panDisplay = receiptMeta?.panNumber ? `<p style="margin: 0 0 4px;"><strong>Donor PAN:</strong> ${esc(receiptMeta.panNumber)}</p>` : "";
+  const addressDisplay = receiptMeta?.address ? `<p style="margin: 0 0 4px;"><strong>Donor Address:</strong> ${esc(receiptMeta.address)}</p>` : "";
+  const methodDisplay = receiptMeta?.paymentMethod ? `<p style="margin: 0 0 4px;"><strong>Payment Method:</strong> ${esc(receiptMeta.paymentMethod.toUpperCase())}</p>` : "";
+  const txDisplay = receiptMeta?.transactionId ? `<p style="margin: 0 0 4px;"><strong>Transaction / UTR Ref:</strong> ${esc(receiptMeta.transactionId)}</p>` : "";
+
+  const receiptUrl = receiptMeta?.donationId ? `${siteUrl}/api/donations/${receiptMeta.donationId}/receipt` : "";
 
   const bodyHtml = `
-    <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">Thank you for your generous support!</h2>
+    <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">Thank you for your generous contribution!</h2>
     <p>${greeting}</p>
     <p>We gratefully acknowledge your contribution of <strong>${formatted}</strong>${cadence}${towards}.</p>
-    <div style="background-color: #faf5f1; border: 1px solid #eaded6; border-radius: 8px; padding: 18px; margin: 20px 0;">
-      <p style="margin: 0 0 8px; font-weight: 600; color: #993925;">Donation Receipt Summary</p>
-      <p style="margin: 0 0 4px;"><strong>Amount:</strong> ${formatted}</p>
+    
+    <div style="background-color: #faf5f1; border: 1px solid #eaded6; border-radius: 10px; padding: 20px; margin: 20px 0;">
+      <div style="border-bottom: 1px dashed #d1c0b6; padding-bottom: 12px; margin-bottom: 14px; display: flex; justify-content: space-between;">
+        <span style="font-weight: 700; color: #993925; font-size: 15px;">Official Donation Receipt</span>
+        <span style="font-size: 13px; color: #584a44; font-family: monospace;">#${esc(receiptNum)}</span>
+      </div>
+      
+      <p style="margin: 0 0 4px;"><strong>Amount:</strong> <span style="font-size: 16px; color: #993925; font-weight: 700;">${formatted}</span></p>
+      <p style="margin: 0 0 4px;"><strong>Date:</strong> ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
       <p style="margin: 0 0 4px;"><strong>Frequency:</strong> ${isMonthly ? "Monthly Recurring" : "One-Time"}</p>
       ${campaignName ? `<p style="margin: 0 0 4px;"><strong>Initiative:</strong> ${esc(campaignName)}</p>` : ""}
-      <p style="margin: 0; font-size: 13px; color: #706460; margin-top: 8px;">Mahila Action is an authorized non-profit organization. Please retain this email for your tax and financial records.</p>
+      ${methodDisplay}
+      ${txDisplay}
+      ${panDisplay}
+      ${addressDisplay}
+      
+      <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #e8ded7; font-size: 12px; color: #695d57; line-height: 1.5;">
+        <p style="margin: 0;"><strong>Mahila Action Society</strong> &bull; Society Reg: 123/2000 &bull; Visakhapatnam, Andhra Pradesh</p>
+      </div>
     </div>
-    <p>Your contribution directly empowers grassroots women leaders, expands girl-child educational centers, and funds livelihood cooperatives across our community.</p>
+
+    <p>Your contribution directly empowers grassroots women leaders, expands girl-child educational centers, and funds livelihood cooperatives across Andhra Pradesh and Telangana.</p>
   `;
 
   await deliver({
     to,
-    subject: `Thank you for your donation of ${formatted} — Mahila Action`,
+    subject: `Donation Receipt (${receiptNum}) — Thank you for your support of ${formatted}`,
     text:
       `${name ? `Hi ${name},` : "Hello,"}\n\n` +
-      `Thank you for your gift of ${formatted}${isMonthly ? " each month" : ""}${campaignName ? ` towards ${campaignName}` : ""}.\n\n` +
+      `Thank you for your generous gift of ${formatted}${isMonthly ? " each month" : ""}${campaignName ? ` towards ${campaignName}` : ""}.\n\n` +
+      `Receipt Number: ${receiptNum}\n` +
+      (receiptMeta?.transactionId ? `Transaction / UTR: ${receiptMeta.transactionId}\n` : "") +
+      `Date: ${new Date().toLocaleDateString("en-IN")}\n\n` +
+      `Mahila Action Society (Reg: 123/2000)\n\n` +
       `Contributions like yours directly fund women's leadership training, education access, ` +
       `and livelihood programmes across Telangana and Andhra Pradesh.\n\n` +
-      `Please keep this email for your records.`,
+      `Please keep this receipt for your records.`,
     html: renderEmailHtml({
-      title: "Donation Receipt",
+      title: `Donation Receipt #${receiptNum}`,
       bodyHtml,
+      cta: receiptUrl ? { text: "View / Print Official Donation Receipt", url: receiptUrl } : undefined,
     }),
-    consoleSummary: `Donation receipt for ${name || "(anonymous)"} <${to}>\n    Amount: ${formatted}${campaignName ? ` (${campaignName})` : ""}`,
+    consoleSummary: `Donation receipt #${receiptNum} for ${name || "(anonymous)"} <${to}>\n    Amount: ${formatted}${campaignName ? ` (${campaignName})` : ""}`,
   });
 }
 
@@ -405,16 +441,26 @@ export async function sendDonationAlertToAdmin(details: {
   campaign?: string | null;
   eventName?: string | null;
   anonymous: boolean;
+  receiptNumber?: string;
+  paymentMethod?: string;
+  transactionId?: string;
+  panNumber?: string;
+  address?: string;
 }) {
   const adminEmail = getAdminNotificationEmail();
   const formatted = `₹${Number(details.amount).toLocaleString("en-IN")}`;
   const bodyHtml = `
     <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">New Donation Received: ${formatted}</h2>
     <table role="presentation" style="width: 100%; border-collapse: collapse;">
-      <tr><td style="padding: 6px 0; font-weight: 600; width: 120px;">Amount:</td><td><strong style="color: #993925; font-size: 16px;">${formatted}</strong></td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600; width: 140px;">Receipt Number:</td><td><code style="background: #f0e6de; padding: 2px 6px; border-radius: 4px;">${esc(details.receiptNumber || "N/A")}</code></td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600;">Amount:</td><td><strong style="color: #993925; font-size: 16px;">${formatted}</strong></td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Donor:</td><td>${details.anonymous ? "Anonymous" : esc(details.name || "Supporter")}</td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Email:</td><td>${details.email ? `<a href="mailto:${esc(details.email)}">${esc(details.email)}</a>` : "Not provided"}</td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Phone:</td><td>${esc(details.phone)}</td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600;">Payment Mode:</td><td><span style="background: #eaf3e6; color: #2e6024; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 12px;">${esc((details.paymentMethod || "UPI").toUpperCase())}</span></td></tr>
+      ${details.transactionId ? `<tr><td style="padding: 6px 0; font-weight: 600;">UTR / Ref ID:</td><td><strong>${esc(details.transactionId)}</strong></td></tr>` : ""}
+      ${details.panNumber ? `<tr><td style="padding: 6px 0; font-weight: 600;">PAN:</td><td><strong>${esc(details.panNumber)}</strong></td></tr>` : ""}
+      ${details.address ? `<tr><td style="padding: 6px 0; font-weight: 600;">Address:</td><td>${esc(details.address)}</td></tr>` : ""}
       <tr><td style="padding: 6px 0; font-weight: 600;">Type:</td><td>${details.donationType === "monthly" ? "Monthly" : "One-Time"}</td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Initiative:</td><td>${esc(details.campaign || details.eventName || "General Fund")}</td></tr>
     </table>
@@ -422,20 +468,24 @@ export async function sendDonationAlertToAdmin(details: {
 
   await deliver({
     to: adminEmail,
-    subject: `New Donation Alert: ${formatted} from ${details.anonymous ? "Anonymous" : details.name || "Supporter"}`,
+    subject: `New Donation Alert: ${formatted} from ${details.anonymous ? "Anonymous" : details.name || "Supporter"} (${details.paymentMethod?.toUpperCase() || "UPI"})`,
     text:
       `New donation received!\n\n` +
+      `Receipt: ${details.receiptNumber || "N/A"}\n` +
       `Amount: ${formatted}\n` +
       `Donor: ${details.anonymous ? "Anonymous" : details.name || "Supporter"}\n` +
       `Email: ${details.email || "Not provided"}\n` +
       `Phone: ${details.phone}\n` +
+      `Payment Method: ${details.paymentMethod || "UPI"}\n` +
+      (details.transactionId ? `UTR / Transaction Ref: ${details.transactionId}\n` : "") +
+      (details.panNumber ? `PAN: ${details.panNumber}\n` : "") +
       `Type: ${details.donationType}\n` +
       `Campaign: ${details.campaign || details.eventName || "General Fund"}`,
     html: renderEmailHtml({
       title: "Donation Notification",
       bodyHtml,
     }),
-    consoleSummary: `Admin alert: Donation of ${formatted} by ${details.name || "Anonymous"}`,
+    consoleSummary: `Admin alert: Donation of ${formatted} by ${details.name || "Anonymous"} (${details.receiptNumber || "N/A"})`,
   });
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
-import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send } from "lucide-react";
+import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   getSavedUserSession, saveUserSession, validateUserSession,
@@ -96,10 +96,12 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
     const interval = setInterval(syncSession, 60000);
 
     window.addEventListener("mahila_user_session_changed", syncSession);
+    window.addEventListener("mahila_submissions_changed", syncSession);
     window.addEventListener("storage", syncSession);
     return () => {
       clearInterval(interval);
       window.removeEventListener("mahila_user_session_changed", syncSession);
+      window.removeEventListener("mahila_submissions_changed", syncSession);
       window.removeEventListener("storage", syncSession);
     };
   }, [refreshKey]);
@@ -223,10 +225,13 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
-        amount: s.data?.amount || 0,
+        amount: Number(s.data?.amount) || 0,
         cause: s.data?.campaign_name || s.data?.event_name || "General Empowerment Support",
         date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: s.status || "Completed",
+        receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
+        paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
+        transactionId: s.data?.transaction_id || s.data?.transactionId || "",
       }));
   }, [userSubmissions, profile]);
 
@@ -438,25 +443,43 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                   {userDonationList.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {userDonationList.map((d) => (
-                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-6 shadow-sm flex flex-col justify-between transition-all">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-3">
                               <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                                <CheckCircle size={12} /> Donation
+                                <CheckCircle size={12} /> Confirmed Contribution
                               </span>
                               <span className="text-[#a65a4a] font-['Fraunces',serif] text-[22px] font-bold">
                                 ₹{d.amount.toLocaleString("en-IN")}
                               </span>
                             </div>
-                            <h4 className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] mt-1">
+                            <h4 className="font-['Inter',sans-serif] font-bold text-[17px] text-[#1e1e1e] mt-1 leading-snug">
                               {d.cause}
                             </h4>
+                            <div className="flex flex-wrap items-center gap-3 text-[12px] text-[#1e1e1e]/60 mt-2 font-mono">
+                              <span>Receipt: <strong className="text-[#1e1e1e]">{d.receiptNumber}</strong></span>
+                              <span>•</span>
+                              <span>Mode: <strong className="text-[#1e1e1e]">{d.paymentMethod}</strong></span>
+                              {d.transactionId && (
+                                <>
+                                  <span>•</span>
+                                  <span className="truncate max-w-[200px]" title={d.transactionId}>Ref: {d.transactionId}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex items-center justify-between text-[13px] text-[#1e1e1e]/55 font-['Inter',sans-serif]">
+                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex items-center justify-between text-[13px] text-[#1e1e1e]/60 font-['Inter',sans-serif]">
                             <span className="flex items-center gap-1.5">
                               <Clock size={14} /> Date: {d.date}
                             </span>
-                            <span className="bg-[#f4efe7] text-[#a65a4a] px-3 py-1 rounded-full text-[12px] font-medium">80G Tax Exempt</span>
+                            <a
+                              href={`/api/donations/${d.id}/receipt`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+                            >
+                              <FileText size={13} /> View / Print Receipt <ExternalLink size={11} />
+                            </a>
                           </div>
                         </div>
                       ))}

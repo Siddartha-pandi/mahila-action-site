@@ -25,6 +25,8 @@ export interface EventItem {
   eventDate: string; // ISO date — when the event itself happens
   location: string;
   totalSeats: number;
+  bookedSeats?: number;
+  availableSeats?: number;
   maxVolunteers: number; // 0 = unlimited; admin-set cap on volunteer sign-ups
   windows: RegWindow[];
   categoryId: string | null; // e.g. "Women & Leadership" — shares the same categories as Stories

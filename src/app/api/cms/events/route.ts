@@ -9,19 +9,45 @@ export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   try {
-    const result = await queryDb("SELECT * FROM events ORDER BY event_date ASC", [], { noCache: true });
+    const result = await queryDb(
+      `SELECT e.*,
+        COALESCE((
+          SELECT SUM(r.seats)
+          FROM event_reservations r
+          WHERE (r.event_id = e.id OR LOWER(r.event_name) = LOWER(e.title))
+            AND (r.volunteer_commitment IS NULL OR r.volunteer_commitment = '' OR r.volunteer_commitment = 'none' OR r.volunteer_commitment = 'attendee')
+        ), 0)::int AS booked_seats,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM event_reservations r
+          WHERE (r.event_id = e.id OR LOWER(r.event_name) = LOWER(e.title))
+            AND (r.volunteer_commitment IS NULL OR r.volunteer_commitment = '' OR r.volunteer_commitment = 'none' OR r.volunteer_commitment = 'attendee')
+        ), 0)::int AS attendee_count
+       FROM events e
+       ORDER BY e.event_date ASC`,
+      [],
+      { noCache: true }
+    );
     return NextResponse.json(
-      result.rows.map((r: any) => ({
-        ...r,
-        id: String(r.id),
-        eventDate: r.event_date || r.eventDate || "",
-        totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
-        maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
-        categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
-        published: r.published !== false && r.published !== 0 && r.published !== "false",
-        createdAt: r.created_at || r.createdAt || "",
-        windows: typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : r.windows || [],
-      })),
+      result.rows.map((r: any) => {
+        const totalSeats = Number(r.total_seats ?? r.totalSeats ?? 0);
+        const bookedSeats = Number(r.booked_seats ?? 0);
+        const availableSeats = totalSeats > 0 ? Math.max(0, totalSeats - bookedSeats) : 0;
+        return {
+          ...r,
+          id: String(r.id),
+          eventDate: r.event_date || r.eventDate || "",
+          totalSeats,
+          bookedSeats,
+          availableSeats,
+          attendeeCount: Number(r.attendee_count ?? 0),
+          maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
+          categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
+          published: r.published !== false && r.published !== 0 && r.published !== "false",
+          createdAt: r.created_at || r.createdAt || "",
+          windows: typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : r.windows || [],
+        };
+      }),
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -127,6 +153,24 @@ export async function POST(req: NextRequest) {
         ]
       );
       finalId = targetNumericId;
+
+      // Link any existing reservations for this event by ID
+      await queryDb(
+        `UPDATE event_reservations
+         SET event_id = $1
+         WHERE event_id IS NULL AND LOWER(event_name) = LOWER($2)`,
+        [targetNumericId, existingRow.title]
+      ).catch(() => {});
+
+      // If title changed, cascade update to event_reservations so bookings don't disconnect!
+      if (existingRow.title && existingRow.title !== title) {
+        await queryDb(
+          `UPDATE event_reservations
+           SET event_name = $1
+           WHERE event_id = $2 OR LOWER(event_name) = LOWER($3)`,
+          [title, targetNumericId, existingRow.title]
+        ).catch(() => {});
+      }
     } else if (targetNumericId !== null) {
       await queryDb(
         `INSERT INTO events (id, title, description, image, event_date, location, total_seats, max_volunteers, windows, category_id, published)
@@ -157,6 +201,13 @@ export async function POST(req: NextRequest) {
         ]
       );
       finalId = targetNumericId;
+
+      await queryDb(
+        `UPDATE event_reservations
+         SET event_id = $1
+         WHERE event_id IS NULL AND LOWER(event_name) = LOWER($2)`,
+        [targetNumericId, title]
+      ).catch(() => {});
     } else {
       const res = await queryDb(
         `INSERT INTO events (title, description, image, event_date, location, total_seats, max_volunteers, windows, category_id, published)
@@ -177,7 +228,34 @@ export async function POST(req: NextRequest) {
       finalId = res.rows[0]?.id;
     }
 
-    return NextResponse.json({ ok: true, id: String(finalId), image });
+    // Query latest booked seats for this event
+    let bookedSeats = 0;
+    let attendeeCount = 0;
+    if (finalId) {
+      const statsRes = await queryDb(
+        `SELECT
+          COALESCE(SUM(seats), 0)::int AS booked_seats,
+          COALESCE(COUNT(*), 0)::int AS attendee_count
+         FROM event_reservations
+         WHERE (event_id = $1 OR LOWER(event_name) = LOWER($2))
+           AND (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee')`,
+        [Number(finalId) || 0, title]
+      ).catch(() => ({ rows: [] }));
+      if (statsRes.rows && statsRes.rows[0]) {
+        bookedSeats = Number(statsRes.rows[0].booked_seats || 0);
+        attendeeCount = Number(statsRes.rows[0].attendee_count || 0);
+      }
+    }
+    const availableSeats = totalSeats > 0 ? Math.max(0, totalSeats - bookedSeats) : 0;
+
+    return NextResponse.json({
+      ok: true,
+      id: String(finalId),
+      image,
+      bookedSeats,
+      availableSeats,
+      attendeeCount,
+    });
   } catch (err: any) {
     console.error("POST /api/cms/events error:", err);
     return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });

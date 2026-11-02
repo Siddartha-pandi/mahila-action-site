@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
+import { useState, useEffect, useCallback } from "react";
+import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
 import { imgDonateBanner, imgTakeAction, imgStory1, imgStory2, imgStory3 } from "../constants/images";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
@@ -11,15 +11,59 @@ import { useUserProfile } from "../hooks/useUserProfile";
 
 export function DonatePage() {
   const profile = useUserProfile();
-  const featured = CAMPAIGNS[0];
-  const otherCampaigns = CAMPAIGNS.slice(1);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(CAMPAIGNS);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(CAMPAIGNS[0].id);
+
   const campaignImages: Record<string, string> = {
+    "learning-centres": imgTakeAction,
     "women-leadership-fund": imgStory1,
     "skills-for-tomorrow": imgStory2,
     "community-health-drive": imgStory3,
   };
-  const [selectedCampaignId, setSelectedCampaignId] = useState(featured.id);
-  const progress = Math.min((featured.raised / featured.goal) * 100, 100);
+
+  // Fetch live campaign totals from the API (aggregated from database donations)
+  const fetchLiveCampaigns = useCallback(async () => {
+    try {
+      const res = await fetch("/api/campaigns");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setCampaigns(data);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch live campaign totals:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLiveCampaigns();
+    window.addEventListener("mahila_campaigns_changed", fetchLiveCampaigns);
+    return () => {
+      window.removeEventListener("mahila_campaigns_changed", fetchLiveCampaigns);
+    };
+  }, [fetchLiveCampaigns]);
+
+  // When a donation completes, immediately increment the local state so the left indicator updates with 0ms delay!
+  const handleDonationSuccess = (info: { campaignId: string; amount: number }) => {
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.id === info.campaignId) {
+          return { ...c, raised: c.raised + info.amount };
+        }
+        return c;
+      })
+    );
+    // Also re-verify with backend
+    setTimeout(() => {
+      fetchLiveCampaigns();
+    }, 600);
+  };
+
+  const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId) ?? campaigns[0];
+  const otherCampaigns = campaigns.filter((c) => c.id !== selectedCampaign.id);
+  const activeImage = campaignImages[selectedCampaign.id] || imgTakeAction;
+  const progress = Math.min((selectedCampaign.raised / selectedCampaign.goal) * 100, 100);
 
   function pickCampaign(id: string) {
     setSelectedCampaignId(id);
@@ -37,31 +81,45 @@ export function DonatePage() {
             <SectionLabel text="Take Action" />
             <SectionTitle text="One Contribution. Many Futures." />
 
-            <div className="relative mt-6 rounded-2xl overflow-hidden h-[260px] sm:h-[380px] md:h-[480px]">
-              <img loading="lazy" decoding="async"
-                src={imgTakeAction}
-                alt={featured.name}
-                className="absolute inset-0 size-full object-cover"
+            <div className="relative mt-6 rounded-2xl overflow-hidden h-[260px] sm:h-[380px] md:h-[480px] shadow-sm">
+              <img
+                loading="lazy"
+                decoding="async"
+                src={activeImage}
+                alt={selectedCampaign.name}
+                className="absolute inset-0 size-full object-cover transition-all duration-500"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent" />
 
               {/* Category tag */}
               <div className="absolute top-6 left-8">
-                <span className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[13px] font-bold px-8 py-2 rounded-full`}>
-                  {featured.tag}
+                <span className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[13px] font-bold px-8 py-2 rounded-full backdrop-blur-sm bg-black/20`}>
+                  {selectedCampaign.tag}
                 </span>
               </div>
 
               {/* Campaign details */}
               <div className="absolute bottom-0 left-0 right-0 p-8">
-                <p className={`${inter()} text-[#f4efe7] text-[22px] font-semibold`}>{featured.name}</p>
+                <p className={`${inter()} text-[#f4efe7] text-[22px] font-semibold transition-all duration-300`}>
+                  {selectedCampaign.name}
+                </p>
                 <div className="mt-4 flex items-center justify-between mb-2">
-                  <p className={`${inter()} text-[#f4efe7] text-[13px] font-semibold`}>₹{featured.raised.toLocaleString("en-IN")} Raised</p>
-                  <p className={`${inter()} text-[#89a26e] text-[13px] font-semibold`}>Goal: ₹{featured.goal.toLocaleString("en-IN")}</p>
+                  <p className={`${inter()} text-[#f4efe7] text-[15px] font-bold tracking-wide`}>
+                    ₹{selectedCampaign.raised.toLocaleString("en-IN")} Raised
+                  </p>
+                  <p className={`${inter()} text-[#89a26e] text-[13px] font-semibold`}>
+                    Goal: ₹{selectedCampaign.goal.toLocaleString("en-IN")}
+                  </p>
                 </div>
-                <div className="relative bg-white/30 rounded-full h-[5px] w-full">
-                  <div className="bg-[#587735] h-[5px] rounded-full transition-all" style={{ width: `${progress}%` }} />
-                  <div className={`${inter()} absolute -top-8 bg-[#89a26e] text-[#f4efe7] text-[10px] font-semibold px-2 py-1 rounded`} style={{ left: `${progress - 4}%` }}>
+                <div className="relative bg-white/30 rounded-full h-[6px] w-full">
+                  <div
+                    className="bg-[#587735] h-[6px] rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                  <div
+                    className={`${inter()} absolute -top-8 bg-[#587735] text-[#f4efe7] text-[11px] font-bold px-2.5 py-1 rounded-md shadow-md transition-all duration-700`}
+                    style={{ left: `${Math.max(0, Math.min(progress - 4, 90))}%` }}
+                  >
                     {Math.round(progress)}%
                   </div>
                 </div>
@@ -70,9 +128,12 @@ export function DonatePage() {
           </div>
 
           {/* Donation form */}
-          <div id="donate-form" className="w-full lg:w-[420px] shrink-0">
+          <div id="donate-form" className="w-full lg:w-[460px] shrink-0">
             <DonationFormCard
               initialCampaignId={selectedCampaignId}
+              campaigns={campaigns}
+              onCampaignChange={(newId) => setSelectedCampaignId(newId)}
+              onDonationSuccess={handleDonationSuccess}
               initialName={profile?.name}
               initialEmail={profile?.email}
               initialPhone={profile?.phone}
@@ -89,38 +150,58 @@ export function DonatePage() {
             <SectionTitle text="Every Cause Needs Your Help" center />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {otherCampaigns.map((c) => (
-              <div key={c.id} className="bg-[#f4efe7] border-2 border-[#a65a4a]/30 rounded-2xl overflow-hidden hover:border-[#a65a4a] transition-colors group">
-                <div className="relative h-[180px] overflow-hidden">
-                  <img loading="lazy" decoding="async"
-                    src={campaignImages[c.id]}
-                    alt={c.name}
-                    className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute top-4 left-4">
-                    <span className={`${inter()} border border-[#f4efe7] text-[#f4efe7] text-[11px] font-semibold px-3 py-1 rounded-full bg-black/30`}>
-                      {c.tag}
-                    </span>
+            {campaigns.map((c) => {
+              const isSelected = c.id === selectedCampaign.id;
+              const cProgress = Math.min((c.raised / c.goal) * 100, 100);
+              return (
+                <div
+                  key={c.id}
+                  className={`bg-[#f4efe7] border-2 rounded-2xl overflow-hidden transition-all group ${
+                    isSelected ? "border-[#993925] ring-2 ring-[#993925]/20 shadow-md" : "border-[#a65a4a]/30 hover:border-[#a65a4a]"
+                  }`}
+                >
+                  <div className="relative h-[180px] overflow-hidden">
+                    <img
+                      loading="lazy"
+                      decoding="async"
+                      src={campaignImages[c.id] || imgTakeAction}
+                      alt={c.name}
+                      className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute top-4 left-4">
+                      <span className={`${inter()} border border-[#f4efe7] text-[#f4efe7] text-[11px] font-semibold px-3 py-1 rounded-full bg-black/30`}>
+                        {c.tag}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <p className={`${inter()} text-[#1e1e1e] text-[18px] font-semibold line-clamp-1`}>{c.name}</p>
+                    <div className="mt-3 bg-[#d9d9d9] rounded-full h-[4px]">
+                      <div
+                        className="bg-[#587735] h-[4px] rounded-full transition-all duration-500"
+                        style={{ width: `${cProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <p className={`${inter()} text-[#1e1e1e] text-[12px] font-semibold`}>
+                        ₹{c.raised.toLocaleString("en-IN")} raised
+                      </p>
+                      <p className={`${inter()} text-[#89a26e] text-[12px] font-semibold`}>Goal: {formatLakh(c.goal)}</p>
+                    </div>
+                    <button
+                      onClick={() => pickCampaign(c.id)}
+                      className={`${inter()} w-full border text-[14px] font-semibold py-2.5 rounded-full mt-4 transition-colors cursor-pointer ${
+                        isSelected
+                          ? "bg-[#993925] text-white border-[#993925]"
+                          : "bg-[#a65a4a]/10 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7]"
+                      }`}
+                    >
+                      {isSelected ? "Selected Campaign" : "Donate"}
+                    </button>
                   </div>
                 </div>
-                <div className="p-5">
-                  <p className={`${inter()} text-[#1e1e1e] text-[18px] font-semibold`}>{c.name}</p>
-                  <div className="mt-3 bg-[#d9d9d9] rounded-full h-[4px]">
-                    <div className="bg-[#587735] h-[4px] rounded-full" style={{ width: `${(c.raised / c.goal) * 100}%` }} />
-                  </div>
-                  <div className="flex justify-between mt-2">
-                    <p className={`${inter()} text-[#1e1e1e] text-[12px] font-semibold`}>{formatLakh(c.raised)} raised</p>
-                    <p className={`${inter()} text-[#89a26e] text-[12px] font-semibold`}>Goal: {formatLakh(c.goal)}</p>
-                  </div>
-                  <button
-                    onClick={() => pickCampaign(c.id)}
-                    className={`${inter()} w-full bg-[#a65a4a]/10 border border-[#a65a4a] text-[#a65a4a] text-[14px] font-semibold py-2.5 rounded-full mt-4 hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-colors cursor-pointer`}
-                  >
-                    Donate
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

@@ -131,6 +131,33 @@ export function validateSeats(seats: unknown, label = "number of seats"): string
   return null;
 }
 
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
+export function validatePanNumber(pan: unknown, required = false): string | null {
+  const clean = String(pan ?? "").trim().toUpperCase();
+  if (!clean) {
+    return required ? "Please enter your 10-digit PAN number." : null;
+  }
+  if (!PAN_REGEX.test(clean)) {
+    return "Please enter a valid 10-character Indian PAN (e.g. ABCDE1234F).";
+  }
+  return null;
+}
+
+export function validateAddress(address: unknown, required = false): string | null {
+  const clean = String(address ?? "").trim();
+  if (!clean) {
+    return required ? "Please enter your postal address for the receipt." : null;
+  }
+  if (clean.length < 5) {
+    return "Please provide a complete postal address (at least 5 characters).";
+  }
+  if (clean.length > 300) {
+    return "Address is too long (maximum 300 characters).";
+  }
+  return null;
+}
+
 /** Returns the first failure from a list of checks, or null when all pass. */
 export function firstError(...results: (string | null)[]): string | null {
   for (const r of results) if (r) return r;

@@ -283,6 +283,68 @@ export function RolesAdmin({
     setPageSize: setUserPageSize,
   } = usePagination(filteredUsers, { initialPageSize: 10 });
 
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number | string>>(new Set());
+
+  const isAllUsersPageSelected =
+    paginatedUsers.length > 0 &&
+    paginatedUsers.every((u) => selectedUserIds.has(u.id));
+  const isSomeUsersPageSelected =
+    paginatedUsers.some((u) => selectedUserIds.has(u.id)) &&
+    !isAllUsersPageSelected;
+
+  const toggleSelectAllUsers = () => {
+    if (isAllUsersPageSelected) {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        paginatedUsers.forEach((u) => next.delete(u.id));
+        return next;
+      });
+    } else {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        paginatedUsers.forEach((u) => next.add(u.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectUser = (id: number | string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchDeleteUsers = async () => {
+    if (!canDeleteRoles) return toast.error("You do not have permission to delete user accounts.");
+    const targets = dbUsers.filter((u) => selectedUserIds.has(u.id));
+    const validUsers = targets.filter(
+      (u) => u.role !== "superadmin" && u.roleId !== "superadmin" && u.email !== currentSession.email
+    );
+    const skippedCount = targets.length - validUsers.length;
+
+    if (skippedCount > 0) {
+      toast.info(`${skippedCount} account(s) skipped (Super Admin or your own active account cannot be deleted).`);
+    }
+    if (!validUsers.length) return;
+
+    if (!confirm(`Are you sure you want to permanently delete ${validUsers.length} user account(s)?`)) return;
+
+    let deletedCount = 0;
+    for (const u of validUsers) {
+      try {
+        const res = await api.del(`/api/members/${u.id}`);
+        if (res.ok) deletedCount++;
+      } catch {}
+    }
+
+    toast.success(`Deleted ${deletedCount} user account(s).`);
+    setSelectedUserIds(new Set());
+    fetchDbUsers();
+  };
+
   const inputBase = "w-full border border-[#a65a4a]/30 rounded-lg px-3 py-2 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif] bg-white";
 
   return (
@@ -361,6 +423,7 @@ export function RolesAdmin({
                 description: "",
                 permissions: {
                   submissions: { view: true, edit: false, delete: false },
+                  donations: { view: true, edit: false, delete: false },
                   events: { view: true, edit: false, delete: false },
                   contentTypeBuilder: { view: true, edit: false, delete: false },
                   stories: { view: true, edit: false, delete: false },
@@ -427,10 +490,47 @@ export function RolesAdmin({
 
           {/* Unified Database User Accounts Table */}
           <div className="bg-white rounded-xl border border-[#a65a4a]/15 overflow-hidden shadow-sm">
+            {/* Bulk Selection Toolbar */}
+            {selectedUserIds.size > 0 && (
+              <div className="bg-[#fcf8f5] border-b border-[#a65a4a]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[13px] animate-in fade-in duration-150">
+                <div className="flex items-center gap-3">
+                  <span className="bg-[#a65a4a] text-white font-bold text-[11px] px-2.5 py-1 rounded-full">
+                    {selectedUserIds.size} Users Selected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBatchDeleteUsers}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300"
+                  >
+                    <Trash2 size={13} /> Delete Selected Users
+                  </button>
+                  <button
+                    onClick={() => setSelectedUserIds(new Set())}
+                    className="px-3 py-1 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-[#f0ebe3] text-[#1e1e1e]/70 uppercase text-[11px] font-semibold tracking-wider border-b border-[#a65a4a]/15">
                   <tr>
+                    <th className="px-3 py-3.5 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllUsersPageSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isSomeUsersPageSelected;
+                        }}
+                        onChange={toggleSelectAllUsers}
+                        className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                        title={isAllUsersPageSelected ? "Deselect page" : "Select entire page"}
+                      />
+                    </th>
                     <th className="px-5 py-3.5">User</th>
                     <th className="px-5 py-3.5">Account Role</th>
                     <th className="px-5 py-3.5">Kind (Participation)</th>
@@ -443,26 +543,43 @@ export function RolesAdmin({
                 <tbody className="divide-y divide-gray-100">
                   {dbLoading ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-[#1e1e1e]/40 text-[13px]">
+                      <td colSpan={8} className="px-5 py-8 text-center text-[#1e1e1e]/40 text-[13px]">
                         Loading user accounts…
                       </td>
                     </tr>
                   ) : dbError ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-6 text-center text-red-500 text-[13px]">
+                      <td colSpan={8} className="px-5 py-6 text-center text-red-500 text-[13px]">
                         {dbError}
                       </td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-[#1e1e1e]/50">
+                      <td colSpan={8} className="px-5 py-8 text-center text-[#1e1e1e]/50">
                         No user accounts found matching query.
                       </td>
                     </tr>
                   ) : (
-                    paginatedUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-gray-50/70 transition-colors">
-                        <td className="px-5 py-4">
+                    paginatedUsers.map((u) => {
+                      const isSelected = selectedUserIds.has(u.id);
+
+                      return (
+                        <tr
+                          key={u.id}
+                          onClick={() => toggleSelectUser(u.id)}
+                          className={`transition-colors cursor-pointer ${
+                            isSelected ? "bg-amber-50/80 hover:bg-amber-100/60" : "hover:bg-gray-50/70"
+                          }`}
+                        >
+                          <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelectUser(u.id)}
+                              className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                            />
+                          </td>
+                          <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] font-bold text-sm flex items-center justify-center">
                               {(u.name || "?").charAt(0).toUpperCase()}
@@ -548,7 +665,7 @@ export function RolesAdmin({
                         </td>
 
                       </tr>
-                    ))
+                    )})
                   )}
                 </tbody>
               </table>

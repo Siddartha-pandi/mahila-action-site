@@ -1,14 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle, ChevronRight } from "lucide-react";
+import { CheckCircle, ChevronRight, FileText, Printer, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { saveDonation } from "@/lib/backend";
-import { firstError, validateAmount, validateEmail, validateName, validatePhone } from "@/lib/validation";
-import { CAMPAIGNS, formatLakh } from "../constants/campaigns";
+import {
+  firstError,
+  validateAmount,
+  validateEmail,
+  validateName,
+  validatePhone,
+  validatePanNumber,
+  validateAddress,
+} from "@/lib/validation";
+import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
 import { inter, fraunces } from "../components/shared/styleHelpers";
 import { PaymentModal } from "../modals/PaymentModal";
 import { useProfileField } from "../hooks/useUserProfile";
+
+const PRESET_AMOUNTS = [500, 1000, 2500, 5000, 10000];
 
 export function DonationFormCard({
   eventName,
@@ -16,6 +25,9 @@ export function DonationFormCard({
   initialName,
   initialEmail,
   initialPhone,
+  campaigns = CAMPAIGNS,
+  onCampaignChange,
+  onDonationSuccess,
   onSaved,
 }: {
   eventName?: string;
@@ -24,140 +36,292 @@ export function DonationFormCard({
   initialName?: string;
   initialEmail?: string;
   initialPhone?: string;
+  /** Dynamic campaign list with live raised amounts. */
+  campaigns?: Campaign[];
+  /** Notifies parent when the donor switches campaign in the dropdown. */
+  onCampaignChange?: (campaignId: string) => void;
+  /** Notifies parent immediately upon successful donation with amount and campaign. */
+  onDonationSuccess?: (info: { campaignId: string; amount: number; campaignName?: string }) => void;
   /** Fires once the donation is recorded — lets a host page refresh its history. */
   onSaved?: () => void;
 }) {
-  const [customAmount, setCustomAmount] = useState("");
+  const [customAmount, setCustomAmount] = useState<string>("1000");
+  const [donationType, setDonationType] = useState<"one-time" | "monthly">("one-time");
   // Prefilled from the signed-in donor's profile, and still fully editable.
   const [donorName, setDonorName] = useProfileField(initialName);
   const [donorEmail, setDonorEmail] = useProfileField(initialEmail);
   const [donorPhone, setDonorPhone] = useProfileField(initialPhone);
-  const [campaignId, setCampaignId] = useState(initialCampaignId ?? CAMPAIGNS[0].id);
+  const [campaignId, setCampaignId] = useState(initialCampaignId ?? campaigns[0]?.id ?? CAMPAIGNS[0].id);
   const [anonymous, setAnonymous] = useState(false);
-  const [showDetails, setShowDetails] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
+
+  // Success state metadata
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [successData, setSuccessData] = useState<{
+    receiptNumber?: string;
+    donationId?: string | number;
+    transactionId?: string;
+    paymentMethod?: string;
+  }>({});
 
   // Keep the dropdown in sync if the person picks a different campaign card further down the page.
   useEffect(() => {
     if (initialCampaignId) setCampaignId(initialCampaignId);
   }, [initialCampaignId]);
 
-  const selectedCampaign = CAMPAIGNS.find(c => c.id === campaignId) ?? CAMPAIGNS[0];
+  const selectedCampaign = campaigns.find((c) => c.id === campaignId) ?? campaigns[0] ?? CAMPAIGNS[0];
   const finalAmount = parseInt(customAmount, 10) || 0;
 
+  function handleSelectPreset(preset: number) {
+    setCustomAmount(String(preset));
+  }
+
   function handleProceed() {
-    // Checked here rather than after payment — the server rejects malformed
-    // details, and a donation that fails to record once money has moved is the
-    // worst place to find that out. Anonymous donors submit no name or email,
-    // so those are only checked when the donor chose to be named.
     const invalid = firstError(
       validateAmount(finalAmount),
       validatePhone(donorPhone),
       !anonymous && donorName.trim() ? validateName(donorName) : null,
       !anonymous && donorEmail.trim() ? validateEmail(donorEmail) : null
     );
+
     if (invalid) return toast.error(invalid);
     setShowPayment(true);
   }
 
-  async function handlePaymentSuccess() {
+  function handlePaymentSuccess(result: {
+    receiptNumber?: string;
+    donationId?: string | number;
+    transactionId?: string;
+    paymentMethod: string;
+  }) {
     setShowPayment(false);
-    const res = await saveDonation({
-      amount: finalAmount,
-      name: anonymous ? "" : donorName,
-      email: anonymous ? "" : donorEmail,
-      phone: donorPhone,
-      anonymous,
-      event_name: eventName,
-      campaign_name: selectedCampaign.name,
-    });
-    if (!res.ok) {
-      toast.error(res.error || "Payment succeeded, but we couldn't record it — please contact us with your payment confirmation.");
-    } else {
-      onSaved?.();
-    }
+    setSuccessData(result);
     setPaymentSuccess(true);
+    onDonationSuccess?.({
+      campaignId,
+      amount: finalAmount,
+      campaignName: selectedCampaign.name,
+    });
+    onSaved?.();
   }
 
   function handleSuccessClose() {
     setPaymentSuccess(false);
+    setSuccessData({});
     setDonorName(initialName ?? "");
     setDonorEmail(initialEmail ?? "");
     setDonorPhone(initialPhone ?? "");
-    setCustomAmount("");
+    setCustomAmount("1000");
+  }
+
+  function handleOpenReceipt() {
+    if (successData.donationId) {
+      window.open(`/api/donations/${successData.donationId}/receipt`, "_blank");
+    } else {
+      window.print();
+    }
   }
 
   if (paymentSuccess) {
     return (
-      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-2xl p-7 flex flex-col items-center text-center gap-4">
-        <div className="size-16 bg-[#587735]/15 rounded-full flex items-center justify-center">
-          <CheckCircle size={32} className="text-[#587735]" />
+      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-3xl p-7 flex flex-col items-center text-center gap-5 shadow-xl animate-in zoom-in-95 duration-200">
+        <div className="size-16 bg-[#587735]/15 rounded-full flex items-center justify-center text-[#587735] shadow-inner">
+          <CheckCircle size={36} strokeWidth={2.5} />
         </div>
-        <h3 className={`${fraunces()} text-[#1e1e1e] text-[24px] font-semibold capitalize`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-          Thank You!
-        </h3>
-        <p className={`${inter()} text-[#1e1e1e]/70 text-[15px] leading-relaxed`}>
-          {donorName ? `Dear ${donorName}, your` : "Your"} donation of{" "}
-          <strong className="text-[#a65a4a]">₹{finalAmount.toLocaleString("en-IN")}</strong> has been received.
-        </p>
-        <button
-          onClick={handleSuccessClose}
-          className={`${inter()} w-full bg-[#a65a4a] text-[#f4efe7] text-[16px] font-semibold py-3.5 rounded-full mt-2 hover:bg-[#993925] transition-colors cursor-pointer`}
-        >
-          Donate Again
-        </button>
+
+        <div>
+          <span className="text-[12px] uppercase font-bold tracking-widest text-[#587735] bg-[#587735]/10 px-3 py-1 rounded-full border border-[#587735]/20">
+            Payment Confirmed
+          </span>
+          <h3
+            className={`${fraunces()} text-[#1e1e1e] text-[26px] font-semibold capitalize mt-2`}
+            style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
+          >
+            Thank You for Your Generosity!
+          </h3>
+          <p className={`${inter()} text-[#1e1e1e]/75 text-[14px] mt-1`}>
+            {donorName && !anonymous ? `Dear ${donorName}, your` : "Your"} contribution of{" "}
+            <strong className="text-[#a65a4a] text-[16px]">₹{finalAmount.toLocaleString("en-IN")}</strong> has been received by Mahila Action.
+          </p>
+        </div>
+
+        {/* Receipt Details Card */}
+        <div className="w-full bg-white border border-[#a65a4a]/25 rounded-2xl p-4 text-left space-y-2 text-[13px]">
+          <div className="flex justify-between items-center pb-2 border-b border-[#eaded6]">
+            <span className="text-[#6e625d] font-medium">Receipt Number:</span>
+            <span className="font-mono font-bold text-[#993925]">
+              {successData.receiptNumber || `MA-REC-${new Date().getFullYear()}-0001`}
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center pb-2 border-b border-[#eaded6]">
+            <span className="text-[#6e625d] font-medium">Cause / Campaign:</span>
+            <span className="font-semibold text-[#1e1e1e] text-right truncate max-w-[200px]">
+              {selectedCampaign.name}
+            </span>
+          </div>
+
+          <div className="flex justify-between items-center pb-2 border-b border-[#eaded6]">
+            <span className="text-[#6e625d] font-medium">Payment Mode:</span>
+            <span className="font-medium text-[#1e1e1e]">
+              {successData.paymentMethod || "UPI"}
+            </span>
+          </div>
+
+          {successData.transactionId && (
+            <div className="flex justify-between items-center pb-2 border-b border-[#eaded6]">
+              <span className="text-[#6e625d] font-medium">Transaction / UTR:</span>
+              <span className="font-mono text-[#1e1e1e] truncate max-w-[180px]">
+                {successData.transactionId}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="w-full space-y-2.5">
+          <button
+            type="button"
+            onClick={handleOpenReceipt}
+            className={`${inter()} w-full bg-[#993925] text-[#f4efe7] text-[15px] font-semibold py-3.5 rounded-full hover:bg-[#802f1e] transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-md`}
+          >
+            <Printer size={18} />
+            Print / Download Receipt
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSuccessClose}
+            className={`${inter()} w-full bg-white border border-[#a65a4a]/40 text-[#a65a4a] text-[15px] font-semibold py-3 rounded-full hover:bg-[#f4efe7] transition-colors cursor-pointer`}
+          >
+            Donate Again
+          </button>
+        </div>
+
+        {donorEmail && !anonymous && (
+          <p className={`${inter()} text-[11px] text-[#1e1e1e]/60 flex items-center gap-1`}>
+            <FileText size={12} />
+            An official receipt has also been sent to <strong>{donorEmail}</strong>.
+          </p>
+        )}
       </div>
     );
   }
 
   return (
     <>
-      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-2xl p-7 flex flex-col gap-5">
-        <h3
-          className={`${fraunces()} text-[#1e1e1e] text-[24px] font-semibold capitalize`}
-          style={{
-            fontVariationSettings: '"SOFT" 0, "WONK" 1',
-          }}
-        >
-          {eventName ? "Donate To This Event" : "Donate To This Campaign"}
-        </h3>
-
-        {/* Custom amount */}
+      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-3xl p-7 flex flex-col gap-5 shadow-lg">
         <div>
-          <p
-            className={`${inter()} text-[13px] font-medium text-[#1e1e1e] uppercase tracking-wider mb-1`}
+          <h3
+            className={`${fraunces()} text-[#1e1e1e] text-[24px] font-semibold capitalize`}
+            style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
           >
-            Custom Contribution:
+            {eventName ? "Donate To This Event" : "Make a Contribution"}
+          </h3>
+          <p className={`${inter()} text-[13px] text-[#6e625d] mt-1`}>
+            100% of your gift directly supports grassroot programs.
           </p>
-          <div className="border-b-2 border-[#a65a4a] pb-2">
-            <input
-              value={customAmount}
-              onChange={(e) => {
-                setCustomAmount(e.target.value.replace(/\D/g, ""));
+        </div>
+
+        {/* Frequency selector: One-time vs Monthly */}
+        <div className="bg-[#e8ded5] p-1 rounded-xl flex gap-1">
+          <button
+            type="button"
+            onClick={() => setDonationType("one-time")}
+            className={`${inter()} flex-1 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
+              donationType === "one-time"
+                ? "bg-[#993925] text-white shadow-sm"
+                : "text-[#6e625d] hover:text-[#1e1e1e]"
+            }`}
+          >
+            One-Time
+          </button>
+          <button
+            type="button"
+            onClick={() => setDonationType("monthly")}
+            className={`${inter()} flex-1 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
+              donationType === "monthly"
+                ? "bg-[#993925] text-white shadow-sm"
+                : "text-[#6e625d] hover:text-[#1e1e1e]"
+            }`}
+          >
+            Monthly Giving
+          </button>
+        </div>
+
+        {/* Preset Contribution Chips */}
+        <div>
+          <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-2`}>
+            Select Amount:
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {PRESET_AMOUNTS.map((amt) => {
+              const active = finalAmount === amt;
+              return (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => handleSelectPreset(amt)}
+                  className={`${inter()} py-2 text-[14px] font-bold rounded-xl border transition-all cursor-pointer ${
+                    active
+                      ? "bg-[#993925] text-white border-[#993925] shadow-sm"
+                      : "bg-white/80 border-[#a65a4a]/30 text-[#1e1e1e] hover:border-[#993925]"
+                  }`}
+                >
+                  ₹{amt.toLocaleString("en-IN")}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                if (PRESET_AMOUNTS.includes(finalAmount)) setCustomAmount("");
               }}
-              placeholder="₹ Enter amount"
-              className={`${inter()} w-full bg-transparent text-[15px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none`}
+              className={`${inter()} py-2 text-[13px] font-semibold rounded-xl border transition-all cursor-pointer ${
+                !PRESET_AMOUNTS.includes(finalAmount) && finalAmount > 0
+                  ? "bg-[#993925] text-white border-[#993925]"
+                  : "bg-white/80 border-[#a65a4a]/30 text-[#6e625d] hover:border-[#993925]"
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+        </div>
+
+        {/* Custom amount input */}
+        <div>
+          <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-1`}>
+            Contribution Amount (₹):
+          </p>
+          <div className="border-b-2 border-[#a65a4a] pb-2 flex items-center gap-2">
+            <span className="text-[#a65a4a] font-bold text-[18px]">₹</span>
+            <input
+              type="text"
+              value={customAmount}
+              onChange={(e) => setCustomAmount(e.target.value.replace(/\D/g, ""))}
+              placeholder="Enter amount in Rupees"
+              className={`${inter()} w-full bg-transparent text-[17px] font-semibold text-[#1e1e1e] placeholder-[#919090] focus:outline-none`}
             />
           </div>
         </div>
 
         {/* Campaign selector */}
         <div>
-          <p
-            className={`${inter()} text-[13px] font-medium text-[#1e1e1e] uppercase tracking-wider mb-1`}
-          >
-            Select Campaign:
+          <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-1`}>
+            Direct Support Towards:
           </p>
           <div className="border-b-2 border-[#a65a4a] pb-2">
             <select
               value={campaignId}
-              onChange={(e) => setCampaignId(e.target.value)}
-              className={`${inter()} w-full bg-transparent text-[15px] text-[#1e1e1e] focus:outline-none cursor-pointer`}
+              onChange={(e) => {
+                setCampaignId(e.target.value);
+                onCampaignChange?.(e.target.value);
+              }}
+              className={`${inter()} w-full bg-transparent text-[14px] text-[#1e1e1e] font-medium focus:outline-none cursor-pointer`}
             >
-              {CAMPAIGNS.map((c) => (
+              {campaigns.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} — {formatLakh(c.raised)} raised so far
+                  {c.name} ({formatLakh(c.raised)} raised)
                 </option>
               ))}
             </select>
@@ -166,101 +330,89 @@ export function DonationFormCard({
 
         {/* Name */}
         <div>
-          <p className={`${inter()} text-[13px] font-medium text-[#1e1e1e] uppercase tracking-wider mb-1`}>Full Name:</p>
+          <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-1`}>
+            Full Name: {!anonymous && <span className="text-[#a65a4a]">*</span>}
+          </p>
           <div className="border-b-2 border-[#a65a4a] pb-2">
             <input
               value={donorName}
               onChange={(e) => setDonorName(e.target.value)}
-              placeholder="Your name"
+              placeholder="Your full legal name"
               disabled={anonymous}
-              className={`${inter()} w-full bg-transparent text-[15px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none disabled:opacity-40`}
+              className={`${inter()} w-full bg-transparent text-[14px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none disabled:opacity-40`}
             />
           </div>
         </div>
 
         {/* Email */}
         <div>
-          <p className={`${inter()} text-[13px] font-medium text-[#1e1e1e] uppercase tracking-wider mb-1`}>Email Address:</p>
+          <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-1`}>
+            Email Address: {!anonymous && <span className="text-[#a65a4a]">*</span>}
+          </p>
           <div className="border-b-2 border-[#a65a4a] pb-2">
             <input
               value={donorEmail}
               onChange={(e) => setDonorEmail(e.target.value)}
-              placeholder="your@email.com"
+              placeholder="For tax receipt & acknowledgement"
               type="email"
               disabled={anonymous}
-              className={`${inter()} w-full bg-transparent text-[15px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none disabled:opacity-40`}
+              className={`${inter()} w-full bg-transparent text-[14px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none disabled:opacity-40`}
             />
           </div>
         </div>
 
         {/* Phone — always required */}
         <div>
-          <p className={`${inter()} text-[13px] font-medium text-[#1e1e1e] uppercase tracking-wider mb-1`}>Phone Number: *</p>
+          <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-1`}>
+            Phone Number: <span className="text-[#a65a4a]">*</span>
+          </p>
           <div className="border-b-2 border-[#a65a4a] pb-2">
             <input
               value={donorPhone}
               onChange={(e) => setDonorPhone(e.target.value)}
-              placeholder="+91 XXXXX XXXXX"
+              placeholder="+91 98765 43210"
               type="tel"
-              className={`${inter()} w-full bg-transparent text-[15px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none`}
+              className={`${inter()} w-full bg-transparent text-[14px] text-[#1e1e1e] placeholder-[#919090] focus:outline-none`}
             />
           </div>
-          {anonymous && (
-            <p className={`${inter()} text-[11px] text-[#1e1e1e]/45 mt-1`}>
-              Kept private — used only for your donation receipt, never shown publicly.
-            </p>
-          )}
         </div>
 
-        {/* Checkboxes */}
-        <div className="flex flex-col gap-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => setShowDetails(!showDetails)}
-              className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-colors ${showDetails ? "bg-[#a65a4a] border-[#a65a4a]" : "bg-[#f4efe7] border-[#a65a4a]"}`}
-            >
-              {showDetails && <CheckCircle size={14} className="text-[#f4efe7]" strokeWidth={3} />}
-            </div>
-            <span className={`${inter()} text-[15px] font-medium text-[#1e1e1e]`}>
-              Show my details
-            </span>
-          </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div
-              onClick={() => {
-                setAnonymous(!anonymous);
-                if (!anonymous) {
-                  setDonorName("");
-                  setDonorEmail("");
-                }
-              }}
-              className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-colors ${anonymous ? "bg-[#a65a4a] border-[#a65a4a]" : "bg-[#f4efe7] border-[#a65a4a]"}`}
-            >
-              {anonymous && <CheckCircle size={14} className="text-[#f4efe7]" strokeWidth={3} />}
-            </div>
-            <span className={`${inter()} text-[15px] font-medium text-[#1e1e1e]`}>
-              Donate anonymously
-            </span>
-          </label>
-        </div>
+        {/* Anonymous Toggle */}
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={anonymous}
+            onChange={(e) => setAnonymous(e.target.checked)}
+            className="size-4 accent-[#993925] cursor-pointer"
+          />
+          <span className={`${inter()} text-[13px] font-medium text-[#1e1e1e]`}>
+            Donate anonymously (hide my identity publicly)
+          </span>
+        </label>
 
         {/* CTA */}
         <button
+          type="button"
           onClick={handleProceed}
-          className={`${inter()} w-full bg-[#a65a4a] text-[#f4efe7] text-[20px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer flex items-center justify-center gap-2`}
+          className={`${inter()} w-full bg-[#993925] text-[#f4efe7] text-[18px] font-semibold py-4 rounded-full hover:bg-[#802f1e] transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg mt-1`}
         >
-          Support for a Cause <ChevronRight size={20} />
+          Proceed to Donate <ChevronRight size={20} />
         </button>
 
-        <p className={`${inter()} text-center text-[12px] text-[#1e1e1e]/50`}>
-          80G Tax exemption available · Secure payment
+        <p className={`${inter()} text-center text-[12px] text-[#1e1e1e]/60`}>
+          🔒 Secure UPI, Cards & Bank Transfer &bull; Instant Confirmation
         </p>
       </div>
+
       {showPayment && (
         <PaymentModal
           amount={finalAmount}
           name={anonymous ? "" : donorName}
           email={anonymous ? "" : donorEmail}
+          phone={donorPhone}
+          campaignName={selectedCampaign.name}
+          donationType={donationType}
+          anonymous={anonymous}
           onClose={() => setShowPayment(false)}
           onSuccess={handlePaymentSuccess}
         />
