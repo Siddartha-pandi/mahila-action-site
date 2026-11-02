@@ -34,10 +34,11 @@ export function CategoriesAdmin({
   }
 
   async function handleAdd() {
-    const cat = newCategory();
-    await saveCategory(cat);
-    onCategoriesChange([...categories, cat]);
-    toast.success("Category created!");
+    const cat = newCategory(categories);
+    const saved = await saveCategory(cat);
+    const finalCat = saved || cat;
+    onCategoriesChange([...categories, finalCat]);
+    toast.success(`Category #${finalCat.id} created!`);
   }
 
   async function handleRename(c: Category) {
@@ -99,6 +100,9 @@ export function CategoriesAdmin({
           const count = postsIn(c.id).length;
           return (
             <div key={`${c.id}_${idx}`} className="border border-[#a65a4a]/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              {/* <span className="font-mono text-[12px] font-semibold text-[#a65a4a] bg-[#a65a4a]/10 px-2.5 py-1.5 rounded-lg shrink-0"> 
+                #{c.id}
+               </span> */}
               <input
                 value={draftFor(c)}
                 onChange={(e) => setNameDraft((d) => ({ ...d, [c.id]: e.target.value }))}

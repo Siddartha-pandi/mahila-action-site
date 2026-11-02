@@ -900,23 +900,35 @@ export async function deleteBlogPost(id: string): Promise<boolean> {
 // CATEGORIES CRUD
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function newCategory(): Category {
-  return { id: uid("cat"), name: "New Category" };
+export function newCategory(existingCategories?: Category[]): Category {
+  const currentCats = existingCategories ?? getLocalSiteData().categories ?? DEFAULT_CATEGORIES;
+  const numericIds = currentCats
+    .map((c) => Number(c.id))
+    .filter((n) => !isNaN(n) && Number.isInteger(n) && n > 0);
+  const nextId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+  return { id: String(nextId), name: "New Category" };
 }
 
-export async function saveCategory(c: Category): Promise<boolean> {
+export async function saveCategory(c: Category): Promise<Category> {
+  let saved = { ...c };
+  try {
+    const res = await api.post<any>(ENDPOINTS.categories, c);
+    if (res.data?.id) {
+      saved = { ...saved, id: String(res.data.id) };
+    }
+  } catch {
+    // offline or local fallback
+  }
+
   const current = getLocalSiteData();
   const categories = current.categories ?? DEFAULT_CATEGORIES;
-  const idx = categories.findIndex((item) => item.id === c.id);
-  const updated = idx >= 0 ? categories.map((item) => (item.id === c.id ? c : item)) : [...categories, c];
+  const idx = categories.findIndex((item) => item.id === c.id || item.id === saved.id);
+  const updated = idx >= 0
+    ? categories.map((item, i) => (i === idx ? saved : item))
+    : [...categories, saved];
   saveLocalSiteData({ categories: updated });
 
-  try {
-    const res = await api.post(ENDPOINTS.categories, c);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return saved;
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {

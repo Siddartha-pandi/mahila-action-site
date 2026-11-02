@@ -38,7 +38,6 @@ async function main() {
     const pool = await getPool();
     const counts = await Promise.all([
       pool.query("SELECT COUNT(*) as count FROM users;"),
-      pool.query("SELECT COUNT(*) as count FROM categories;"),
       pool.query("SELECT COUNT(*) as count FROM events;"),
       pool.query("SELECT COUNT(*) as count FROM blog_posts;"),
     ]).catch(() => []);
@@ -50,9 +49,9 @@ async function main() {
       console.log("Database Seeding Summary");
       console.log("==================================================");
       console.log(`Users:          ${getCount(counts[0])}`);
-      console.log(`Categories:     ${getCount(counts[1])}`);
-      console.log(`Events:         ${getCount(counts[2])}`);
-      console.log(`Blog Posts:     ${getCount(counts[3])}`);
+      console.log(`Categories:     Stored in JSON format (src/data/categories.json)`);
+      console.log(`Events:         ${getCount(counts[1])}`);
+      console.log(`Blog Posts:     ${getCount(counts[2])}`);
       console.log(`Contact Info:   Stored in JSON format (src/data/contact.json)`);
       console.log(`Councilors:     Stored in JSON format (src/data/councilors.json)`);
       console.log(`Timeline:       Stored in JSON format (src/data/timeline.json)`);

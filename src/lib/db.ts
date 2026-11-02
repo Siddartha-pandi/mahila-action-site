@@ -131,16 +131,7 @@ function rowPlaceholders(rowCount: number, columnCount: number): string {
 }
 
 export async function seedAllData(dbPool: any): Promise<void> {
-  // 1. Categories (IDs: 1, 2, 3, 4)
-  await dbPool.query(`
-    INSERT INTO categories (id, name) VALUES 
-      (1, 'Women & Leadership'),
-      (2, 'Education & Learning'),
-      (3, 'Livelihood & Skills'),
-      (4, 'Community Wellbeing')
-    ON CONFLICT (id) DO NOTHING
-  `);
-
+  // Categories are now managed in JSON format (src/data/categories.json)
   // Map category code strings to integer IDs
   const catMap: Record<string, number> = {
     cat_women: 1,
@@ -265,7 +256,7 @@ export async function seedAllData(dbPool: any): Promise<void> {
   } catch { }
 
   // Synchronize PostgreSQL SERIAL sequences past manually seeded IDs
-  const tablesToSync = ["users", "categories", "events", "blog_posts", "media"];
+  const tablesToSync = ["users", "events", "blog_posts", "media"];
   // Sent as one batch — statements sent together instead of multiple round trips.
   try {
     await dbPool.query(
@@ -340,6 +331,10 @@ export async function initDb(): Promise<void> {
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS category_id TEXT",
+        "ALTER TABLE events DROP CONSTRAINT IF EXISTS events_category_id_fkey",
+        "ALTER TABLE blog_posts DROP CONSTRAINT IF EXISTS blog_posts_category_id_fkey",
+        "DROP TABLE IF EXISTS categories CASCADE",
+        "DROP TABLE IF EXISTS cms_categories CASCADE",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS max_volunteers INTEGER DEFAULT 0",
         "ALTER TABLE events ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT TRUE",
         "ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS published BOOLEAN DEFAULT TRUE",

@@ -1,5 +1,5 @@
 -- PostgreSQL Schema for Mahila Action Site
--- Version: 5.1 (Persistent INTEGER SERIAL Schema — Safe to re-run without wiping data)
+-- Version: 5.2 (Persistent INTEGER SERIAL Schema — Safe to re-run without wiping data)
 
 -- 1. Users table (Admins, Members, Volunteers, Vendors)
 CREATE TABLE IF NOT EXISTS users (
@@ -24,12 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2. CMS Categories
-CREATE TABLE IF NOT EXISTS categories (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- 2. CMS Categories (Stored in JSON format: src/data/categories.json)
 
 -- 3. CMS Events
 CREATE TABLE IF NOT EXISTS events (
@@ -42,7 +37,7 @@ CREATE TABLE IF NOT EXISTS events (
   total_seats INTEGER DEFAULT 0,
   max_volunteers INTEGER DEFAULT 0,
   windows TEXT NOT NULL,
-  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  category_id INTEGER,
   published BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -51,7 +46,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS blog_posts (
   id SERIAL PRIMARY KEY,
   section TEXT NOT NULL,
-  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  category_id INTEGER,
   title TEXT NOT NULL,
   excerpt TEXT,
   content TEXT,
@@ -152,4 +147,3 @@ CREATE TABLE IF NOT EXISTS media (
 );
 
 CREATE INDEX IF NOT EXISTS media_created_at_idx ON media (created_at DESC);
-

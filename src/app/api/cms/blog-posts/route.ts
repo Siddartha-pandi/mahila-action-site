@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { ensureMediaUrl, ensureMediaUrlsArray, ensureHtmlMediaUrls } from "@/lib/mediaServer";
+import { readCategoriesFile } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -77,9 +78,10 @@ export async function POST(req: NextRequest) {
           resolvedCategoryId = catMap[normalized];
         } else {
           try {
-            const catRes = await queryDb("SELECT id FROM categories WHERE LOWER(name) = LOWER($1) LIMIT 1", [String(rawCat).trim()]);
-            if (catRes.rows[0]?.id) {
-              resolvedCategoryId = Number(catRes.rows[0].id);
+            const categories = await readCategoriesFile();
+            const found = categories.find((c) => c.name.toLowerCase() === normalized || String(c.id) === normalized);
+            if (found && !isNaN(Number(found.id))) {
+              resolvedCategoryId = Number(found.id);
             }
           } catch {}
         }

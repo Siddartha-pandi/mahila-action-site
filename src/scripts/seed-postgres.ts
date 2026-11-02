@@ -8,7 +8,6 @@ async function main() {
     
     // Summary report of seeded tables
     const userCount = await pool.query("SELECT COUNT(*) as count FROM users;");
-    const categoryCount = await pool.query("SELECT COUNT(*) as count FROM categories;");
     const eventCount = await pool.query("SELECT COUNT(*) as count FROM events;");
     const postCount = await pool.query("SELECT COUNT(*) as count FROM blog_posts;");
 
@@ -18,7 +17,7 @@ async function main() {
     console.log("Database Initialization & Seeding Complete!");
     console.log("==================================================");
     console.log(`Users:          ${getCount(userCount)}`);
-    console.log(`Categories:     ${getCount(categoryCount)}`);
+    console.log(`Categories:     Stored in JSON format (src/data/categories.json)`);
     console.log(`Events:         ${getCount(eventCount)}`);
     console.log(`Blog Posts:     ${getCount(postCount)}`);
     console.log(`Contact Info:   Stored in JSON format (src/data/contact.json)`);
