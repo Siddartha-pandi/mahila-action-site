@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       validateName(body.name),
       validateEmail(body.email),
       // Phone is optional on the contact form, but must be sane when supplied.
-      body.phone ? validatePhone(body.phone) : null,
+      validatePhone(body.phone, "phone number", { required: false }),
       validateText(body.subject, "a subject", { max: LIMITS.subject.max, required: false }),
       validateText(body.message, "your message", { min: LIMITS.message.min, max: LIMITS.message.max })
     );

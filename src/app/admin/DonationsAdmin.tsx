@@ -54,6 +54,10 @@ export function DonationsAdmin() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Campaigns State & Editor
+  const session = getCurrentAdminSession();
+  const canEdit = hasPermission(session, "donations", "edit");
+  const canDelete = hasPermission(session, "donations", "delete");
+
   const [campaigns, setCampaigns] = useState<Campaign[]>(CAMPAIGNS);
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [editingCampaigns, setEditingCampaigns] = useState<Campaign[]>([]);
@@ -172,6 +176,7 @@ export function DonationsAdmin() {
   };
 
   const handleSaveAllCampaigns = async () => {
+    if (!canEdit) return toast.error("Permission denied to edit campaigns.");
     for (const c of editingCampaigns) {
       if (!c.name.trim()) return toast.error("Every campaign must have a title.");
       if (!c.goal || c.goal <= 0) return toast.error("Goal must be greater than zero.");
@@ -197,6 +202,7 @@ export function DonationsAdmin() {
 
   const handleSaveOfflineDonation = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canEdit) return toast.error("Permission denied to record offline donations.");
     const amt = Number(offlineForm.amount);
     if (!amt || amt <= 0) {
       return toast.error("Please enter a valid donation amount (greater than ₹0).");
@@ -245,10 +251,6 @@ export function DonationsAdmin() {
       setSavingOffline(false);
     }
   };
-
-  const session = getCurrentAdminSession();
-  const canEdit = hasPermission(session, "donations", "edit");
-  const canDelete = hasPermission(session, "donations", "delete");
 
   const reload = useCallback(async (isSilent = true) => {
     if (!isSilent) setLoading(true);

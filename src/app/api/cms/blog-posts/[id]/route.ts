@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
+import { AdminModule } from "@/lib/permissions";
 import { ensureMediaUrl, ensureMediaUrlsArray, ensureHtmlMediaUrls } from "@/lib/mediaServer";
 import { readCategoriesFile } from "@/lib/categories";
 
@@ -34,13 +35,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-
   try {
     const { id } = await params;
     const b = await req.json();
-    const section = b.section;
+
+    const checkRes = await queryDb("SELECT section FROM blog_posts WHERE id::text = $1", [id]);
+    const section = b.section || checkRes.rows[0]?.section || "story";
+    const mod: AdminModule = section === "story" ? "stories" : section === "impact" ? "impactStories" : "eventsBlog";
+
+    const auth = await verifyAdminPermission(req, mod, "edit");
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
     const title = b.title;
     const excerpt = b.excerpt;
     const content = b.content !== undefined ? await ensureHtmlMediaUrls(b.content, "story-content") : undefined;
@@ -163,11 +169,17 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-
   try {
     const { id } = await params;
+    const checkRes = await queryDb("SELECT section FROM blog_posts WHERE id::text = $1", [id]);
+    const section = checkRes.rows[0]?.section || "story";
+    const mod: AdminModule = section === "story" ? "stories" : section === "impact" ? "impactStories" : "eventsBlog";
+
+    const auth = await verifyAdminPermission(req, mod, "delete");
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
     const numId = Number(id);
     const res = !isNaN(numId)
       ? await queryDb("DELETE FROM blog_posts WHERE id = $1 RETURNING id", [numId])

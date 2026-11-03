@@ -29,19 +29,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Phone is required for online donations; optional for offline/cash records
-    const phoneError = isOffline
-      ? body.phone
-        ? validatePhone(body.phone)
-        : null
-      : validatePhone(body.phone);
+    const isAnonymous = Boolean(body.anonymous);
 
     const invalid = firstError(
       validateAmount(body.amount),
-      phoneError,
-      body.name ? validateName(body.name) : null,
-      body.email ? validateEmail(body.email) : null,
-      body.pan_number ? validatePanNumber(body.pan_number, false) : null,
-      body.address ? validateAddress(body.address, false) : null
+      validatePhone(body.phone, "phone number", { required: !isOffline }),
+      validateName(body.name, "donor name", { required: !isAnonymous && !isOffline }),
+      validateEmail(body.email, "donor email", { required: !isAnonymous && !isOffline }),
+      validatePanNumber(body.pan_number, false),
+      validateAddress(body.address, false)
     );
     if (invalid) {
       return NextResponse.json({ error: invalid }, { status: 400 });

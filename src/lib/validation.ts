@@ -29,9 +29,14 @@ export function normalizeEmail(email: string): string {
   return String(email ?? "").trim().toLowerCase();
 }
 
-export function validateEmail(email: unknown, label = "email address"): string | null {
+export function validateEmail(
+  email: unknown,
+  label = "email address",
+  opts: { required?: boolean } = {}
+): string | null {
+  const { required = true } = opts;
   const value = String(email ?? "").trim();
-  if (!value) return `Please enter your ${label}.`;
+  if (!value) return required ? `Please enter your ${label}.` : null;
   if (value.length > LIMITS.email.max) return `That ${label} is too long.`;
   // A local part cannot start or end with a dot, and cannot contain "..".
   const [local] = value.split("@");
@@ -48,10 +53,20 @@ export function validateEmail(email: unknown, label = "email address"): string |
  * must start 6–9; numbers carrying a country code are only length-checked, so
  * overseas supporters are not rejected.
  */
-export function validatePhone(phone: unknown, label = "phone number"): string | null {
+export function validatePhone(
+  phone: unknown,
+  label = "phone number",
+  opts: { required?: boolean } = {}
+): string | null {
+  const { required = true } = opts;
   const raw = String(phone ?? "").trim();
-  if (!raw) return `Please enter your ${label}.`;
-  if (/[A-Za-z]/.test(raw)) return `Please enter a valid ${label} (digits only, e.g. +91 98765 43210).`;
+  if (!raw) return required ? `Please enter your ${label}.` : null;
+
+  // Reject invalid characters like letters, symbols (@, $, %, #, etc.).
+  // Allowed characters are digits, plus (+), spaces, hyphens (-), parentheses (), and dots (.).
+  if (/[A-Za-z]/.test(raw) || !/^[0-9+\s\-().]+$/.test(raw)) {
+    return `Please enter a valid ${label} (digits only, e.g. +91 98765 43210).`;
+  }
 
   const digits = raw.replace(/\D/g, "");
   if (digits.length < 10 || digits.length > 15) {
@@ -75,7 +90,7 @@ export function validatePassword(password: unknown, label = "Password"): string 
   const value = String(password ?? "");
   if (!value) return `${label} is required.`;
   if (value.length < LIMITS.password.min) return `${label} must be at least ${LIMITS.password.min} characters.`;
-  if (value.length > LIMITS.password.max) return `${label} must be under ${LIMITS.password.max} characters.`;
+  if (value.length > LIMITS.password.max) return `${label} cannot exceed ${LIMITS.password.max} characters.`;
   if (!/[A-Za-z]/.test(value)) return `${label} must include at least one letter.`;
   if (!/\d/.test(value)) return `${label} must include at least one number.`;
   if (/^\s|\s$/.test(value)) return `${label} cannot start or end with a space.`;
@@ -87,9 +102,14 @@ export function validatePasswordConfirmation(password: unknown, confirmation: un
   return null;
 }
 
-export function validateName(name: unknown, label = "full name"): string | null {
+export function validateName(
+  name: unknown,
+  label = "full name",
+  opts: { required?: boolean } = {}
+): string | null {
+  const { required = true } = opts;
   const value = String(name ?? "").trim();
-  if (!value) return `Please enter your ${label}.`;
+  if (!value) return required ? `Please enter your ${label}.` : null;
   if (value.length < LIMITS.name.min) return `Please enter your complete ${label}.`;
   if (value.length > LIMITS.name.max) return `That ${label} is too long.`;
   // Letters in any script, plus combining marks — Devanagari and Telugu vowel
@@ -109,12 +129,16 @@ export function validateText(
   const { min = 0, max = Infinity, required = true } = opts;
   const text = String(value ?? "").trim();
   if (!text) return required ? `Please enter ${label}.` : null;
-  if (text.length < min) return `${label[0].toUpperCase()}${label.slice(1)} must be at least ${min} characters.`;
-  if (text.length > max) return `${label[0].toUpperCase()}${label.slice(1)} must be under ${max} characters.`;
+  const capitalized = label ? label[0].toUpperCase() + label.slice(1) : "Field";
+  if (text.length < min) return `${capitalized} must be at least ${min} characters.`;
+  if (text.length > max) return `${capitalized} must be under ${max} characters.`;
   return null;
 }
 
 export function validateAmount(amount: unknown, label = "donation amount"): string | null {
+  if (amount === "" || amount === null || amount === undefined || (typeof amount === "string" && !amount.trim())) {
+    return `Please enter a ${label}.`;
+  }
   const value = Number(amount);
   if (!Number.isFinite(value)) return `Please enter a valid ${label}.`;
   if (!Number.isInteger(value)) return `Please enter a whole ${label}, without paise.`;
@@ -124,6 +148,9 @@ export function validateAmount(amount: unknown, label = "donation amount"): stri
 }
 
 export function validateSeats(seats: unknown, label = "number of seats"): string | null {
+  if (seats === "" || seats === null || seats === undefined || (typeof seats === "string" && !seats.trim())) {
+    return `Please enter the ${label}.`;
+  }
   const value = Number(seats);
   if (!Number.isInteger(value)) return `Please enter a valid ${label}.`;
   if (value < LIMITS.seats.min) return `Please reserve at least ${LIMITS.seats.min} seat.`;

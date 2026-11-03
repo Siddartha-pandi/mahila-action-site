@@ -20,13 +20,15 @@ export async function ensureMediaUrl(
   }
 
   // Parse data URL format: data:<mimeType>;base64,<data>
-  const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const match = imageUrl.match(/^data:([^;,]+)(?:;[^,]*)?;base64,([\s\S]+)$/);
   if (!match) {
     return imageUrl;
   }
 
-  const mimeType = match[1].toLowerCase();
-  const buffer = Buffer.from(match[2], "base64");
+  let mimeType = match[1].toLowerCase().trim();
+  if (mimeType === "image/jpg") mimeType = "image/jpeg";
+  const cleanBase64 = match[2].trim().replace(/\s/g, "");
+  const buffer = Buffer.from(cleanBase64, "base64");
   if (!buffer || buffer.length === 0) {
     return imageUrl;
   }

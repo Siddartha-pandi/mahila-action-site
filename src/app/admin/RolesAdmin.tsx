@@ -32,6 +32,7 @@ import {
 
 import { api } from "../../lib/api";
 import { toast } from "sonner";
+import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 
@@ -98,19 +99,32 @@ export function RolesAdmin({
 
   async function handleSaveUser(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingUser?.email || !editingUser?.name) {
-      return toast.error("Please fill in both name and email.");
+    if (!canEditRoles) {
+      return toast.error("Permission denied: You lack EDIT rights for users.");
+    }
+    if (editingUser?.role === "superadmin" && !isSuperAdmin) {
+      return toast.error("Only Super Admin can assign the Super Admin role.");
+    }
+    const hasPassword = Boolean(editingUser?.password && String(editingUser.password).trim());
+    const invalid = firstError(
+      validateName(editingUser?.name),
+      validateEmail(editingUser?.email),
+      validatePhone(editingUser?.phone, "phone number", { required: false }),
+      !editingUser?.id && hasPassword ? validatePassword(editingUser.password) : null
+    );
+    if (invalid) {
+      return toast.error(invalid);
     }
 
     try {
       const payload: any = {
-        name: editingUser.name,
-        email: editingUser.email,
-        phone: editingUser.phone,
+        name: editingUser.name.trim(),
+        email: editingUser.email.trim().toLowerCase(),
+        phone: editingUser.phone?.trim() || null,
         role: editingUser.role || "user",
         kind: editingUser.kind || null,
         status: editingUser.status || "Active",
-        skills: editingUser.skills,
+        skills: editingUser.skills || null,
         permissions: editingUser.permissions ?? null,
       };
 
@@ -121,7 +135,9 @@ export function RolesAdmin({
         toast.success(`Updated user ${editingUser.name}`);
       } else {
         // Create new user account
-        payload.password = editingUser.password || "123456";
+        if (hasPassword) {
+          payload.password = editingUser.password.trim();
+        }
         const res = await api.post("/api/members", payload);
         if (!res.ok) throw new Error(res.error || "Failed to create user account.");
         toast.success(`Created user account for ${editingUser.name}`);
@@ -425,7 +441,7 @@ export function RolesAdmin({
                   submissions: { view: true, edit: false, delete: false },
                   donations: { view: true, edit: false, delete: false },
                   events: { view: true, edit: false, delete: false },
-                  contentTypeBuilder: { view: true, edit: false, delete: false },
+                  contentTypeBuilder: { view: false, edit: false, delete: false },
                   stories: { view: true, edit: false, delete: false },
                   impactStories: { view: true, edit: false, delete: false },
                   categories: { view: true, edit: false, delete: false },
@@ -434,6 +450,7 @@ export function RolesAdmin({
                   timeline: { view: true, edit: false, delete: false },
                   contact: { view: true, edit: false, delete: false },
                   roles: { view: false, edit: false, delete: false },
+                  trash: { view: false, edit: false, delete: false },
                 },
               });
               setShowRoleModal(true);
@@ -575,8 +592,9 @@ export function RolesAdmin({
                             <input
                               type="checkbox"
                               checked={isSelected}
+                              disabled={u.role === "superadmin" || u.email === currentSession.email || !canDeleteRoles}
                               onChange={() => toggleSelectUser(u.id)}
-                              className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                              className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle disabled:opacity-30 disabled:cursor-not-allowed"
                             />
                           </td>
                           <td className="px-5 py-4">
@@ -628,7 +646,7 @@ export function RolesAdmin({
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {u.role !== "superadmin" && (
+                            {u.role !== "superadmin" && canEditRoles && (
                               <button
                                 onClick={() => {
                                   const basePerms = u.permissions || getRoleById(u.role).permissions;
@@ -647,8 +665,9 @@ export function RolesAdmin({
                                 setEditingUser(u);
                                 setShowUserModal(true);
                               }}
-                              className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer"
-                              title="Edit user account details"
+                              disabled={!canEditRoles || (u.role === "superadmin" && !isSuperAdmin)}
+                              className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={u.role === "superadmin" && !isSuperAdmin ? "Only Super Admin can edit this account" : "Edit user account details"}
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
@@ -838,7 +857,7 @@ export function RolesAdmin({
                   <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Password</label>
                   <input
                     type="password"
-                    placeholder="Defaults to 123456"
+                    placeholder="Defaults to Mahila@2026"
                     value={editingUser?.password || ""}
                     onChange={e => setEditingUser((prev: any) => ({ ...prev, password: e.target.value }))}
                     className={inputBase}
@@ -860,9 +879,13 @@ export function RolesAdmin({
                       onChange={e => setEditingUser((prev: any) => ({ ...prev, role: e.target.value }))}
                       className={inputBase}
                     >
-                      <option value="admin">Admin (Full Access)</option>
-                      <option value="staff">Staff (View Only Admin Access)</option>
-                      <option value="user">User (No Admin Access)</option>
+                      {roles
+                        .filter((r) => isSuperAdmin || r.id !== "superadmin")
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
                     </select>
                   </div>
 

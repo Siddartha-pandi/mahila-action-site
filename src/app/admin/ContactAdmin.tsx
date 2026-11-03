@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { Mail, Send, CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { inputBase, labelBase } from "../adminWidgets";
 import { ContactInfo, saveContactInfo } from "../../lib/data";
+import { firstError, validateEmail, validatePhone } from "@/lib/validation";
+import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 
 export function ContactAdmin({ contact, onChange }: { contact: ContactInfo; onChange: (next: ContactInfo) => void }) {
   const [testingConnection, setTestingConnection] = useState(false);
@@ -17,11 +19,22 @@ export function ContactAdmin({ contact, onChange }: { contact: ContactInfo; onCh
   }>({ checked: false });
   const [testRecipient, setTestRecipient] = useState("");
 
+  const session = getCurrentAdminSession();
+  const canEdit = hasPermission(session, "contact", "edit");
+
   function update(patch: Partial<ContactInfo>) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for contact info.");
     onChange({ ...contact, ...patch });
   }
 
   async function handleSave() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for contact info.");
+    const invalid = firstError(
+      contact.email?.trim() ? validateEmail(contact.email) : null,
+      contact.phone?.trim() ? validatePhone(contact.phone, "phone number", { required: false }) : null
+    );
+    if (invalid) return toast.error(invalid);
+
     const ok = await saveContactInfo(contact);
     if (ok) toast.success("Contact info saved and published!");
     else toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
@@ -56,6 +69,11 @@ export function ContactAdmin({ contact, onChange }: { contact: ContactInfo; onCh
   }
 
   async function sendTest() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required.");
+    if (testRecipient.trim()) {
+      const invalid = validateEmail(testRecipient, "test recipient email");
+      if (invalid) return toast.error(invalid);
+    }
     setSendingTest(true);
     try {
       const res = await fetch("/api/admin/email-status", {
@@ -137,7 +155,8 @@ export function ContactAdmin({ contact, onChange }: { contact: ContactInfo; onCh
       <div>
         <button
           onClick={handleSave}
-          className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+          disabled={!canEdit}
+          className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Save Contact Info
         </button>
@@ -187,8 +206,8 @@ export function ContactAdmin({ contact, onChange }: { contact: ContactInfo; onCh
             <button
               type="button"
               onClick={sendTest}
-              disabled={sendingTest}
-              className="flex items-center gap-2 bg-[#993925] text-white text-[13px] font-semibold px-5 py-2.5 rounded-lg hover:bg-[#802f1e] transition-colors cursor-pointer disabled:opacity-50 shrink-0 w-full sm:w-auto justify-center"
+              disabled={sendingTest || !canEdit}
+              className="flex items-center gap-2 bg-[#993925] text-white text-[13px] font-semibold px-5 py-2.5 rounded-lg hover:bg-[#802f1e] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0 w-full sm:w-auto justify-center"
             >
               {sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Send Test Email

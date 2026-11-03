@@ -9,6 +9,7 @@ import {
   saveTimelineOrder,
   deleteTimelineEntry,
 } from "../../lib/data";
+import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 
 export function TimelineAdmin({
   timeline,
@@ -21,6 +22,10 @@ export function TimelineAdmin({
   const [activeId, setActiveId] = useState<string | null>(sorted[0]?.id ? String(sorted[0].id) : null);
   const active = timeline.find((t) => String(t.id) === String(activeId)) ?? sorted[0] ?? null;
 
+  const session = getCurrentAdminSession();
+  const canEdit = hasPermission(session, "timeline", "edit");
+  const canDelete = hasPermission(session, "timeline", "delete");
+
   useEffect(() => {
     if (!activeId && sorted.length > 0) {
       setActiveId(String(sorted[0].id));
@@ -28,15 +33,17 @@ export function TimelineAdmin({
   }, [sorted, activeId]);
 
   const activeIndex = active ? sorted.findIndex((t) => String(t.id) === String(active.id)) : -1;
-  const canMoveEarlier = activeIndex > 0;
-  const canMoveLater = activeIndex >= 0 && activeIndex < sorted.length - 1;
+  const canMoveEarlier = canEdit && activeIndex > 0;
+  const canMoveLater = canEdit && activeIndex >= 0 && activeIndex < sorted.length - 1;
 
   function update(patch: Partial<TimelineEntry>) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
     onChange(timeline.map((t) => (String(t.id) === String(active.id) ? { ...t, ...patch } : t)));
   }
 
   function handleAdd() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to add a milestone.");
     const t = newTimelineEntry(sorted.length);
     const next = [...timeline, t];
     onChange(next);
@@ -44,6 +51,7 @@ export function TimelineAdmin({
   }
 
   async function handleDelete(id: string) {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required for timeline.");
     await deleteTimelineEntry(id);
     const next = timeline.filter((t) => String(t.id) !== String(id));
     const reindexed = next
@@ -56,12 +64,17 @@ export function TimelineAdmin({
   }
 
   async function handleSave() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
+    if (!active.year?.trim() || !active.title?.trim()) {
+      return toast.error("Please enter both a year and milestone title.");
+    }
     await saveTimelineEntry(active);
     toast.success("Timeline entry saved!");
   }
 
   async function move(dir: -1 | 1) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
     const currentList = [...sorted];
     const idx = currentList.findIndex((t) => String(t.id) === String(active.id));
@@ -93,8 +106,8 @@ export function TimelineAdmin({
       items={sorted}
       activeId={activeId}
       onSelect={setActiveId}
-      onAdd={handleAdd}
-      onDelete={handleDelete}
+      onAdd={canEdit ? handleAdd : undefined}
+      onDelete={canDelete ? handleDelete : undefined}
       itemLabel={(t) => `${t.year} — ${t.title}`}
       addLabel="Add New Milestone"
       emptyLabel="No timeline entries yet."
@@ -151,7 +164,11 @@ export function TimelineAdmin({
             <label className={labelBase}>Description</label>
             <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={4} className={`${inputBase} resize-y`} />
           </div>
-          <button onClick={handleSave} className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2">
+          <button
+            onClick={handleSave}
+            disabled={!canEdit}
+            className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             Save Milestone
           </button>
         </div>

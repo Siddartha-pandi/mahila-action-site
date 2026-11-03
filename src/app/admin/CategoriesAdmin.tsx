@@ -12,6 +12,7 @@ import {
   deleteCategoryPosts,
   findCategory,
 } from "../../lib/data";
+import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 
 export function CategoriesAdmin({
   categories,
@@ -29,11 +30,16 @@ export function CategoriesAdmin({
   const [reassignTo, setReassignTo] = useState<string>("");
   const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
 
+  const session = getCurrentAdminSession();
+  const canEdit = hasPermission(session, "categories", "edit");
+  const canDelete = hasPermission(session, "categories", "delete");
+
   function draftFor(c: Category) {
     return nameDraft[c.id] ?? c.name;
   }
 
   async function handleAdd() {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for categories.");
     const cat = newCategory(categories);
     const saved = await saveCategory(cat);
     const finalCat = saved || cat;
@@ -42,6 +48,7 @@ export function CategoriesAdmin({
   }
 
   async function handleRename(c: Category) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required for categories.");
     const name = (nameDraft[c.id] ?? c.name).trim();
     if (!name) return toast.error("Category name can't be empty");
     const updated = { ...c, name };
@@ -51,6 +58,7 @@ export function CategoriesAdmin({
   }
 
   function openRemove(c: Category) {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required for categories.");
     setRemoving(c);
     setReassignTo("");
     setSelectedPostIds(postsIn(c.id).map((p) => p.id));
@@ -64,6 +72,7 @@ export function CategoriesAdmin({
   }
 
   async function confirmRemoveMoveAll() {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required for categories.");
     if (!removing) return;
     if (!reassignTo) return toast.error("Choose a category to move the blogs to");
     const next = await reassignCategoryPosts(posts, removing.id, reassignTo);
@@ -76,6 +85,7 @@ export function CategoriesAdmin({
   }
 
   async function confirmRemoveDeleteAll() {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required for categories.");
     if (!removing) return;
     const next = await deleteCategoryPosts(posts, removing.id);
     onPostsChange(next);
@@ -88,12 +98,14 @@ export function CategoriesAdmin({
 
   return (
     <div className="w-full font-['Inter',sans-serif]">
-      <button
-        onClick={handleAdd}
-        className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-lg hover:bg-[#993925] transition-colors cursor-pointer mb-5"
-      >
-        + Add New Category
-      </button>
+      {canEdit && (
+        <button
+          onClick={handleAdd}
+          className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-lg hover:bg-[#993925] transition-colors cursor-pointer mb-5"
+        >
+          + Add New Category
+        </button>
+      )}
 
       <div className="flex flex-col gap-3">
         {categories.map((c, idx) => {
@@ -115,13 +127,15 @@ export function CategoriesAdmin({
               <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => handleRename(c)}
-                  className="text-[13px] font-['Inter',sans-serif] font-medium text-[#a65a4a] border border-[#a65a4a]/30 px-4 py-2 rounded-lg hover:bg-[#a65a4a]/5 cursor-pointer"
+                  disabled={!canEdit}
+                  className="text-[13px] font-['Inter',sans-serif] font-medium text-[#a65a4a] border border-[#a65a4a]/30 px-4 py-2 rounded-lg hover:bg-[#a65a4a]/5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => openRemove(c)}
-                  className="text-[13px] font-['Inter',sans-serif] font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 cursor-pointer"
+                  disabled={!canDelete}
+                  className="text-[13px] font-['Inter',sans-serif] font-medium text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Remove
                 </button>

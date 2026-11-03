@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import { readCategoriesFile, writeCategoriesFile, getNextCategoryId, CategoryItem } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +20,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "categories", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const b = await req.json();

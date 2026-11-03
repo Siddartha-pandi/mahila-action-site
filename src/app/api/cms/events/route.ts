@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export const dynamic = "force-dynamic";
@@ -61,8 +61,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "events", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const b = await req.json();
@@ -79,7 +81,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const title = b.title !== undefined ? (b.title || "New Event") : (existingRow?.title || "New Event");
+    const title = String(b.title !== undefined ? b.title : (existingRow?.title || "")).trim();
+    if (!title) {
+      return NextResponse.json({ error: "Event title is required." }, { status: 400 });
+    }
     const eventDate = b.eventDate || b.event_date || existingRow?.event_date || new Date().toISOString().slice(0, 10);
     const description = b.description !== undefined ? (b.description || null) : (existingRow?.description || null);
     const rawImage = b.image !== undefined ? (b.image || null) : (existingRow?.image || null);

@@ -29,8 +29,8 @@ export function RecycleBinAdmin() {
   const [filterType, setFilterType] = useState<string>("all");
 
   const session = getCurrentAdminSession();
-  const canDelete = hasPermission(session, "trash" as any, "delete") ?? true;
-  const canEdit = hasPermission(session, "trash" as any, "edit") ?? true;
+  const canDelete = hasPermission(session, "trash", "delete");
+  const canEdit = hasPermission(session, "trash", "edit");
 
   function reload() {
     setItems(getTrashItems());
@@ -62,6 +62,7 @@ export function RecycleBinAdmin() {
   }, []);
 
   function handleRestore(item: TrashItem) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to restore items.");
     const ok = restoreTrashItem(item);
     if (ok) {
       toast.success(`Restored "${item.title}" successfully!`);
@@ -72,6 +73,7 @@ export function RecycleBinAdmin() {
   }
 
   function handlePermanentDelete(item: TrashItem) {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required to permanently delete items.");
     if (!confirm(`Are you sure you want to permanently delete "${item.title}"? This cannot be undone.`)) {
       return;
     }
@@ -81,6 +83,7 @@ export function RecycleBinAdmin() {
   }
 
   function handleEmptyTrash() {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required to empty recycle bin.");
     if (!items.length) {
       return toast.error("Recycle Bin is already empty.");
     }
@@ -152,6 +155,7 @@ export function RecycleBinAdmin() {
   };
 
   const handleBatchRestore = () => {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to restore items.");
     const targets = items.filter((item) => selectedTrashKeys.has(`${item.type}_${item.id}`));
     if (!targets.length) return;
     let count = 0;
@@ -164,6 +168,7 @@ export function RecycleBinAdmin() {
   };
 
   const handleBatchPermanentDelete = () => {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required to permanently delete items.");
     const targets = items.filter((item) => selectedTrashKeys.has(`${item.type}_${item.id}`));
     if (!targets.length) return;
     if (!confirm(`Are you sure you want to permanently erase ${targets.length} item(s)? This cannot be undone.`)) {
@@ -227,7 +232,7 @@ export function RecycleBinAdmin() {
           </button>
           <button
             onClick={handleEmptyTrash}
-            disabled={!items.length}
+            disabled={!items.length || !canDelete}
             className="inline-flex items-center gap-2 bg-rose-600 text-white font-medium text-[13px] px-4 py-2.5 rounded-xl hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Trash2 size={15} /> Empty Recycle Bin
@@ -320,13 +325,15 @@ export function RecycleBinAdmin() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleBatchRestore}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer border border-emerald-300"
+                disabled={!canEdit}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer border border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <RotateCcw size={13} /> Restore Selected
               </button>
               <button
                 onClick={handleBatchPermanentDelete}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300"
+                disabled={!canDelete}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Trash2 size={13} /> Permanently Erase Selected
               </button>
@@ -423,14 +430,16 @@ export function RecycleBinAdmin() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleRestore(item)}
-                          className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          disabled={!canEdit}
+                          className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Restore back to live site"
                         >
                           <RotateCcw size={14} /> Restore
                         </button>
                         <button
                           onClick={() => handlePermanentDelete(item)}
-                          className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          disabled={!canDelete}
+                          className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Permanently erase"
                         >
                           <Trash2 size={14} /> Erase

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import { CAMPAIGNS, Campaign } from "@/app/constants/campaigns";
 import fs from "fs/promises";
 import path from "path";
@@ -75,9 +75,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) {
-    return NextResponse.json({ error: "Not authenticated as administrator" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "donations", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   try {

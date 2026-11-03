@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import { verifySmtpConnection, sendTestEmail, getAdminNotificationEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "contact", "view");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const status = await verifySmtpConnection();
@@ -22,12 +24,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "contact", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
-    const targetEmail = body.to || admin.email || getAdminNotificationEmail();
+    const targetEmail = body.to || auth.admin.email || getAdminNotificationEmail();
 
     if (!targetEmail) {
       return NextResponse.json({ error: "Target email address required." }, { status: 400 });

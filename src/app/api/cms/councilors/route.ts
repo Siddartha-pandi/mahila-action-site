@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 
@@ -52,11 +52,17 @@ export async function GET() {
 import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "councilors", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const b = await req.json();
+    const name = String(b.name || "").trim();
+    if (!name) {
+      return NextResponse.json({ error: "Councilor name is required." }, { status: 400 });
+    }
     const orderIndex = Number(b.order ?? b.order_index ?? 0);
     const list = await readCouncilors();
 

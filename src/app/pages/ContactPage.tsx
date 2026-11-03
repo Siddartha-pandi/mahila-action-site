@@ -45,7 +45,7 @@ export function ContactPage() {
     const invalid = firstError(
       validateName(form.name),
       validateEmail(form.email),
-      form.phone.trim() ? validatePhone(form.phone) : null,
+      validatePhone(form.phone, "phone number", { required: false }),
       validateText(form.subject, "a subject", { max: LIMITS.subject.max, required: false }),
       validateText(form.message, "your message", { min: LIMITS.message.min, max: LIMITS.message.max })
     );

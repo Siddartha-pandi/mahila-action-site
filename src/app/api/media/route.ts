@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,17 +21,19 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
  * Parses a data URL (e.g. data:image/png;base64,iVBOR...) into a Buffer and MIME type.
  */
 function parseDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } | null {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const match = dataUrl.match(/^data:([^;,]+)(?:;[^,]*)?;base64,([\s\S]+)$/);
   if (!match) return null;
-  const mimeType = match[1].toLowerCase();
-  const buffer = Buffer.from(match[2], "base64");
+  let mimeType = match[1].toLowerCase().trim();
+  if (mimeType === "image/jpg") mimeType = "image/jpeg";
+  const cleanBase64 = match[2].trim().replace(/\s/g, "");
+  const buffer = Buffer.from(cleanBase64, "base64");
   return { buffer, mimeType };
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) {
-    return NextResponse.json({ error: "Not authenticated as admin" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "events", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   try {
@@ -80,16 +82,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Normalize mimeType if image/jpg
+    if (mimeType === "image/jpg") mimeType = "image/jpeg";
+
     // Default mime type fallback if generic application/octet-stream was sent
     if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-      if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) mimeType = "image/jpeg";
-      else if (filename.endsWith(".png")) mimeType = "image/png";
-      else if (filename.endsWith(".webp")) mimeType = "image/webp";
-      else if (filename.endsWith(".gif")) mimeType = "image/gif";
-      else if (filename.endsWith(".svg")) mimeType = "image/svg+xml";
+      const lowerName = filename.toLowerCase();
+      if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) mimeType = "image/jpeg";
+      else if (lowerName.endsWith(".png")) mimeType = "image/png";
+      else if (lowerName.endsWith(".webp")) mimeType = "image/webp";
+      else if (lowerName.endsWith(".gif")) mimeType = "image/gif";
+      else if (lowerName.endsWith(".svg")) mimeType = "image/svg+xml";
+      else if (lowerName.endsWith(".avif")) mimeType = "image/avif";
+      else if (lowerName.endsWith(".bmp")) mimeType = "image/bmp";
       else {
         return NextResponse.json(
-          { error: `Unsupported image MIME type: ${mimeType}. Allowed formats: JPEG, PNG, WebP, GIF, SVG, AVIF.` },
+          { error: `Unsupported image MIME type: ${mimeType}. Allowed formats: JPEG, PNG, WebP, GIF, SVG, AVIF, BMP.` },
           { status: 400 }
         );
       }
@@ -128,8 +136,10 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const limit = Math.min(Number(url.searchParams.get("limit") || 50), 100);
-    const offset = Math.max(Number(url.searchParams.get("offset") || 0), 0);
+    const rawLimit = Number(url.searchParams.get("limit"));
+    const limit = !isNaN(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
+    const rawOffset = Number(url.searchParams.get("offset"));
+    const offset = !isNaN(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
     const res = await queryDb(
       `SELECT id, filename, mime_type, byte_size, created_at

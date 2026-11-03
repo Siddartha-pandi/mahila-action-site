@@ -287,9 +287,16 @@ export function AdminPage({
     return hasPermission(currentAdminUser, t.id as AdminModule, "view");
   });
 
-  const hasViewAccess = hasPermission(currentAdminUser, activeSection as AdminModule, "view");
-  const customTab = CUSTOM_TABS.find(t => t.id === activeSection);
+  const customTab = CUSTOM_TABS.find((t) => t.id === activeSection);
+  const isSuperOnly = Boolean((customTab as any)?.isSuperAdminOnly && currentAdminUser.roleId !== "superadmin");
+  const hasViewAccess = !isSuperOnly && hasPermission(currentAdminUser, activeSection as AdminModule, "view");
   const currentRole = getRoleById(currentAdminUser.roleId);
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeSection)) {
+      setActiveSection(visibleTabs[0].id);
+    }
+  }, [visibleTabs, activeSection]);
 
   function updateSiteData(patch: Partial<SiteData>) {
     onSiteDataChange({ ...siteData, ...patch });

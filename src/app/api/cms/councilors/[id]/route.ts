@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 
@@ -56,8 +56,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "councilors", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;
@@ -102,8 +104,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "councilors", "delete");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;

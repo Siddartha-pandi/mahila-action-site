@@ -4,6 +4,7 @@ import { Globe, EyeOff } from "lucide-react";
 import { AdminListEditor, GalleryField, ImageField, TagsField, inputBase, labelBase } from "../adminWidgets";
 import { BlogContentEditor } from "../BlogContentEditor";
 import { BlogPost, Category, newBlogPost, saveBlogPost, deleteBlogPost, findCategory } from "../../lib/data";
+import { getCurrentAdminSession, hasPermission, AdminModule } from "../../lib/permissions";
 
 export function BlogPostsAdmin({
   section,
@@ -22,6 +23,11 @@ export function BlogPostsAdmin({
   const usesCategories = section === "story" || section === "impact";
   const sectionNoun = section === "story" ? "Story" : section === "impact" ? "Impact page" : "Event blog";
 
+  const moduleKey: AdminModule = section === "story" ? "stories" : section === "impact" ? "impactStories" : "eventsBlog";
+  const session = getCurrentAdminSession();
+  const canEdit = hasPermission(session, moduleKey, "edit");
+  const canDelete = hasPermission(session, moduleKey, "delete");
+
   useEffect(() => {
     if (!activeId && filtered.length > 0) {
       setActiveId(String(filtered[0].id));
@@ -29,18 +35,21 @@ export function BlogPostsAdmin({
   }, [filtered, activeId]);
 
   function update(patch: Partial<BlogPost>) {
+    if (!canEdit) return toast.error(`Permission denied: EDIT rights required for ${sectionNoun}.`);
     if (!active) return;
     const updated = { ...active, ...patch };
     onChange(posts.map((p) => (String(p.id) === String(active.id) ? updated : p)));
   }
 
   function handleAdd() {
+    if (!canEdit) return toast.error(`Permission denied: EDIT rights required to create a new ${sectionNoun.toLowerCase()}.`);
     const post = newBlogPost(section, usesCategories ? categories[0]?.id ?? null : null);
     onChange([...posts, post]);
     setActiveId(post.id);
   }
 
   async function handleDelete(id: string) {
+    if (!canDelete) return toast.error(`Permission denied: DELETE rights required for ${sectionNoun}.`);
     await deleteBlogPost(id);
     const next = posts.filter((p) => String(p.id) !== String(id));
     onChange(next);
@@ -49,6 +58,7 @@ export function BlogPostsAdmin({
   }
 
   async function handleTogglePublish(targetPost?: BlogPost) {
+    if (!canEdit) return toast.error(`Permission denied: EDIT rights required to change publish status.`);
     const post = targetPost || active;
     if (!post) return;
     const nextPublished = post.published === false;
@@ -63,7 +73,11 @@ export function BlogPostsAdmin({
   }
 
   async function handleSave(forcePublished?: boolean) {
+    if (!canEdit) return toast.error(`Permission denied: EDIT rights required to save ${sectionNoun.toLowerCase()}.`);
     if (!active) return;
+    if (!active.title?.trim()) {
+      return toast.error(`Please enter a title for the ${sectionNoun.toLowerCase()}.`);
+    }
     const postToSave = forcePublished !== undefined ? { ...active, published: forcePublished } : active;
     if (forcePublished !== undefined) {
       update({ published: forcePublished });
@@ -82,8 +96,8 @@ export function BlogPostsAdmin({
       items={filtered}
       activeId={activeId}
       onSelect={setActiveId}
-      onAdd={handleAdd}
-      onDelete={handleDelete}
+      onAdd={canEdit ? handleAdd : undefined}
+      onDelete={canDelete ? handleDelete : undefined}
       itemLabel={(p) => p.title}
       itemSubLabel={(p) => {
         let catName = usesCategories ? findCategory(categories, p.categoryId)?.name : null;
@@ -229,7 +243,8 @@ export function BlogPostsAdmin({
             <button
               type="button"
               onClick={() => handleSave()}
-              className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+              disabled={!canEdit}
+              className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {active.published !== false ? "Save Changes" : "Save as Draft"}
             </button>
@@ -238,7 +253,8 @@ export function BlogPostsAdmin({
               <button
                 type="button"
                 onClick={() => handleSave(true)}
-                className="inline-flex items-center gap-2 bg-emerald-600 text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm"
+                disabled={!canEdit}
+                className="inline-flex items-center gap-2 bg-emerald-600 text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Globe size={15} />
                 <span>Publish & Save</span>
@@ -247,7 +263,8 @@ export function BlogPostsAdmin({
               <button
                 type="button"
                 onClick={() => handleSave(false)}
-                className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-300 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer"
+                disabled={!canEdit}
+                className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-300 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <EyeOff size={14} className="text-amber-700" />
                 <span>Unpublish (Move to Draft)</span>

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "roles", "view");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const result = await queryDb(
@@ -47,20 +49,32 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "roles", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const body = await req.json();
     const { name, email, phone, role, kind, status, password, skills, permissions } = body || {};
 
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const isSuperadmin =
+      auth.admin?.role === "superadmin" ||
+      auth.admin?.sub === "superadmin_env" ||
+      auth.admin?.email.toLowerCase().trim() === envSuperadminEmail;
+
+    if (role === "superadmin" && !isSuperadmin) {
+      return NextResponse.json({ error: "Only a Super Admin can create Super Admin accounts." }, { status: 403 });
+    }
+
     const invalid = firstError(
       validateName(name),
       validateEmail(email),
-      phone ? validatePhone(phone) : null,
+      validatePhone(phone, "phone number", { required: false }),
       // Admins may leave the password blank to accept the default below; only a
       // supplied one has to meet the strength rules.
-      password ? validatePassword(password) : null
+      password && String(password).trim() ? validatePassword(password) : null
     );
     if (invalid) {
       return NextResponse.json({ error: invalid }, { status: 400 });
@@ -77,7 +91,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "An account with this email address already exists." }, { status: 409 });
     }
 
-    const rawPassword = password ? String(password) : "123456";
+    const rawPassword = password && String(password).trim() ? String(password) : "Mahila@2026";
     const password_hash = bcrypt.hashSync(rawPassword, 10);
     const assignedRole = role || "user";
     const assignedStatus = status || "Active";

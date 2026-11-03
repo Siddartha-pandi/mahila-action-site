@@ -80,8 +80,8 @@ export function DonationFormCard({
     const invalid = firstError(
       validateAmount(finalAmount),
       validatePhone(donorPhone),
-      !anonymous && donorName.trim() ? validateName(donorName) : null,
-      !anonymous && donorEmail.trim() ? validateEmail(donorEmail) : null
+      validateName(donorName, "full name", { required: !anonymous }),
+      validateEmail(donorEmail, "email address", { required: !anonymous })
     );
 
     if (invalid) return toast.error(invalid);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import fs from "fs/promises";
 import path from "path";
 
@@ -52,8 +52,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "timeline", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const b = await req.json();
@@ -68,6 +70,12 @@ export async function POST(req: NextRequest) {
       }));
       await writeTimeline(list);
       return NextResponse.json({ ok: true, count: list.length });
+    }
+
+    const year = String(b.year || "").trim();
+    const title = String(b.title || "").trim();
+    if (!year || !title) {
+      return NextResponse.json({ error: "Both year and title are required for timeline milestones." }, { status: 400 });
     }
 
     const orderIndex = Number(b.order ?? b.order_index ?? 0);

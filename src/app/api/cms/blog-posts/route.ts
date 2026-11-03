@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
+import { AdminModule } from "@/lib/permissions";
 import { ensureMediaUrl, ensureMediaUrlsArray, ensureHtmlMediaUrls } from "@/lib/mediaServer";
 import { readCategoriesFile } from "@/lib/categories";
 
@@ -40,11 +41,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-
   try {
     const b = await req.json();
+    const section = b.section || "story";
+    const mod: AdminModule = section === "story" ? "stories" : section === "impact" ? "impactStories" : "eventsBlog";
+    const auth = await verifyAdminPermission(req, mod, "edit");
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+    const title = String(b.title || "").trim();
+    if (!title) {
+      return NextResponse.json({ error: "Title is required for blog posts." }, { status: 400 });
+    }
     const rawCover = b.coverImage || b.cover_image || null;
     const coverImage = await ensureMediaUrl(rawCover, "story-cover.png");
     const galleryItems = await ensureMediaUrlsArray(b.gallery || [], "story-gallery");

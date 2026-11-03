@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
+import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 const ALLOWED_STATUSES = ["New", "Contacted", "Completed"];
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "submissions", "view");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;
@@ -22,12 +25,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "submissions", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;
     const { status, name, email, phone } = (await req.json()) || {};
+
+    const invalid = firstError(
+      name !== undefined ? validateName(name) : null,
+      email !== undefined ? validateEmail(email) : null,
+      phone !== undefined ? validatePhone(phone, "phone number", { required: false }) : null
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -71,8 +85,10 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "submissions", "delete");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
+import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "roles", "view");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   const { id } = await params;
   if (id === "superadmin_env") {
@@ -36,13 +39,47 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "roles", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;
     const body = await req.json();
     const { role, kind, sub_role, status, name, email, phone, skills, permissions } = body || {};
+
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const isSuperadmin =
+      auth.admin?.role === "superadmin" ||
+      auth.admin?.sub === "superadmin_env" ||
+      auth.admin?.email.toLowerCase().trim() === envSuperadminEmail;
+
+    if (id === "superadmin_env") {
+      return NextResponse.json({ error: "The system Super Admin account cannot be modified." }, { status: 403 });
+    }
+
+    const checkRes = await queryDb("SELECT role, email FROM users WHERE id = $1", [id]);
+    if (checkRes.rows.length === 0) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (checkRes.rows[0]?.role === "superadmin" && !isSuperadmin) {
+      return NextResponse.json({ error: "Only a Super Admin can modify a Super Admin account." }, { status: 403 });
+    }
+
+    if (role === "superadmin" && !isSuperadmin) {
+      return NextResponse.json({ error: "Only a Super Admin can assign the Super Admin role." }, { status: 403 });
+    }
+
+    const invalid = firstError(
+      name !== undefined ? validateName(name) : null,
+      email !== undefined ? validateEmail(email) : null,
+      phone !== undefined ? validatePhone(phone, "phone number", { required: false }) : null
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
 
     const updates: string[] = [];
     const values: any[] = [];
@@ -105,11 +142,16 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "roles", "delete");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const { id } = await params;
+    if (id === "superadmin_env") {
+      return NextResponse.json({ error: "The system Super Admin account cannot be deleted." }, { status: 403 });
+    }
     const checkRes = await queryDb("SELECT role FROM users WHERE id = $1", [id]);
     if (checkRes.rows[0]?.role === "superadmin") {
       return NextResponse.json({ error: "Superadmin account cannot be deleted." }, { status: 403 });

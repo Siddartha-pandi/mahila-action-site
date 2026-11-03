@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const invalid = firstError(
       validateName(name),
       validateEmail(email),
-      phone ? validatePhone(phone) : null,
+      validatePhone(phone, "phone number", { required: false }),
       validateText(message, "your message", { max: LIMITS.message.max, required: false })
     );
     if (invalid) {

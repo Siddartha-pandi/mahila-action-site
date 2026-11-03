@@ -1126,6 +1126,9 @@ export function EventsAdmin({
   async function handleSave() {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to save Events.");
     if (!active) return;
+    if (!active.title?.trim()) {
+      return toast.error("Event title cannot be empty.");
+    }
 
     const todayStr = localTodayStr(); // e.g. "2026-08-05" in local timezone
 
@@ -1542,9 +1545,9 @@ export function EventsAdmin({
           items={events}
           activeId={activeId}
           onSelect={setActiveId}
-          onAdd={handleAdd}
-          onDelete={handleDelete}
-          itemAction={(ev) => (
+          onAdd={canEdit ? handleAdd : undefined}
+          onDelete={canDelete ? handleDelete : undefined}
+          itemAction={canEdit ? (ev) => (
             <button
               type="button"
               onClick={(e) => {
@@ -1561,7 +1564,7 @@ export function EventsAdmin({
               {ev.published !== false ? <Globe size={11} className="text-emerald-600" /> : <EyeOff size={11} className="text-amber-600" />}
               <span>{ev.published !== false ? "Live" : "Draft"}</span>
             </button>
-          )}
+          ) : undefined}
           itemLabel={(e) => e.title}
           itemSubLabel={(e) => `${e.published === false ? "📝 Draft • " : "🌐 Published • "}${isEventOpen(e) ? "Open" : "Closed"}`}
           addLabel="Add New Event"
@@ -1798,7 +1801,8 @@ export function EventsAdmin({
                 <button
                   type="button"
                   onClick={handleSave}
-                  className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+                  disabled={!canEdit}
+                  className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Save Changes
                 </button>
@@ -1809,7 +1813,8 @@ export function EventsAdmin({
                     onClick={async () => {
                       await handleSetPublish(active, true);
                     }}
-                    className="inline-flex items-center gap-2 bg-emerald-600 text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm"
+                    disabled={!canEdit}
+                    className="inline-flex items-center gap-2 bg-emerald-600 text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Globe size={15} />
                     <span>Publish & Save (Make Live)</span>
@@ -1820,7 +1825,8 @@ export function EventsAdmin({
                     onClick={async () => {
                       await handleSetPublish(active, false);
                     }}
-                    className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-300 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer"
+                    disabled={!canEdit}
+                    className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-300 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <EyeOff size={14} className="text-amber-700" />
                     <span>Unpublish (Move to Draft)</span>
