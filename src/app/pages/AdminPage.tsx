@@ -200,7 +200,28 @@ export function AdminPage({
       clearTimeout(timer);
       activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
     };
-  }, [loggedIn]);
+  }, [loggedIn, onExit]);
+
+  const visibleTabs = useMemo(() => {
+    return CUSTOM_TABS.filter((t) => {
+      if ((t as any).isSuperAdminOnly && currentAdminUser?.roleId !== "superadmin") {
+        return false;
+      }
+      return hasPermission(currentAdminUser, t.id as AdminModule, "view");
+    });
+  }, [currentAdminUser]);
+
+  const customTab = CUSTOM_TABS.find((t) => t.id === activeSection);
+  const isSuperOnly = Boolean((customTab as any)?.isSuperAdminOnly && currentAdminUser?.roleId !== "superadmin");
+  const hasViewAccess = !isSuperOnly && hasPermission(currentAdminUser, activeSection as AdminModule, "view");
+  const currentRole = getRoleById(currentAdminUser?.roleId);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeSection)) {
+      setActiveSection(visibleTabs[0].id);
+    }
+  }, [loggedIn, visibleTabs, activeSection]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -215,6 +236,16 @@ export function AdminPage({
     setCurrentAdminUser(userSession);
     setLoggedIn(true);
     setDraft({ ...existing });
+
+    // Open "Form Submissions & Applications" immediately after fresh login
+    setActiveSection("submissions");
+    try {
+      localStorage.setItem("mahila_admin_active_tab", "submissions");
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "submissions");
+      window.history.replaceState({}, "", url.toString());
+    } catch {}
+
     const userRole = getRoleById(userSession.roleId);
     toast.success(`Signed in as ${userRole.name}`);
   }
@@ -222,6 +253,13 @@ export function AdminPage({
   async function handleLogout() {
     await signOutAdmin();
     clearAdminSession();
+    try {
+      localStorage.setItem("mahila_admin_active_tab", "submissions");
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "submissions");
+      window.history.replaceState({}, "", url.toString());
+    } catch {}
+    setActiveSection("submissions");
     setLoggedIn(false);
     toast("Signed out");
     onExit();
@@ -279,24 +317,6 @@ export function AdminPage({
       </main>
     );
   }
-
-  const visibleTabs = CUSTOM_TABS.filter((t) => {
-    if ((t as any).isSuperAdminOnly && currentAdminUser.roleId !== "superadmin") {
-      return false;
-    }
-    return hasPermission(currentAdminUser, t.id as AdminModule, "view");
-  });
-
-  const customTab = CUSTOM_TABS.find((t) => t.id === activeSection);
-  const isSuperOnly = Boolean((customTab as any)?.isSuperAdminOnly && currentAdminUser.roleId !== "superadmin");
-  const hasViewAccess = !isSuperOnly && hasPermission(currentAdminUser, activeSection as AdminModule, "view");
-  const currentRole = getRoleById(currentAdminUser.roleId);
-
-  useEffect(() => {
-    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeSection)) {
-      setActiveSection(visibleTabs[0].id);
-    }
-  }, [visibleTabs, activeSection]);
 
   function updateSiteData(patch: Partial<SiteData>) {
     onSiteDataChange({ ...siteData, ...patch });

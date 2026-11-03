@@ -184,6 +184,9 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     const adminRes = await signInAdmin(identifier, loginPass);
     if (adminRes.ok) {
       setCurrentAdminSession(identifier);
+      try {
+        localStorage.setItem("mahila_admin_active_tab", "submissions");
+      } catch {}
       setAuthBusy(false);
       // An admin sign-in is not the visitor account a protected form wants, so
       // drop any pending destination rather than bouncing them into it.

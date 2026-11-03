@@ -76,6 +76,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
           canonicalEmail = "mahilaaction.vsk@gmail.com";
         }
         setCurrentAdminSession(canonicalEmail);
+        try {
+          localStorage.setItem("mahila_admin_active_tab", "submissions");
+        } catch {}
         setAuthBusy(false);
         toast.success("Signed in to Admin Panel!");
         setPage("admin");
@@ -101,6 +104,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
         canonicalEmail = "mahilaaction.vsk@gmail.com";
       }
       setCurrentAdminSession(canonicalEmail);
+      try {
+        localStorage.setItem("mahila_admin_active_tab", "submissions");
+      } catch {}
       toast.success("Signed in to Admin Panel!");
       setPage("admin");
       return;
