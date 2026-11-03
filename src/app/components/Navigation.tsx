@@ -18,7 +18,7 @@ import { getSavedUserSession, type VolunteerAccountProfile } from "@/lib/backend
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination } from "../hooks/useAuthGuard";
-import { inter, type Page } from "./shared/styleHelpers";
+import { inter, scrollToTop, type Page } from "./shared/styleHelpers";
 
 export function Navigation({
   page,
@@ -75,9 +75,16 @@ export function Navigation({
   ];
 
   function nav(p: Page) {
-    setPage(p);
     setMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (document.body.style.overflow === "hidden") {
+      document.body.style.overflow = "";
+    }
+    if (page === p) {
+      scrollToTop("smooth");
+    } else {
+      setPage(p);
+      scrollToTop("instant");
+    }
   }
 
   return (

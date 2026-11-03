@@ -9,7 +9,7 @@ import { PageBanner } from "../components/PageBanner";
 import { CouncilorCard } from "../components/CouncilorCard";
 import { FilterTabs } from "../components/FilterTabs";
 import { Button } from "../components/ui/Button";
-import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
+import { inter, fraunces, scrollToTop, type Page } from "../components/shared/styleHelpers";
 
 export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
@@ -148,7 +148,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
             className="mt-6 sm:mt-8 w-full sm:w-auto px-8 sm:px-12 py-3.5 sm:py-4"
             onClick={() => {
               setPage("donate");
-              window.scrollTo({ top: 0 });
+              scrollToTop("instant");
             }}
           >
             Donate Now

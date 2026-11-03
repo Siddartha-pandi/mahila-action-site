@@ -15,7 +15,7 @@ import { ContentContext } from "./context/ContentContext";
 import { SiteDataContext } from "./context/SiteDataContext";
 
 // Shared helpers
-import { PAGE_TO_PATH, pathToPage, type Page } from "./components/shared/styleHelpers";
+import { PAGE_TO_PATH, pathToPage, scrollToTop, type Page } from "./components/shared/styleHelpers";
 
 // Components
 import { Navigation } from "./components/Navigation";
@@ -81,8 +81,20 @@ export default function App() {
   }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
-    if (page !== "admin") window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [page]);
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+  }, []);
+
+  useEffect(() => {
+    if (page !== "admin") {
+      scrollToTop("instant");
+      const raf = requestAnimationFrame(() => {
+        scrollToTop("instant");
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [location.pathname, page]);
 
   if (page === "admin") {
     return (
