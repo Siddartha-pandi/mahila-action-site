@@ -25,6 +25,7 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
   const [seats, setSeats] = useState("1");
   const [companions, setCompanions] = useState<{ name: string; phone: string }[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   function handleSeatsChange(v: string) {
     setSeats(v);
@@ -43,6 +44,7 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     const invalid = firstError(
       validateName(name),
       validateEmail(email),
@@ -54,13 +56,18 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
       ])
     );
     if (invalid) return toast.error(invalid);
-    const res = await saveReservation({
-      name, email, phone, seats: Number(seats), event_name: event.title,
-      event_id: event.id,
-      volunteer_commitment: commitment, companions,
-    });
-    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      const res = await saveReservation({
+        name, email, phone, seats: Number(seats), event_name: event.title,
+        event_id: event.id,
+        volunteer_commitment: commitment, companions,
+      });
+      if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
+      setSubmitted(true);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -157,8 +164,8 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
           )}
         </div>
       )}
-      <button type="submit" className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}>
-        Confirm Reservation
+      <button type="submit" disabled={submitting} className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}>
+        {submitting ? "Confirming..." : "Confirm Reservation"}
       </button>
     </form>
   );
@@ -174,9 +181,11 @@ export function VendorReserveForm({ event, onClose }: { event: EventItem; onClos
   const [offering, setOffering] = useState("");
   const [needsSpace, setNeedsSpace] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     const invalid = firstError(
       validateText(businessName, "your business or organization name", { min: 2, max: 150 }),
       validateName(contactName, "contact person's name"),
@@ -185,12 +194,17 @@ export function VendorReserveForm({ event, onClose }: { event: EventItem; onClos
       validateText(offering, "what you'd like to offer", { min: 3, max: 500 })
     );
     if (invalid) return toast.error(invalid);
-    const res = await saveVendor({
-      business_name: businessName, contact_name: contactName, email, phone,
-      offering, needs_space: needsSpace, event_name: event.title,
-    });
-    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your application — please try again.");
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      const res = await saveVendor({
+        business_name: businessName, contact_name: contactName, email, phone,
+        offering, needs_space: needsSpace, event_name: event.title,
+      });
+      if (!res.ok) return toast.error(res.error || "Something went wrong submitting your application — please try again.");
+      setSubmitted(true);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -245,8 +259,8 @@ export function VendorReserveForm({ event, onClose }: { event: EventItem; onClos
         </div>
         <span className="font-['Inter',sans-serif] text-[14px] font-medium text-[#1e1e1e]">I'll need space / a stall at the event</span>
       </label>
-      <button type="submit" className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}>
-        Submit Vendor Application
+      <button type="submit" disabled={submitting} className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}>
+        {submitting ? "Submitting..." : "Submit Vendor Application"}
       </button>
     </form>
   );
@@ -270,6 +284,7 @@ export function AttendEventForm({
   const [members, setMembers] = useState("1");
   const [companions, setCompanions] = useState<{ name: string; phone: string }[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const selectedEvent = events.find(ev => String(ev.id) === String(eventId)) ?? (defaultEventId ? events.find(ev => String(ev.id) === String(defaultEventId)) : null) ?? events[0] ?? null;
 
@@ -290,6 +305,7 @@ export function AttendEventForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     if (!eventId || !selectedEvent) return toast.error("Please select an event to attend");
     const invalid = firstError(
       validateName(name),
@@ -302,14 +318,19 @@ export function AttendEventForm({
       ])
     );
     if (invalid) return toast.error(invalid);
-    const res = await saveReservation({
-      name, email, phone, seats: Number(members),
-      event_name: selectedEvent.title,
-      event_id: selectedEvent.id,
-      companions,
-    });
-    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
-    setSubmitted(true);
+    setSubmitting(true);
+    try {
+      const res = await saveReservation({
+        name, email, phone, seats: Number(members),
+        event_name: selectedEvent.title,
+        event_id: selectedEvent.id,
+        companions,
+      });
+      if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
+      setSubmitted(true);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -403,8 +424,8 @@ export function AttendEventForm({
         </div>
       )}
 
-      <button type="submit" className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}>
-        Confirm My Attendance
+      <button type="submit" disabled={submitting} className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}>
+        {submitting ? "Confirming..." : "Confirm My Attendance"}
       </button>
     </form>
   );

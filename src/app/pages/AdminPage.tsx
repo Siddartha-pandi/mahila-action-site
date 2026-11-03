@@ -13,6 +13,7 @@ import {
   getRoleById,
   type AdminUser,
   type AdminModule,
+  UNAUTHENTICATED_ADMIN_USER,
 } from "@/lib/permissions";
 import {
   Inbox,
@@ -160,6 +161,8 @@ export function AdminPage({
       if (isLoggedIn) {
         setDraft({ ...existing });
         setCurrentAdminUser(getCurrentAdminSession());
+      } else {
+        setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
       }
     });
 
@@ -187,6 +190,7 @@ export function AdminPage({
         await signOutAdmin();
         clearAdminSession();
         setLoggedIn(false);
+        setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
         toast.error("Signed out automatically after 5 minutes of inactivity");
         onExit();
       }, INACTIVITY_LIMIT_MS);
@@ -254,6 +258,7 @@ export function AdminPage({
     await signOutAdmin();
     clearAdminSession();
     try {
+      sessionStorage.setItem("mahila_admin_active_tab", "submissions");
       localStorage.setItem("mahila_admin_active_tab", "submissions");
       const url = new URL(window.location.href);
       url.searchParams.set("tab", "submissions");
@@ -261,6 +266,7 @@ export function AdminPage({
     } catch {}
     setActiveSection("submissions");
     setLoggedIn(false);
+    setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
     toast("Signed out");
     onExit();
   }

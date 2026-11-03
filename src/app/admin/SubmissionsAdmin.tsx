@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   Download,
@@ -211,7 +211,34 @@ export function SubmissionsAdmin() {
     toast.success("Submission moved to Recycle Bin");
   }
 
-  const list = Array.isArray(submissions) ? submissions : [];
+  const list = useMemo(() => {
+    const raw = Array.isArray(submissions) ? submissions : [];
+    const seenEventResIds = new Set<string>();
+    const seenKeys = new Set<string>();
+
+    const priority: Record<string, number> = {
+      volunteer: 1,
+      vendor: 1,
+      reservation: 2,
+    };
+
+    const sorted = [...raw].sort((a, b) => (priority[a.type] ?? 0) - (priority[b.type] ?? 0));
+    const result: SubmissionItem[] = [];
+
+    for (const item of sorted) {
+      if (!item || !item.id) continue;
+      const isEventRes = item.type === "volunteer" || item.type === "reservation" || item.type === "vendor";
+      if (isEventRes) {
+        if (seenEventResIds.has(String(item.id))) continue;
+        seenEventResIds.add(String(item.id));
+      }
+      const key = `${item.type}_${item.id}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      result.push(item);
+    }
+    return result;
+  }, [submissions]);
 
   // Filter calculations — bucketed by intent, not by raw stored type.
   const volunteerList = list.filter(i => categoryOf(i) === "volunteer");

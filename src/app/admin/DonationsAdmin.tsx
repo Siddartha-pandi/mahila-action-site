@@ -40,6 +40,7 @@ import { addToTrash } from "../../lib/recycleBin";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
+import { firstError, validateEmail, validatePhone } from "@/lib/validation";
 import { toast } from "sonner";
 
 export function DonationsAdmin() {
@@ -210,6 +211,12 @@ export function DonationsAdmin() {
     if (!offlineForm.anonymous && !offlineForm.name.trim()) {
       return toast.error("Please enter donor name or check Anonymous Supporter.");
     }
+
+    const invalid = firstError(
+      offlineForm.phone?.trim() ? validatePhone(offlineForm.phone, "phone number", { required: false }) : null,
+      offlineForm.email?.trim() ? validateEmail(offlineForm.email, "donor email", { required: false }) : null
+    );
+    if (invalid) return toast.error(invalid);
 
     setSavingOffline(true);
     try {

@@ -221,7 +221,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
   const userDonationList = useMemo(() => {
     if (!profile) return [];
-    return userSubmissions
+    const rawList = userSubmissions
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
@@ -232,7 +232,30 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
         paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
         transactionId: s.data?.transaction_id || s.data?.transactionId || "",
+        createdAt: s.createdAt,
       }));
+
+    // Deduplicate donations so the exact same donation is never rendered twice
+    const seen = new Map<string, typeof rawList[number]>();
+    for (const d of rawList) {
+      const rec = d.receiptNumber && !d.receiptNumber.startsWith("MA-REC-donation_") ? d.receiptNumber.trim().toUpperCase() : null;
+      const tx = d.transactionId ? d.transactionId.trim().toLowerCase() : null;
+      const key = rec ? `rec:${rec}` : tx ? `tx:${tx}` : `id:${d.id}`;
+
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, d);
+      } else {
+        // Prefer server-persisted row (numeric ID) over local placeholder ID ("donation_...")
+        const isCurrentServer = !String(d.id).startsWith("donation_");
+        const isExistingServer = !String(existing.id).startsWith("donation_");
+        if (isCurrentServer && !isExistingServer) {
+          seen.set(key, d);
+        }
+      }
+    }
+
+    return [...seen.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [userSubmissions, profile]);
 
   const now = new Date();

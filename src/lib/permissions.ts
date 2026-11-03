@@ -341,9 +341,20 @@ export function getRoleById(roleId: string): AdminRole {
 
 // ── Active Session Management ────────────────────────────────────────────────
 
+export const UNAUTHENTICATED_ADMIN_USER: AdminUser = {
+  id: "guest",
+  name: "Guest",
+  email: "",
+  roleId: "user",
+  status: "Inactive",
+  permissions: USER_PERMISSIONS,
+};
+
 export function getCurrentAdminSession(): AdminUser {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SESSION);
+    const raw = typeof window !== "undefined"
+      ? (sessionStorage.getItem(STORAGE_KEYS.SESSION) || localStorage.getItem(STORAGE_KEYS.SESSION))
+      : null;
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.email) {
@@ -354,8 +365,7 @@ export function getCurrentAdminSession(): AdminUser {
     }
   } catch {}
 
-  const defaultUser = getStoredAdminUsers()[0] || DEFAULT_ADMIN_USERS[0];
-  return defaultUser;
+  return UNAUTHENTICATED_ADMIN_USER;
 }
 
 export function setCurrentAdminSession(email: string) {
@@ -391,14 +401,23 @@ export function setCurrentAdminSession(email: string) {
         status: "Active",
       });
     }
-    localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify({ email: match.email, timestamp: Date.now() }));
+    const sessionData = JSON.stringify({ email: match.email, timestamp: Date.now() });
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(STORAGE_KEYS.SESSION, sessionData);
+      localStorage.removeItem(STORAGE_KEYS.SESSION);
+    }
   } catch (e) {
     console.error("Failed to set session:", e);
   }
 }
 
 export function clearAdminSession() {
-  localStorage.removeItem(STORAGE_KEYS.SESSION);
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem(STORAGE_KEYS.SESSION);
+      localStorage.removeItem(STORAGE_KEYS.SESSION);
+    } catch {}
+  }
 }
 
 // ── Permission Evaluation ───────────────────────────────────────────────────

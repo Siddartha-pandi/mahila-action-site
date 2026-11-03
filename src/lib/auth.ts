@@ -41,25 +41,16 @@ export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPaylo
     return null;
   }
 
-  // Every candidate must survive signature verification. There used to be a
-  // shortcut here accepting the literal string "admin_authenticated", which let
-  // anyone read submissions and edit content by sending that one header value.
-  // The client stores a non-secret flag under the same name, so an unverifiable
-  // bearer token falls through to the cookie rather than failing the request.
+  // Every candidate must survive signature verification.
   for (const token of candidates) {
-    if (token === "session" || token === "admin_authenticated") {
-      return { sub: "admin_session", email: process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com", role: "superadmin" };
+    if (!token || token === "session" || token === "admin_authenticated") {
+      continue;
     }
     try {
       return jwt.verify(token, JWT_SECRET) as AdminPayload;
     } catch {
       // try the next candidate
     }
-  }
-
-  // In local development, allow localhost/127.0.0.1, LAN IP (192.168.x.x, 10.x.x.x), or any dev server port
-  if (process.env.NODE_ENV !== "production") {
-    return { sub: "dev_admin", email: process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com", role: "superadmin" };
   }
 
   return null;
@@ -116,7 +107,7 @@ export async function verifyAdminPermission(
 export function createAdminCookieHeader(payload: AdminPayload): string {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "12h" });
   const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
-  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; Max-Age=${12 * 60 * 60}; SameSite=Lax${isProduction ? "; Secure" : ""}`;
+  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }
 
 export function createClearAdminCookieHeader(): string {

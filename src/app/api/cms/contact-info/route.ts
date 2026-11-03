@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
+import { firstError, validateEmail, validatePhone } from "@/lib/validation";
 import fs from "fs/promises";
 import path from "path";
 
@@ -64,6 +65,14 @@ export async function PUT(req: NextRequest) {
 
   try {
     const b = await req.json();
+    const invalid = firstError(
+      b.email ? validateEmail(b.email, "contact email", { required: false }) : null,
+      b.phone ? validatePhone(b.phone, "contact phone number", { required: false }) : null
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
+
     const updated = {
       email: b.email ?? "",
       emailNote: b.emailNote || b.email_note || "",

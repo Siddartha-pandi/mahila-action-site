@@ -109,6 +109,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
 
   const [userSubmissions, setUserSubmissions] = useState<SubmissionItem[]>([]);
@@ -291,21 +292,27 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   }
 
   async function handleConfirm() {
+    if (confirming) return;
     if (selectedEvents.length === 0) return toast.error("Please select at least one event");
     const eventTitles = realEvents.filter(e => selectedEvents.includes(String(e.id))).map(e => e.title);
-    const res = await saveVolunteer({
-      name: profile?.name ?? "",
-      email: profile?.email ?? "",
-      phone: profile?.phone ?? "",
-      skills: profile?.skills ?? "",
-      selected_events: eventTitles,
-    });
-    if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
-    setConfirmed(true);
-    if (profile?.email || profile?.phone) {
-      loadUserSubmissions(profile.email, profile.phone)
-        .then(subs => setUserSubmissions(subs))
-        .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
+    setConfirming(true);
+    try {
+      const res = await saveVolunteer({
+        name: profile?.name ?? "",
+        email: profile?.email ?? "",
+        phone: profile?.phone ?? "",
+        skills: profile?.skills ?? "",
+        selected_events: eventTitles,
+      });
+      if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
+      setConfirmed(true);
+      if (profile?.email || profile?.phone) {
+        loadUserSubmissions(profile.email, profile.phone)
+          .then(subs => setUserSubmissions(subs))
+          .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
+      }
+    } finally {
+      setConfirming(false);
     }
   }
 
@@ -450,12 +457,22 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       }
     });
 
-    return list;
+    // One card per event per role to prevent duplicate registrations
+    const byEventAndRole = new Map<string, typeof list[number]>();
+    for (const item of list) {
+      const key = `${item.typeLabel}::${item.title.trim().toLowerCase()}`;
+      const seen = byEventAndRole.get(key);
+      if (!seen || new Date(item.createdAt).getTime() < new Date(seen.createdAt).getTime()) {
+        byEventAndRole.set(key, item);
+      }
+    }
+
+    return [...byEventAndRole.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [userSubmissions, profile]);
 
   const userDonationList = useMemo(() => {
     if (!profile) return [];
-    return userSubmissions
+    const rawList = userSubmissions
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
@@ -465,7 +482,30 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
         status: s.status || "Completed",
         receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
         paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
+        transactionId: s.data?.transaction_id || s.data?.transactionId || "",
+        createdAt: s.createdAt,
       }));
+
+    // Deduplicate donations so the same receipt or transaction ref is never displayed twice
+    const seen = new Map<string, typeof rawList[number]>();
+    for (const d of rawList) {
+      const rec = d.receiptNumber && !d.receiptNumber.startsWith("MA-REC-donation_") ? d.receiptNumber.trim().toUpperCase() : null;
+      const tx = d.transactionId ? d.transactionId.trim().toLowerCase() : null;
+      const key = rec ? `rec:${rec}` : tx ? `tx:${tx}` : `id:${d.id}`;
+
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, d);
+      } else {
+        const isCurrentServer = !String(d.id).startsWith("donation_");
+        const isExistingServer = !String(existing.id).startsWith("donation_");
+        if (isCurrentServer && !isExistingServer) {
+          seen.set(key, d);
+        }
+      }
+    }
+
+    return [...seen.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [userSubmissions, profile]);
 
   return (
@@ -822,6 +862,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                             <h5 className="font-['Inter',sans-serif] font-bold text-[15px] text-[#1e1e1e] mt-1">{d.cause}</h5>
                             <p className="text-[11px] text-[#1e1e1e]/60 font-mono mt-1.5">
                               Receipt: <strong className="text-[#1e1e1e]">{d.receiptNumber}</strong> • {d.paymentMethod}
+                              {d.transactionId && <span> • Ref: {d.transactionId}</span>}
                             </p>
                           </div>
                           <div className="border-t border-[#a65a4a]/10 pt-3 mt-4 flex items-center justify-between text-[12px] text-[#1e1e1e]/50 font-['Inter',sans-serif]">
@@ -948,10 +989,10 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
                       <button
                         onClick={handleConfirm}
-                        disabled={selectedEvents.length === 0}
+                        disabled={selectedEvents.length === 0 || confirming}
                         className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {selectedEvents.length === 0 ? "Select events to register" : `Confirm Registration for ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
+                        {confirming ? "Submitting..." : selectedEvents.length === 0 ? "Select events to register" : `Confirm Registration for ${selectedEvents.length} Event${selectedEvents.length > 1 ? "s" : ""}`}
                       </button>
                     </>
                   )}

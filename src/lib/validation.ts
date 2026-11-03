@@ -48,10 +48,15 @@ export function validateEmail(
 }
 
 /**
- * Accepts an international number of 10–15 digits, ignoring spaces, dashes,
- * brackets and a leading "+". A bare 10-digit number is treated as Indian and
- * must start 6–9; numbers carrying a country code are only length-checked, so
- * overseas supporters are not rejected.
+ * Comprehensive phone number validation:
+ * - Accepts international format (10–15 digits) or Indian mobile numbers (10 digits).
+ * - Disallows letters, symbols, misplaced plus signs (+ only allowed as the first character).
+ * - For Indian numbers (10 digits, or with +91, 91, or leading 0 prefix):
+ *     - Ensures the 10-digit mobile number begins with 6, 7, 8, or 9.
+ *     - Rejects repetitive dummy numbers (e.g., 9999999999, 0000000000).
+ * - For international numbers:
+ *     - Ensures 10 to 15 digits total.
+ *     - Rejects repetitive numbers.
  */
 export function validatePhone(
   phone: unknown,
@@ -62,9 +67,14 @@ export function validatePhone(
   const raw = String(phone ?? "").trim();
   if (!raw) return required ? `Please enter your ${label}.` : null;
 
+  // Plus sign check: can only appear at most once and only as the very first character
+  if ((raw.match(/\+/g) || []).length > 1 || (raw.includes("+") && !raw.startsWith("+"))) {
+    return `Please enter a valid ${label} (e.g. +91 98765 43210).`;
+  }
+
   // Reject invalid characters like letters, symbols (@, $, %, #, etc.).
-  // Allowed characters are digits, plus (+), spaces, hyphens (-), parentheses (), and dots (.).
-  if (/[A-Za-z]/.test(raw) || !/^[0-9+\s\-().]+$/.test(raw)) {
+  // Allowed characters are digits, leading plus (+), spaces, hyphens (-), parentheses (), and dots (.).
+  if (/[A-Za-z]/.test(raw) || !/^\+?[0-9\s\-().]+$/.test(raw)) {
     return `Please enter a valid ${label} (digits only, e.g. +91 98765 43210).`;
   }
 
@@ -72,13 +82,63 @@ export function validatePhone(
   if (digits.length < 10 || digits.length > 15) {
     return `Please enter a valid ${label} (10–15 digits, e.g. +91 98765 43210).`;
   }
+
+  // Reject if all digits in the number are identical (e.g. 1111111111)
   if (/^(\d)\1+$/.test(digits)) {
     return `Please enter a real ${label}.`;
   }
-  if (digits.length === 10 && !/^[6-9]/.test(digits)) {
-    return `Please enter a valid 10-digit mobile ${label} starting with 6, 7, 8 or 9 — or include your country code.`;
+
+  // Check Indian mobile numbers (10 digits, or 11 digits starting with 0, or 12 digits starting with 91, or +91 prefix)
+  const isIndian =
+    digits.length === 10 ||
+    (digits.length === 11 && digits.startsWith("0")) ||
+    (digits.length === 12 && digits.startsWith("91")) ||
+    raw.startsWith("+91");
+
+  if (isIndian) {
+    const mobile10 = digits.slice(-10);
+    if (mobile10.length !== 10) {
+      return `Please enter a valid 10-digit mobile ${label} (e.g. +91 98765 43210).`;
+    }
+    if (!/^[6-9]/.test(mobile10)) {
+      return `Please enter a valid 10-digit mobile ${label} starting with 6, 7, 8 or 9.`;
+    }
+    if (/^(\d)\1{9}$/.test(mobile10)) {
+      return `Please enter a real ${label}.`;
+    }
+  } else {
+    // For non-Indian international numbers, reject if the local portion is all identical digits
+    if (/^(\d)\1{7,}$/.test(digits.slice(2))) {
+      return `Please enter a real ${label}.`;
+    }
   }
+
   return null;
+}
+
+/**
+ * Normalizes a phone string into a clean standard representation (+91 XXXXX XXXXX for Indian numbers
+ * or standard digits with leading plus).
+ */
+export function normalizePhone(phone: unknown): string {
+  const raw = String(phone ?? "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+  if (digits.length === 11 && digits.startsWith("0") && /^[6-9]/.test(digits.slice(1))) {
+    const m = digits.slice(1);
+    return `+91 ${m.slice(0, 5)} ${m.slice(5)}`;
+  }
+  if (digits.length === 12 && digits.startsWith("91") && /^[6-9]/.test(digits.slice(2))) {
+    const m = digits.slice(2);
+    return `+91 ${m.slice(0, 5)} ${m.slice(5)}`;
+  }
+  if (raw.startsWith("+")) {
+    return `+${digits}`;
+  }
+  return digits;
 }
 
 /**
