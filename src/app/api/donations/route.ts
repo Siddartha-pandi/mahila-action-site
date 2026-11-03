@@ -11,6 +11,7 @@ import {
   validatePanNumber,
   validateAddress,
 } from "@/lib/validation";
+import { validateUtr } from "@/lib/utrValidation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,10 +24,7 @@ export async function POST(req: NextRequest) {
         String(body.payment_method || "").trim().toLowerCase()
       );
 
-    const donationType = body.donation_type || (isOffline ? "one-time" : undefined);
-    if (!donationType) {
-      return NextResponse.json({ error: "donation_type is required." }, { status: 400 });
-    }
+    const donationType = body.donation_type || "one-time";
 
     // Phone is required for online donations; optional for offline/cash records
     const isAnonymous = Boolean(body.anonymous);
@@ -51,6 +49,32 @@ export async function POST(req: NextRequest) {
       ? "cash"
       : "upi";
     const cleanTxId = body.transaction_id ? String(body.transaction_id).trim() : null;
+
+    if (!isOffline && cleanMethod === "upi") {
+      const utrErr = validateUtr(cleanTxId, true);
+      if (utrErr) {
+        return NextResponse.json({ error: utrErr }, { status: 400 });
+      }
+    }
+
+    // Check for duplicate UTR / Transaction ID in database
+    if (cleanTxId) {
+      const dupCheck = await queryDb(
+        `SELECT id, receipt_number, created_at FROM donations WHERE LOWER(transaction_id) = LOWER($1) LIMIT 1`,
+        [cleanTxId]
+      );
+      if (dupCheck.rows.length > 0) {
+        const existing = dupCheck.rows[0];
+        return NextResponse.json(
+          {
+            error: `This UPI Reference / UTR Number (${cleanTxId}) has already been recorded for receipt ${
+              existing.receipt_number || `#${existing.id}`
+            }. Duplicate submissions are not accepted.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
     const cleanNotes = body.notes ? String(body.notes).trim() : null;
     const donationStatus = body.status ? String(body.status).trim() : isOffline ? "Completed" : "New";
     const customDate = body.created_at || body.date ? new Date(body.created_at || body.date) : new Date();

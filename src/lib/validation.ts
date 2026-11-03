@@ -185,6 +185,8 @@ export function validateAddress(address: unknown, required = false): string | nu
   return null;
 }
 
+export { validateUtr } from "./utrValidation";
+
 /** Returns the first failure from a list of checks, or null when all pass. */
 export function firstError(...results: (string | null)[]): string | null {
   for (const r of results) if (r) return r;

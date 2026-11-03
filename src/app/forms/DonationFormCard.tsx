@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CheckCircle, ChevronRight, FileText, Printer, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -46,7 +46,8 @@ export function DonationFormCard({
   onSaved?: () => void;
 }) {
   const [customAmount, setCustomAmount] = useState<string>("1000");
-  const [donationType, setDonationType] = useState<"one-time" | "monthly">("one-time");
+  const donationType = "one-time";
+  const customInputRef = useRef<HTMLInputElement>(null);
   // Prefilled from the signed-in donor's profile, and still fully editable.
   const [donorName, setDonorName] = useProfileField(initialName);
   const [donorEmail, setDonorEmail] = useProfileField(initialEmail);
@@ -223,38 +224,26 @@ export function DonationFormCard({
           </p>
         </div>
 
-        {/* Frequency selector: One-time vs Monthly */}
-        <div className="bg-[#e8ded5] p-1 rounded-xl flex gap-1">
-          <button
-            type="button"
-            onClick={() => setDonationType("one-time")}
-            className={`${inter()} flex-1 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
-              donationType === "one-time"
-                ? "bg-[#993925] text-white shadow-sm"
-                : "text-[#6e625d] hover:text-[#1e1e1e]"
-            }`}
-          >
-            One-Time
-          </button>
-          <button
-            type="button"
-            onClick={() => setDonationType("monthly")}
-            className={`${inter()} flex-1 py-2 text-[13px] font-semibold rounded-lg transition-all cursor-pointer ${
-              donationType === "monthly"
-                ? "bg-[#993925] text-white shadow-sm"
-                : "text-[#6e625d] hover:text-[#1e1e1e]"
-            }`}
-          >
-            Monthly Giving
-          </button>
-        </div>
-
         {/* Preset Contribution Chips */}
         <div>
           <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-2`}>
             Select Amount:
           </p>
           <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (PRESET_AMOUNTS.includes(finalAmount)) setCustomAmount("");
+                customInputRef.current?.focus();
+              }}
+              className={`${inter()} py-2 px-1 text-[12px] sm:text-[13px] font-semibold rounded-xl border transition-all cursor-pointer text-center ${
+                !PRESET_AMOUNTS.includes(finalAmount)
+                  ? "bg-[#993925] text-white border-[#993925] shadow-sm"
+                  : "bg-white/80 border-[#a65a4a]/30 text-[#6e625d] hover:border-[#993925]"
+              }`}
+            >
+              Custom
+            </button>
             {PRESET_AMOUNTS.map((amt) => {
               const active = finalAmount === amt;
               return (
@@ -272,19 +261,6 @@ export function DonationFormCard({
                 </button>
               );
             })}
-            <button
-              type="button"
-              onClick={() => {
-                if (PRESET_AMOUNTS.includes(finalAmount)) setCustomAmount("");
-              }}
-              className={`${inter()} py-2 px-1 text-[12px] sm:text-[13px] font-semibold rounded-xl border transition-all cursor-pointer text-center ${
-                !PRESET_AMOUNTS.includes(finalAmount) && finalAmount > 0
-                  ? "bg-[#993925] text-white border-[#993925]"
-                  : "bg-white/80 border-[#a65a4a]/30 text-[#6e625d] hover:border-[#993925]"
-              }`}
-            >
-              Custom
-            </button>
           </div>
         </div>
 
@@ -296,6 +272,7 @@ export function DonationFormCard({
           <div className="border-b-2 border-[#a65a4a] pb-2 flex items-center gap-2">
             <span className="text-[#a65a4a] font-bold text-[18px]">₹</span>
             <input
+              ref={customInputRef}
               type="text"
               value={customAmount}
               onChange={(e) => setCustomAmount(e.target.value.replace(/\D/g, ""))}
@@ -400,7 +377,7 @@ export function DonationFormCard({
         </button>
 
         <p className={`${inter()} text-center text-[12px] text-[#1e1e1e]/60`}>
-          🔒 Secure UPI, Cards & Bank Transfer &bull; Instant Confirmation
+          🔒 Secure UPI &amp; QR Payment &bull; Instant Confirmation
         </p>
       </div>
 
