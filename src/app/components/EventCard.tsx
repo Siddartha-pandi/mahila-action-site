@@ -30,16 +30,30 @@ export function EventCard({
   const open = isEventOpen(event);
 
   return (
-    <div className={`relative w-full ${className} rounded-2xl overflow-hidden ${event.published === false ? "ring-3 ring-amber-400/80" : ""}`}>
+    <div
+      onClick={() => onReserve?.(event)}
+      onKeyDown={(e) => {
+        if (onReserve && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onReserve(event);
+        }
+      }}
+      role={onReserve ? "button" : undefined}
+      tabIndex={onReserve ? 0 : undefined}
+      aria-label={`Register for ${event.title}`}
+      className={`relative w-full ${className} rounded-2xl overflow-hidden group transition-all duration-300 ${
+        onReserve ? "cursor-pointer hover:shadow-xl hover:ring-2 hover:ring-[#a65a4a]/40" : ""
+      } ${event.published === false ? "ring-3 ring-amber-400/80" : ""}`}
+    >
       <SafeImage
         src={event.image}
         alt={event.title}
-        className="absolute inset-0 size-full object-cover"
+        className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
         containerClassName="absolute inset-0 size-full flex flex-col items-center justify-center bg-[#2c1d19] text-[#f4efe7]/60 gap-2 select-none"
         errorText="Image not available"
         iconSize={40}
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent transition-opacity group-hover:opacity-90" />
 
       {/* Admin Publish / Unpublish Card Controls */}
       {onTogglePublish && (
@@ -123,30 +137,18 @@ export function EventCard({
         )}
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-        <p className={`${inter()} text-[#f4efe7] text-[18px] sm:text-[20px] font-semibold line-clamp-2`}>{event.title}</p>
+      <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 pointer-events-none">
+        <p className={`${inter()} text-[#f4efe7] text-[18px] sm:text-[20px] font-semibold line-clamp-2 group-hover:text-white transition-colors`}>{event.title}</p>
         <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-1.5 sm:gap-y-2 mt-2 sm:mt-3">
-          <span className={`${inter()} text-[#f4efe7] text-[13px] sm:text-[14px] flex items-center gap-1.5 sm:gap-2`}>
+          <span className={`${inter()} text-[#f4efe7]/90 text-[13px] sm:text-[14px] flex items-center gap-1.5 sm:gap-2`}>
             <Calendar size={15} /> {formatEventDate(event.eventDate)}
           </span>
           {event.location && (
-            <span className={`${inter()} text-[#f4efe7] text-[13px] sm:text-[14px] flex items-center gap-1.5 sm:gap-2`}>
+            <span className={`${inter()} text-[#f4efe7]/90 text-[13px] sm:text-[14px] flex items-center gap-1.5 sm:gap-2`}>
               <MapPin size={15} /> {event.location}
             </span>
           )}
         </div>
-        {onReserve && (
-          <button
-            onClick={() => onReserve(event)}
-            className={`${inter()} text-[13px] sm:text-[14px] font-semibold px-5 sm:px-6 py-2 sm:py-2.5 rounded-full mt-4 sm:mt-5 transition-colors cursor-pointer w-full sm:w-auto text-center ${
-              open
-                ? "bg-[#f4efe7] text-[#a65a4a] hover:bg-white"
-                : "border border-[#f4efe7]/60 text-[#f4efe7] hover:bg-[#f4efe7]/10"
-            }`}
-          >
-            {open ? "Register for Event" : "Past Event"}
-          </button>
-        )}
       </div>
     </div>
   );
