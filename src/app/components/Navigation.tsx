@@ -13,6 +13,7 @@ import {
   Calendar,
   Mail,
   ChevronRight,
+  LayoutDashboard,
 } from "lucide-react";
 import { getSavedUserSession, type VolunteerAccountProfile } from "@/lib/backend";
 import { LogoMark } from "./LogoMark";
@@ -29,17 +30,30 @@ export function Navigation({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userSession, setUserSession] = useState<VolunteerAccountProfile | null>(getSavedUserSession);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return Boolean(sessionStorage.getItem("admin_jwt"));
+    }
+    return false;
+  });
   const { openModal } = useModal();
 
   useEffect(() => {
     function syncSession() {
       setUserSession(getSavedUserSession());
     }
+    function syncAdmin() {
+      setIsAdmin(Boolean(typeof window !== "undefined" && sessionStorage.getItem("admin_jwt")));
+    }
     window.addEventListener("mahila_user_session_changed", syncSession);
+    window.addEventListener("mahila_admin_auth_changed", syncAdmin);
     window.addEventListener("storage", syncSession);
+    window.addEventListener("storage", syncAdmin);
     return () => {
       window.removeEventListener("mahila_user_session_changed", syncSession);
+      window.removeEventListener("mahila_admin_auth_changed", syncAdmin);
       window.removeEventListener("storage", syncSession);
+      window.removeEventListener("storage", syncAdmin);
     };
   }, []);
 
@@ -129,6 +143,19 @@ export function Navigation({
             <Heart size={15} className="fill-[#f4efe7] shrink-0" />
             <span>Donate Now</span>
           </button>
+
+          {/* Admin Panel Return Button (Visible when logged into Admin) */}
+          {isAdmin && (
+            <button
+              onClick={() => nav("admin")}
+              className={`${inter()} bg-[#1c1917] hover:bg-[#2c2725] text-white border border-amber-500/40 text-[12px] sm:text-[13px] font-semibold px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-xs`}
+              title="Return to Admin Panel"
+            >
+              <LayoutDashboard size={14} className="text-amber-300 shrink-0" />
+              <span className="hidden lg:inline">Admin Panel</span>
+              <span className="lg:hidden">Admin</span>
+            </button>
+          )}
 
           {/* User Profile / Login */}
           {!userSession ? (
@@ -222,6 +249,22 @@ export function Navigation({
             })}
 
             <div className="pt-4 mt-2 border-t border-[#a65a4a]/20 flex flex-col gap-2.5 sm:gap-3">
+              {/* Mobile Admin Panel Button */}
+              {isAdmin && (
+                <button
+                  onClick={() => nav("admin")}
+                  className={`${inter()} w-full bg-[#1c1917] border-2 border-amber-500/40 text-[#f4efe7] text-[14px] sm:text-[15px] font-semibold px-5 py-3 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-[#2c2725] transition-all shadow-sm`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <LayoutDashboard size={18} className="text-amber-300" />
+                    <span>Return to Admin Panel</span>
+                  </div>
+                  <span className="text-[11px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+                    Admin
+                  </span>
+                </button>
+              )}
+
               {/* Mobile Donate Button */}
               <button
                 onClick={() => nav("donate")}

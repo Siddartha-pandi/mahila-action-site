@@ -737,7 +737,7 @@ export async function sendPermVolunteerAcknowledgementEmail(
 
   await deliver({
     to,
-    subject: `Permanent Volunteer Request Received — Mahila Action`,
+    subject: `Permanent Volunteer ${isActivate ? "Application" : "Deactivation Request"} Received — Mahila Action`,
     text:
       `Hi ${name},\n\n` +
       `We have received your permanent volunteer ${isActivate ? "application" : "deactivation request"}.\n` +

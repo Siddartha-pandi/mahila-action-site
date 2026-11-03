@@ -17,6 +17,7 @@ import {
   RefreshCw,
   UserMinus,
   Printer,
+  XCircle,
 } from "lucide-react";
 import {
   getSubmissions,
@@ -178,6 +179,8 @@ export function SubmissionsAdmin() {
 
     const res = await updateSubmissionStatusRemote(item, status);
     if (!res.ok) return toast.error(res.error || "Could not update the status — please try again.");
+
+    updateSubmissionStatus(item.id, status);
 
     setSubmissions(prev => prev.map(s => (s.id === item.id && s.type === item.type ? { ...s, status } : s)));
     if (selectedItem?.id === item.id && selectedItem?.type === item.type) {
@@ -514,7 +517,17 @@ export function SubmissionsAdmin() {
     perm_volunteer_deactivate: "Deactivate Request",
   };
 
-  const getStatusBadge = (status: SubmissionItem["status"]) => {
+  const getStatusBadge = (status: SubmissionItem["status"], category?: SubmissionCategory) => {
+    if (category === "perm_volunteer_request" || category === "perm_volunteer_deactivate") {
+      switch (status) {
+        case "New":
+          return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"><Clock size={12} /> Pending</span>;
+        case "Contacted":
+          return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200"><XCircle size={12} /> Rejected</span>;
+        case "Completed":
+          return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200"><CheckCircle size={12} /> Approved</span>;
+      }
+    }
     switch (status) {
       case "New":
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"><Clock size={12} /> New</span>;
@@ -785,7 +798,7 @@ export function SubmissionsAdmin() {
                 {permDeactivateList.length}
               </span>
               {permDeactivateList.filter(v => v.status === "New").length > 0 && (
-                <span className="inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold" title="Pending review">
+                <span className={`inline-flex items-center justify-center size-4 rounded-full text-[10px] font-bold ${filterType === "perm_volunteer_deactivate" ? "bg-white text-rose-700" : "bg-rose-600 text-white"}`} title="Pending review">
                   {permDeactivateList.filter(v => v.status === "New").length}
                 </span>
               )}
@@ -997,7 +1010,7 @@ export function SubmissionsAdmin() {
                         {showStatusColumn && (
                           <td className="py-3.5 px-4">
                             {isStatusEligible(categoryOf(item)) ? (
-                              getStatusBadge(item.status)
+                              getStatusBadge(item.status, categoryOf(item))
                             ) : (
                               <span className="text-[#1e1e1e]/25 text-[12px] font-mono">—</span>
                             )}
@@ -1095,9 +1108,19 @@ export function SubmissionsAdmin() {
                       ⏳ Pending — no decision made yet.
                     </p>
                   )}
+                  {selectedItem.status !== "New" && (
+                    <button
+                      onClick={() => handleStatusChange(selectedItem, "New")}
+                      className="mt-2 text-[11px] text-gray-500 hover:text-gray-800 underline block cursor-pointer"
+                    >
+                      Reset to Pending (New)
+                    </button>
+                  )}
                   {selectedItem.data?.message && (
                     <div className="mt-3">
-                      <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Applicant's Note</span>
+                      <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">
+                        {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "Deactivation Reason / Note" : "Applicant's Note"}
+                      </span>
                       <div className="p-3 bg-gray-50 rounded-lg text-[13px] text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">
                         {selectedItem.data.message}
                       </div>
@@ -1151,7 +1174,9 @@ export function SubmissionsAdmin() {
                   <p className="text-[#1e1e1e] font-medium">{selectedItem.data.subject}</p>
                 </div>
               )}
-              {selectedItem.data.message && (
+              {selectedItem.data.message &&
+                categoryOf(selectedItem) !== "perm_volunteer_request" &&
+                categoryOf(selectedItem) !== "perm_volunteer_deactivate" && (
                 <div>
                   <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Message</span>
                   <div className="p-3 bg-gray-50 rounded-lg text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">

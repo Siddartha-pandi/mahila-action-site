@@ -179,6 +179,7 @@ function rowToSubmission(type: SubmissionItem["type"], row: any): SubmissionItem
     type: resolvedType,
     data: {
       ...rest,
+      request_type,
       companions: parseJsonColumn(rest.companions, []),
       selected_events: parseJsonColumn(rest.selected_events, []),
       anonymous: rest.anonymous === 1 || rest.anonymous === true,
@@ -249,6 +250,9 @@ export async function loadSubmissions(): Promise<SubmissionItem[]> {
 
 /** Which API path owns a given submission, for status updates and deletes. */
 function submissionPath(type: SubmissionItem["type"]) {
+  if (type === "perm_volunteer_deactivate") {
+    return "/api/perm-volunteers";
+  }
   return SUBMISSION_SOURCES.find((s) => s.type === type)?.path;
 }
 
@@ -273,10 +277,7 @@ export async function deleteSubmissionRemote(item: SubmissionItem): Promise<{ ok
 }
 
 /** Submission types with no server table — they exist only in local storage. */
-export const LOCAL_ONLY_SUBMISSION_TYPES: SubmissionItem["type"][] = [
-  "perm_volunteer_request",
-  "perm_volunteer_deactivate",
-];
+export const LOCAL_ONLY_SUBMISSION_TYPES: SubmissionItem["type"][] = [];
 
 // Demo rows ("Ananya Rao", "Kavita Reddy", "Suresh Kumar", "Pooja Verma") used
 // to be written into local storage whenever it was empty. The admin panel paints
@@ -460,6 +461,14 @@ export async function loadUserSubmissions(email?: string, phone?: string): Promi
             if (matchesServer) {
               isAlreadyOnServer = true;
             }
+          }
+        }
+
+        // For permanent volunteer requests / deactivations: match by type if already on server
+        if (!isAlreadyOnServer && (s.type === "perm_volunteer_request" || s.type === "perm_volunteer_deactivate")) {
+          const matchesServer = serverItems.some((srv) => srv.type === s.type);
+          if (matchesServer) {
+            isAlreadyOnServer = true;
           }
         }
 
