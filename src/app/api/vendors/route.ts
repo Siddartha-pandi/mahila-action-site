@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
-import { sendVendorConfirmationEmail } from "@/lib/email";
+import { sendVendorConfirmationEmail, sendVendorAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,6 +62,16 @@ export async function POST(req: NextRequest) {
       console.error("sendVendorConfirmationEmail failed:", err)
     );
 
+    sendVendorAlertToAdmin({
+      eventName: body.event_name,
+      contactName: body.contact_name,
+      businessName: body.business_name,
+      email: body.email,
+      phone: body.phone,
+      offering: body.offering,
+      website: body.website,
+    }).catch((err) => console.error("sendVendorAlertToAdmin failed:", err));
+
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {
     console.error("POST /api/vendors error:", err);
@@ -80,23 +89,21 @@ export async function GET(req: NextRequest) {
     );
     const mappedRows = result.rows.map((row: any) => {
       let meta: any = {};
-      if (typeof row.companions === "string") {
-        try {
-          const parsed = JSON.parse(row.companions);
-          if (Array.isArray(parsed) && parsed.length > 0) meta = parsed[0];
-        } catch {}
-      } else if (Array.isArray(row.companions) && row.companions.length > 0) {
-        meta = row.companions[0];
+      try {
+        const parsed = JSON.parse(row.companions || "[]");
+        meta = Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : {};
+      } catch {
+        meta = {};
       }
       return {
         id: row.id,
-        event_name: row.event_name,
-        contact_name: row.name,
         business_name: meta.business_name || row.name,
+        contact_name: row.name,
         email: row.email,
         phone: row.phone,
-        offering: meta.offering || "Vendor stall",
-        needs_space: meta.needs_space || 0,
+        event_name: row.event_name,
+        offering: meta.offering || "",
+        needs_space: meta.needs_space ? 1 : 0,
         status: row.status,
         created_at: row.created_at,
       };

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { isEventOpen, type EventItem } from "@/lib/data";
+import { useState, useEffect } from "react";
+import { isEventOpen, saveEvent, findCategory, type EventItem } from "@/lib/data";
+import { toast } from "sonner";
+import { Shield } from "lucide-react";
 import { BlogDetailModal } from "../modals/BlogDetailModal";
 import { imgAboutBanner } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
@@ -36,24 +38,63 @@ export function EventsPage() {
   const { openModal } = useModal();
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
+  useEffect(() => {
+    try {
+      const hasAdmin = Boolean(
+        localStorage.getItem("admin_jwt") ||
+        localStorage.getItem("mahila_admin_active_session_v1") ||
+        document.cookie.includes("mahila_admin=") ||
+        new URLSearchParams(window.location.search).get("admin") === "1" ||
+        new URLSearchParams(window.location.search).get("admin") === "true"
+      );
+      if (hasAdmin) setIsAdmin(true);
+    } catch {}
+  }, []);
+
+  async function handleTogglePublish(ev: EventItem, published: boolean) {
+    if ((ev.published !== false) === published) return;
+    const patched: EventItem = { ...ev, published };
+    const res = await saveEvent(patched);
+    if (res.ok) {
+      window.dispatchEvent(new Event("mahila_sitedata_changed"));
+      if (published) {
+        toast.success(`"${ev.title}" is now Published and live on the website!`);
+      } else {
+        toast.success(`"${ev.title}" is now Unpublished (Draft) and hidden from public.`);
+      }
+    } else {
+      toast.error(res.error || "Failed to update event publication status.");
+    }
+  }
+
+  const selectedCatObj = siteData.categories.find(
+    (c) => String(c.id) === String(activeCategory) || c.name === activeCategory
+  );
   const targetCategoryKeys = new Set(
-    [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]
+    [String(activeCategory), selectedCatObj ? String(selectedCatObj.id) : null, selectedCatObj?.name].filter(Boolean) as string[]
   );
 
-  const allEvents = sortForDisplay(siteData.events);
+  const allEvents = sortForDisplay(siteData.events).filter((e) => isAdmin ? true : e.published !== false);
   const events =
     activeCategory === ALL
       ? allEvents
-      : allEvents.filter((e) => e.categoryId && targetCategoryKeys.has(e.categoryId));
+      : allEvents.filter((e) => {
+          const eCat = findCategory(siteData.categories, e.categoryId);
+          const actCat = findCategory(siteData.categories, activeCategory);
+          if (eCat && actCat) {
+            return String(eCat.id) === String(actCat.id);
+          }
+          return String(e.categoryId) === String(activeCategory) || e.categoryId === activeCategory;
+        });
 
   const eventPosts = [...siteData.blogPosts]
-    .filter((p) => p.section === "event")
+    .filter((p) => p.section === "event" && (isAdmin ? true : p.published !== false))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   function handleReserve(ev: EventItem) {
-    if (isEventOpen(ev)) openModal("reserve", { id: ev.id });
+    if (isEventOpen(ev)) openModal("reserve", { id: String(ev.id) });
     else openModal("closed");
   }
 
@@ -68,7 +109,7 @@ export function EventsPage() {
 
   function categoryName(categoryId: string | null) {
     if (!categoryId) return undefined;
-    return siteData.categories.find((c) => c.id === categoryId || c.name === categoryId)?.name ?? categoryId;
+    return findCategory(siteData.categories, categoryId)?.name ?? categoryId;
   }
 
   return (
@@ -76,23 +117,38 @@ export function EventsPage() {
       <PageBanner img={imgAboutBanner} title="Events" />
 
       {/* ── Upcoming events ── */}
-      <section className="pt-14 pb-16 px-6">
+      <section className="pt-10 sm:pt-14 pb-12 sm:pb-16 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8 sm:mb-10">
             <SectionLabel text="Upcoming Events" />
             <SectionTitle text="Join The Movement" center />
-            <p className={`${inter()} text-[#1e1e1e]/75 text-[17px] leading-relaxed mt-4 max-w-[640px] mx-auto`}>
+            <p className={`${inter()} text-[#1e1e1e]/75 text-[15px] sm:text-[17px] leading-relaxed mt-3 sm:mt-4 max-w-[640px] mx-auto`}>
               Every event we run is open to the community. Filter by the area you care about, then reserve your seat.
             </p>
           </div>
 
-          <div className="mb-10">
+          <div className="mb-8 sm:mb-10">
             <FilterTabs
               options={siteData.categories}
               activeId={activeCategory}
               onChange={setActiveCategory}
             />
           </div>
+
+          {/* Admin Mode Bar */}
+          {isAdmin && (
+            <div className="mb-6 p-3.5 sm:p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 text-amber-900">
+                <Shield size={18} className="text-amber-700 shrink-0" />
+                <span className="text-[12px] sm:text-[13px] font-semibold">
+                  Admin Mode Active: Showing all events (including drafts). Use the <strong>Publish</strong> and <strong>Unpublish</strong> buttons on each card to toggle visibility.
+                </span>
+              </div>
+              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded-full shrink-0 self-start sm:self-auto">
+                Admin Controls ON
+              </span>
+            </div>
+          )}
 
           {events.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
@@ -102,7 +158,8 @@ export function EventsPage() {
                   event={ev}
                   categoryName={categoryName(ev.categoryId)}
                   onReserve={handleReserve}
-                  className="h-[420px]"
+                  onTogglePublish={isAdmin ? handleTogglePublish : undefined}
+                  className="h-[380px] sm:h-[420px]"
                 />
               ))}
             </div>
@@ -120,7 +177,7 @@ export function EventsPage() {
       </section>
 
       {/* ── Past events blog ── */}
-      <section className="py-16 px-6 bg-white/30">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/30">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-center mb-10">
             <SectionLabel text="What We've Done" />

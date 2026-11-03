@@ -5,6 +5,8 @@ const nextConfig = {
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",
+    "192.168.0.125",
+    "192.168.0.125:3000",
     "192.168.137.1",
     "192.168.1.6",
     "192.168.1.0/24",
@@ -30,25 +32,36 @@ const nextConfig = {
   },
   compress: true,
   poweredByHeader: false,
-  headers: async () => [
-    {
-      source: "/:all*(svg|jpg|png|webp|avif|css|js)",
-      headers: [
+  headers: async () => {
+    if (process.env.NODE_ENV === "development") {
+      return [
         {
-          key: "Cache-Control",
-          value: "public, max-age=31536000, immutable",
+          source: "/:path*",
+          headers: [
+            {
+              key: "Cache-Control",
+              value: "no-store, no-cache, must-revalidate, proxy-revalidate",
+            },
+          ],
         },
-      ],
-    },
-  ],
-  webpack: (config, { dev }) => {
-    config.resolve.alias["@"] = path.resolve(process.cwd(), "src");
-    if (dev) {
-      config.cache = false;
+      ];
     }
+    return [
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
+  webpack: (config) => {
+    config.resolve.alias["@"] = path.resolve(process.cwd(), "src");
     return config;
   },
 };
 
 export default nextConfig;
-

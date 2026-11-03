@@ -16,19 +16,12 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
+import { fileToDataUrl, uploadMediaToDb } from "@/lib/media";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 function escapeHtml(s: string) {
   return s
@@ -153,9 +146,12 @@ export function BlogContentEditor({
       const dataUrl = await fileToDataUrl(files[0]);
       setCropTarget({ src: dataUrl, forImg: null });
     } else if (files.length > 1) {
-      for (const file of files) {
-        const dataUrl = await fileToDataUrl(file);
-        insertImageHtml(dataUrl);
+      try {
+        const urls = await Promise.all(files.map((file) => uploadMediaToDb(file)));
+        urls.forEach((url) => insertImageHtml(url));
+        toast.success(`${urls.length} images uploaded!`);
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to upload images");
       }
     }
   }
@@ -232,15 +228,26 @@ export function BlogContentEditor({
     }
   }
 
-  function handleCropConfirm(croppedDataUrl: string) {
-    if (cropTarget?.forImg) {
-      // Re-cropping an image already placed in the content — update it in place.
-      cropTarget.forImg.src = croppedDataUrl;
-      emitChange();
-    } else {
-      insertImageHtml(croppedDataUrl);
+  async function handleCropConfirm(croppedDataUrl: string) {
+    try {
+      const savedUrl = await uploadMediaToDb(croppedDataUrl, "story-image.png");
+      if (savedUrl.startsWith("data:")) {
+        toast.warning("Image could not be saved to media table (saved locally).");
+      } else {
+        toast.success("Image saved to media table!");
+      }
+      if (cropTarget?.forImg) {
+        // Re-cropping an image already placed in the content — update it in place.
+        cropTarget.forImg.src = savedUrl;
+        emitChange();
+      } else {
+        insertImageHtml(savedUrl);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload image");
+    } finally {
+      setCropTarget(null);
     }
-    setCropTarget(null);
   }
 
   // Floating selection bubble menu (Medium-style: select text to format it).

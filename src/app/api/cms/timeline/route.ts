@@ -1,15 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
-import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
+import fs from "fs/promises";
+import path from "path";
+
+import { ensureMediaUrl } from "@/lib/mediaServer";
+
+const TIMELINE_PATH = path.join(process.cwd(), "src", "data", "timeline.json");
+
+interface TimelineRecord {
+  id: string | number;
+  year: string;
+  title: string;
+  description?: string;
+  image?: string;
+  order?: number;
+  order_index?: number;
+}
+
+async function readTimeline(): Promise<TimelineRecord[]> {
+  try {
+    const raw = await fs.readFile(TIMELINE_PATH, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeTimeline(data: TimelineRecord[]): Promise<void> {
+  await fs.mkdir(path.dirname(TIMELINE_PATH), { recursive: true });
+  await fs.writeFile(TIMELINE_PATH, JSON.stringify(data, null, 2), "utf-8");
+}
 
 export async function GET() {
   try {
-    const result = await queryDb("SELECT * FROM cms_timeline ORDER BY order_index ASC");
+    const list = await readTimeline();
+    const sorted = [...list].sort(
+      (a, b) => Number(a.order_index ?? a.order ?? 0) - Number(b.order_index ?? b.order ?? 0)
+    );
     return NextResponse.json(
-      result.rows.map((r: any) => ({
+      sorted.map((r) => ({
         ...r,
+        id: String(r.id),
         order: Number(r.order_index ?? r.order ?? 0),
+        order_index: Number(r.order_index ?? r.order ?? 0),
       }))
     );
   } catch (err: any) {
@@ -19,31 +52,75 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "timeline", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const b = await req.json();
-    const orderIndex = Number(b.order ?? b.order_index ?? 0);
-    let finalId = b.id;
 
-    if (b.id && !isNaN(Number(b.id))) {
-      await queryDb(
-        `INSERT INTO cms_timeline (id, year, title, description, image, order_index)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT(id) DO UPDATE SET year=EXCLUDED.year, title=EXCLUDED.title, description=EXCLUDED.description,
-           image=EXCLUDED.image, order_index=EXCLUDED.order_index`,
-        [Number(b.id), b.year, b.title, b.description || null, b.image || null, orderIndex]
-      );
-    } else {
-      const res = await queryDb(
-        `INSERT INTO cms_timeline (year, title, description, image, order_index)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [b.year, b.title, b.description || null, b.image || null, orderIndex]
-      );
-      finalId = res.rows[0]?.id;
+    // Handle batch reorder / update
+    if (Array.isArray(b)) {
+      const list = b.map((item, index) => ({
+        ...item,
+        id: String(item.id),
+        order: index,
+        order_index: index,
+      }));
+      await writeTimeline(list);
+      return NextResponse.json({ ok: true, count: list.length });
     }
-    return NextResponse.json({ ok: true, id: finalId });
+
+    const year = String(b.year || "").trim();
+    const title = String(b.title || "").trim();
+    if (!year || !title) {
+      return NextResponse.json({ error: "Both year and title are required for timeline milestones." }, { status: 400 });
+    }
+
+    const orderIndex = Number(b.order ?? b.order_index ?? 0);
+    const list = await readTimeline();
+
+    let finalId = b.id ? String(b.id) : null;
+    if (!finalId) {
+      const maxNum = list.reduce((max, t) => {
+        const n = Number(t.id);
+        return isNaN(n) ? max : Math.max(max, n);
+      }, 0);
+      finalId = String(maxNum + 1);
+    }
+
+    const existingIndex = list.findIndex((t) => String(t.id) === finalId);
+
+    // Automatically store base64 data URLs in PostgreSQL media table
+    const storedImage = b.image !== undefined
+      ? await ensureMediaUrl(b.image, `timeline-${finalId}.png`)
+      : undefined;
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = {
+        ...list[existingIndex],
+        year: b.year ?? list[existingIndex].year,
+        title: b.title ?? list[existingIndex].title,
+        description: b.description ?? list[existingIndex].description,
+        image: storedImage ?? list[existingIndex].image,
+        order: orderIndex,
+        order_index: orderIndex,
+      };
+    } else {
+      list.push({
+        id: finalId,
+        year: b.year ?? "",
+        title: b.title ?? "",
+        description: b.description ?? "",
+        image: storedImage ?? "",
+        order: orderIndex,
+        order_index: orderIndex,
+      });
+    }
+
+    await writeTimeline(list);
+    return NextResponse.json({ ok: true, id: finalId, image: storedImage });
   } catch (err: any) {
     console.error("POST /api/cms/timeline error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

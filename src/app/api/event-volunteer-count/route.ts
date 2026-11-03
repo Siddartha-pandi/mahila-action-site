@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
         [title]
       ),
       queryDb(
-        "SELECT max_volunteers FROM cms_events WHERE LOWER(title) = LOWER($1) LIMIT 1",
+        "SELECT max_volunteers FROM events WHERE LOWER(title) = LOWER($1) LIMIT 1",
         [title]
       ),
     ]);

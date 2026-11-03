@@ -76,6 +76,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
           canonicalEmail = "mahilaaction.vsk@gmail.com";
         }
         setCurrentAdminSession(canonicalEmail);
+        try {
+          localStorage.setItem("mahila_admin_active_tab", "submissions");
+        } catch {}
         setAuthBusy(false);
         toast.success("Signed in to Admin Panel!");
         setPage("admin");
@@ -101,6 +104,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
         canonicalEmail = "mahilaaction.vsk@gmail.com";
       }
       setCurrentAdminSession(canonicalEmail);
+      try {
+        localStorage.setItem("mahila_admin_active_tab", "submissions");
+      } catch {}
       toast.success("Signed in to Admin Panel!");
       setPage("admin");
       return;
@@ -173,21 +179,21 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       <section className="py-10 sm:py-16 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
           {profile ? (
-            <div className="max-w-[500px] w-full mx-auto bg-white rounded-3xl p-8 border border-[#a65a4a]/20 text-center shadow-lg">
-              <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
+            <div className="max-w-[500px] w-full mx-auto bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-[#a65a4a]/20 text-center shadow-lg">
+              <div className="size-14 sm:size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
                 <CheckCircle size={32} />
               </div>
-              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Currently Signed In</h3>
-              <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/65 max-w-md mx-auto mt-2 leading-relaxed">
+              <h3 className="font-['Fraunces',serif] text-[20px] sm:text-[24px] font-semibold text-[#1e1e1e]">Currently Signed In</h3>
+              <p className="font-['Inter',sans-serif] text-[13px] sm:text-[15px] text-[#1e1e1e]/65 max-w-md mx-auto mt-2 leading-relaxed">
                 You are logged in as <strong className="text-[#a65a4a]">{profile.name}</strong> ({profile.email}).
               </p>
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <button onClick={() => setPage("account")} className="w-full sm:w-auto px-7 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center justify-center gap-2">
+                <button onClick={() => setPage("account")} className="w-full sm:w-auto px-6 sm:px-7 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[14px] sm:text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center justify-center gap-2">
                   <User size={18} /> Go to My Account →
                 </button>
                 <button
                   onClick={() => { saveUserSession(null); setProfile(null); toast.success("Signed out"); }}
-                  className="w-full sm:w-auto px-5 py-3 border border-[#a65a4a]/30 text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[14px] rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-5 py-3 border border-[#a65a4a]/30 text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[13px] sm:text-[14px] rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
                 >
                   <LogOut size={16} /> Sign Out
                 </button>
@@ -195,16 +201,16 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
             </div>
           ) : (
             <div className="max-w-[480px] w-full mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-[#a65a4a]/20 overflow-hidden">
-              <div className="bg-[#a65a4a] px-8 py-6 text-center">
-                <h2 className="font-['Fraunces',serif] text-[#f4efe7] text-[26px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+              <div className="bg-[#a65a4a] px-5 sm:px-8 py-5 sm:py-6 text-center">
+                <h2 className="font-['Fraunces',serif] text-[#f4efe7] text-[22px] sm:text-[26px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
                   {mode === "login" ? "Account Sign In" : mode === "register" ? "Create Account" : mode === "forgot" ? "Reset Password" : "Choose New Password"}
                 </h2>
-                <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[13px] mt-1">
+                <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] sm:text-[13px] mt-1">
                   {mode === "login" ? "Access your registered events & contributions" : mode === "register" ? "Register to participate in community initiatives" : mode === "forgot" ? "Enter your registered email address" : "Choose a strong new password"}
                 </p>
               </div>
 
-              <div className="p-8">
+              <div className="p-5 sm:p-8">
                 {mode === "login" && (
                   <form onSubmit={handleLogin} className="flex flex-col gap-4">
                     <div>
@@ -224,7 +230,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                       </div>
                       <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]" required />
                     </div>
-                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60 flex items-center justify-center gap-2">
+                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60 flex items-center justify-center gap-2">
                       <LogIn size={18} />
                       {authBusy ? "Signing in…" : "Sign In"}
                     </button>
@@ -265,7 +271,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                         <option>General Support</option>
                       </select>
                     </div>
-                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
                       {authBusy ? "Creating account…" : "Create Account & Continue"}
                     </button>
                     <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">
@@ -312,7 +318,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                         </div>
                       )}
 
-                      <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                      <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
                         {authBusy ? "Sending…" : "Send Reset Link"}
                       </button>
                       <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">
@@ -350,7 +356,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
                     {resetConfirm.length > 0 && resetPass !== resetConfirm && (
                       <p className="font-['Inter',sans-serif] text-[#993925] text-[12px] -mt-1">Passwords don't match.</p>
                     )}
-                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                    <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
                       {authBusy ? "Saving…" : "Save New Password"}
                     </button>
                     <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55 mt-2">

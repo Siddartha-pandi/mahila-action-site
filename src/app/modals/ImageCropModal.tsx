@@ -141,10 +141,10 @@ export function ImageCropModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[500] bg-black/70 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[500] bg-black/70 flex items-center justify-center p-2.5 sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[720px] max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#1e1e1e]/10">
-          <h3 className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e]">Crop Image</h3>
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[#1e1e1e]/10">
+          <h3 className="font-['Inter',sans-serif] font-semibold text-[14px] sm:text-[15px] text-[#1e1e1e]">Crop Image</h3>
           <button
             onClick={onCancel}
             className="size-8 flex items-center justify-center rounded-full hover:bg-[#1e1e1e]/5 cursor-pointer text-[#1e1e1e]/60"
@@ -154,15 +154,15 @@ export function ImageCropModal({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 px-5 py-2.5 border-b border-[#1e1e1e]/10 bg-[#faf7f3]">
-          <span className="font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/45 uppercase tracking-wider mr-1">
+        <div className="flex flex-wrap items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 border-b border-[#1e1e1e]/10 bg-[#faf7f3]">
+          <span className="font-['Inter',sans-serif] text-[10px] sm:text-[11px] font-semibold text-[#1e1e1e]/45 uppercase tracking-wider mr-1">
             Aspect
           </span>
           {ASPECTS.map((a) => (
             <button
               key={a.label}
               onClick={() => applyAspect(a.value)}
-              className={`px-3 py-1 rounded-full text-[12px] font-['Inter',sans-serif] font-medium cursor-pointer transition-colors ${
+              className={`px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-[12px] font-['Inter',sans-serif] font-medium cursor-pointer transition-colors ${
                 aspect === a.value
                   ? "bg-[#a65a4a] text-white"
                   : "bg-white border border-[#a65a4a]/25 text-[#1e1e1e]/70 hover:border-[#a65a4a]"
@@ -174,14 +174,14 @@ export function ImageCropModal({
           {displaySize && (
             <button
               onClick={() => initBox(displaySize.w, displaySize.h, aspect)}
-              className="ml-auto flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-['Inter',sans-serif] font-medium text-[#1e1e1e]/60 hover:text-[#a65a4a] cursor-pointer"
+              className="ml-auto flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-[12px] font-['Inter',sans-serif] font-medium text-[#1e1e1e]/60 hover:text-[#a65a4a] cursor-pointer"
             >
               <RotateCcw size={12} /> Reset
             </button>
           )}
         </div>
 
-        <div className="flex-1 overflow-auto flex items-center justify-center bg-[#1e1e1e]/90 p-6">
+        <div className="flex-1 overflow-auto flex items-center justify-center bg-[#1e1e1e]/90 p-2.5 sm:p-6">
           <div className="relative select-none" style={{ touchAction: "none" }}>
             <img
               ref={imgRef}
@@ -237,7 +237,7 @@ export function ImageCropModal({
           </p>
         )}
 
-        <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-[#1e1e1e]/10">
+        <div className="flex items-center justify-end gap-2 px-4 sm:px-5 py-3 sm:py-3.5 border-t border-[#1e1e1e]/10">
           <Button variant="ghost" onClick={onCancel} size="sm">
             Cancel
           </Button>

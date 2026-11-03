@@ -48,15 +48,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Database Admin / Staff Accounts Check
+    // 2. Database Admin / Staff / Custom Role Accounts Check
     const result = await queryDb(
-      "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role IN ('admin', 'staff')",
+      "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role != 'user'",
       [normalizedEmail]
     );
     const user = result.rows[0];
 
     if (!user) {
-      return NextResponse.json({ error: "Invalid email or password, or user account does not have admin/staff access." }, { status: 401 });
+      return NextResponse.json({ error: "Invalid email or password, or user account does not have admin panel access." }, { status: 401 });
+    }
+
+    if (user.status && user.status !== "Active") {
+      return NextResponse.json({ error: "Your account is inactive. Please contact the administrator." }, { status: 403 });
     }
 
     const isValidPassword = await bcrypt.compare(String(password), user.password_hash);

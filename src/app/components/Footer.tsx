@@ -2,6 +2,8 @@
 
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
+import { useSiteData } from "../context/SiteDataContext";
+import { useUserProfile } from "../hooks/useUserProfile";
 import { fraunces, inter, type Page } from "./shared/styleHelpers";
 
 const FOOTER_IMPACT_LINKS: { label: string; id: string }[] = [
@@ -13,10 +15,31 @@ const FOOTER_IMPACT_LINKS: { label: string; id: string }[] = [
 
 export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   const { openModal } = useModal();
+  const siteData = useSiteData();
+  const contact = siteData?.contact;
+  const email = contact?.email || "contact@mahilaction.org";
+  const phone = contact?.phone || "+91 123454321";
+  const userProfile = useUserProfile();
 
   function nav(p: Page) {
     setPage(p);
-    window.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleAttendEvents() {
+    if (userProfile) {
+      nav("eventsBlog");
+    } else {
+      openModal("attend");
+    }
+  }
+
+  function handleVolunteer() {
+    if (userProfile) {
+      nav("eventsBlog");
+    } else {
+      openModal("volunteer");
+    }
   }
 
   function openImpact(id: string) {
@@ -25,13 +48,13 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
 
   return (
     <footer className="bg-[#a65a4a]">
-      <div className="max-w-[1200px] mx-auto px-6 py-16">
-        <div className="flex flex-col lg:flex-row justify-between gap-12">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
+        <div className="flex flex-col lg:flex-row justify-between gap-10 lg:gap-12">
           {/* Brand */}
-          <div className="flex flex-col gap-8 max-w-[300px]">
+          <div className="flex flex-col gap-6 sm:gap-8 max-w-[360px] lg:max-w-[300px]">
             <LogoMark invert />
             <div
-              className={`${fraunces()} text-[#f4efe7] text-[26px] leading-tight`}
+              className={`${fraunces()} text-[#f4efe7] text-[22px] sm:text-[26px] leading-tight`}
               style={{
                 fontVariationSettings: '"SOFT" 0, "WONK" 1',
               }}
@@ -42,13 +65,13 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => nav("donate")}
-                className={`${inter()} bg-[#f4efe7] text-[#a65a4a] text-[15px] font-bold px-10 py-3 rounded-full hover:bg-white transition-colors cursor-pointer text-center`}
+                className={`${inter()} w-full sm:w-auto bg-[#f4efe7] text-[#a65a4a] text-[14px] sm:text-[15px] font-bold px-6 sm:px-10 py-3 rounded-full hover:bg-white transition-colors cursor-pointer text-center`}
               >
                 Donate For The Cause
               </button>
               <button
-                onClick={() => openModal("volunteer")}
-                className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[15px] font-bold px-10 py-3 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}
+                onClick={() => nav("eventsBlog")}
+                className={`${inter()} w-full sm:w-auto border-2 border-[#f4efe7] text-[#f4efe7] text-[14px] sm:text-[15px] font-bold px-6 sm:px-10 py-3 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}
               >
                 Join The Movement
               </button>
@@ -56,10 +79,10 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
           </div>
 
           {/* Links grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-5 md:gap-10">
+          <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 gap-6 sm:gap-8 md:gap-10">
             <div>
               <p
-                className={`${inter()} text-[#f4efe7] text-[16px] font-semibold uppercase mb-4`}
+                className={`${inter()} text-[#f4efe7] text-[15px] sm:text-[16px] font-semibold uppercase mb-3 sm:mb-4`}
               >
                 Mahila Action
               </p>
@@ -74,7 +97,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
             </div>
             <div>
               <p
-                className={`${inter()} text-[#f4efe7] text-[16px] font-semibold uppercase mb-4`}
+                className={`${inter()} text-[#f4efe7] text-[15px] sm:text-[16px] font-semibold uppercase mb-3 sm:mb-4`}
               >
                 Get Involved
               </p>
@@ -82,7 +105,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 className={`${inter()} text-[#f4efe7]/80 text-[13px] flex flex-col gap-2`}
               >
                 <button
-                  onClick={() => openModal("attend")}
+                  onClick={handleAttendEvents}
                   className="text-left hover:text-[#f4efe7] transition-colors cursor-pointer"
                 >
                   Attend Events
@@ -94,7 +117,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                   Partner With Us
                 </button>
                 <button
-                  onClick={() => openModal("volunteer")}
+                  onClick={handleVolunteer}
                   className="text-left hover:text-[#f4efe7] transition-colors cursor-pointer"
                 >
                   Volunteer
@@ -103,7 +126,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
             </div>
             <div>
               <p
-                className={`${inter()} text-[#f4efe7] text-[16px] font-semibold uppercase mb-4`}
+                className={`${inter()} text-[#f4efe7] text-[15px] sm:text-[16px] font-semibold uppercase mb-3 sm:mb-4`}
               >
                 Our Impacts
               </p>
@@ -121,9 +144,9 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 ))}
               </div>
             </div>
-            <div className="col-span-2 md:col-span-1">
+            <div className="xs:col-span-2 md:col-span-1">
               <p
-                className={`${inter()} text-[#f4efe7] text-[16px] font-semibold uppercase mb-4`}
+                className={`${inter()} text-[#f4efe7] text-[15px] sm:text-[16px] font-semibold uppercase mb-3 sm:mb-4`}
               >
                 Contact
               </p>
@@ -131,12 +154,19 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 className={`${inter()} text-[#f4efe7]/80 text-[13px] flex flex-col gap-2`}
               >
                 <a
-                  href="mailto:contact@mahilaction.org"
-                  className="hover:text-[#f4efe7] transition-colors"
+                  href={`mailto:${email}`}
+                  className="hover:text-[#f4efe7] transition-colors break-all"
                 >
-                  contact@mahilaction.org
+                  {email}
                 </a>
-                <span>+91 XXXXXXXXX</span>
+                {phone && (
+                  <a
+                    href={`tel:${phone.replace(/\s+/g, "")}`}
+                    className="hover:text-[#f4efe7] transition-colors"
+                  >
+                    {phone}
+                  </a>
+                )}
               </div>
               {/* Social icons */}
               <div className="flex gap-4 mt-4">

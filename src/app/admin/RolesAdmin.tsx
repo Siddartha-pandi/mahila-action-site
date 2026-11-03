@@ -32,6 +32,7 @@ import {
 
 import { api } from "../../lib/api";
 import { toast } from "sonner";
+import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 
@@ -98,19 +99,32 @@ export function RolesAdmin({
 
   async function handleSaveUser(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingUser?.email || !editingUser?.name) {
-      return toast.error("Please fill in both name and email.");
+    if (!canEditRoles) {
+      return toast.error("Permission denied: You lack EDIT rights for users.");
+    }
+    if (editingUser?.role === "superadmin" && !isSuperAdmin) {
+      return toast.error("Only Super Admin can assign the Super Admin role.");
+    }
+    const hasPassword = Boolean(editingUser?.password && String(editingUser.password).trim());
+    const invalid = firstError(
+      validateName(editingUser?.name),
+      validateEmail(editingUser?.email),
+      validatePhone(editingUser?.phone, "phone number", { required: false }),
+      !editingUser?.id && hasPassword ? validatePassword(editingUser.password) : null
+    );
+    if (invalid) {
+      return toast.error(invalid);
     }
 
     try {
       const payload: any = {
-        name: editingUser.name,
-        email: editingUser.email,
-        phone: editingUser.phone,
+        name: editingUser.name.trim(),
+        email: editingUser.email.trim().toLowerCase(),
+        phone: editingUser.phone?.trim() || null,
         role: editingUser.role || "user",
         kind: editingUser.kind || null,
         status: editingUser.status || "Active",
-        skills: editingUser.skills,
+        skills: editingUser.skills || null,
         permissions: editingUser.permissions ?? null,
       };
 
@@ -121,7 +135,9 @@ export function RolesAdmin({
         toast.success(`Updated user ${editingUser.name}`);
       } else {
         // Create new user account
-        payload.password = editingUser.password || "123456";
+        if (hasPassword) {
+          payload.password = editingUser.password.trim();
+        }
         const res = await api.post("/api/members", payload);
         if (!res.ok) throw new Error(res.error || "Failed to create user account.");
         toast.success(`Created user account for ${editingUser.name}`);
@@ -283,6 +299,68 @@ export function RolesAdmin({
     setPageSize: setUserPageSize,
   } = usePagination(filteredUsers, { initialPageSize: 10 });
 
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<number | string>>(new Set());
+
+  const isAllUsersPageSelected =
+    paginatedUsers.length > 0 &&
+    paginatedUsers.every((u) => selectedUserIds.has(u.id));
+  const isSomeUsersPageSelected =
+    paginatedUsers.some((u) => selectedUserIds.has(u.id)) &&
+    !isAllUsersPageSelected;
+
+  const toggleSelectAllUsers = () => {
+    if (isAllUsersPageSelected) {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        paginatedUsers.forEach((u) => next.delete(u.id));
+        return next;
+      });
+    } else {
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        paginatedUsers.forEach((u) => next.add(u.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectUser = (id: number | string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchDeleteUsers = async () => {
+    if (!canDeleteRoles) return toast.error("You do not have permission to delete user accounts.");
+    const targets = dbUsers.filter((u) => selectedUserIds.has(u.id));
+    const validUsers = targets.filter(
+      (u) => u.role !== "superadmin" && u.roleId !== "superadmin" && u.email !== currentSession.email
+    );
+    const skippedCount = targets.length - validUsers.length;
+
+    if (skippedCount > 0) {
+      toast.info(`${skippedCount} account(s) skipped (Super Admin or your own active account cannot be deleted).`);
+    }
+    if (!validUsers.length) return;
+
+    if (!confirm(`Are you sure you want to permanently delete ${validUsers.length} user account(s)?`)) return;
+
+    let deletedCount = 0;
+    for (const u of validUsers) {
+      try {
+        const res = await api.del(`/api/members/${u.id}`);
+        if (res.ok) deletedCount++;
+      } catch {}
+    }
+
+    toast.success(`Deleted ${deletedCount} user account(s).`);
+    setSelectedUserIds(new Set());
+    fetchDbUsers();
+  };
+
   const inputBase = "w-full border border-[#a65a4a]/30 rounded-lg px-3 py-2 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] font-['Inter',sans-serif] bg-white";
 
   return (
@@ -361,8 +439,9 @@ export function RolesAdmin({
                 description: "",
                 permissions: {
                   submissions: { view: true, edit: false, delete: false },
+                  donations: { view: true, edit: false, delete: false },
                   events: { view: true, edit: false, delete: false },
-                  contentTypeBuilder: { view: true, edit: false, delete: false },
+                  contentTypeBuilder: { view: false, edit: false, delete: false },
                   stories: { view: true, edit: false, delete: false },
                   impactStories: { view: true, edit: false, delete: false },
                   categories: { view: true, edit: false, delete: false },
@@ -371,6 +450,7 @@ export function RolesAdmin({
                   timeline: { view: true, edit: false, delete: false },
                   contact: { view: true, edit: false, delete: false },
                   roles: { view: false, edit: false, delete: false },
+                  trash: { view: false, edit: false, delete: false },
                 },
               });
               setShowRoleModal(true);
@@ -427,10 +507,47 @@ export function RolesAdmin({
 
           {/* Unified Database User Accounts Table */}
           <div className="bg-white rounded-xl border border-[#a65a4a]/15 overflow-hidden shadow-sm">
+            {/* Bulk Selection Toolbar */}
+            {selectedUserIds.size > 0 && (
+              <div className="bg-[#fcf8f5] border-b border-[#a65a4a]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[13px] animate-in fade-in duration-150">
+                <div className="flex items-center gap-3">
+                  <span className="bg-[#a65a4a] text-white font-bold text-[11px] px-2.5 py-1 rounded-full">
+                    {selectedUserIds.size} Users Selected
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBatchDeleteUsers}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300"
+                  >
+                    <Trash2 size={13} /> Delete Selected Users
+                  </button>
+                  <button
+                    onClick={() => setSelectedUserIds(new Set())}
+                    className="px-3 py-1 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-[#f0ebe3] text-[#1e1e1e]/70 uppercase text-[11px] font-semibold tracking-wider border-b border-[#a65a4a]/15">
                   <tr>
+                    <th className="px-3 py-3.5 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllUsersPageSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isSomeUsersPageSelected;
+                        }}
+                        onChange={toggleSelectAllUsers}
+                        className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                        title={isAllUsersPageSelected ? "Deselect page" : "Select entire page"}
+                      />
+                    </th>
                     <th className="px-5 py-3.5">User</th>
                     <th className="px-5 py-3.5">Account Role</th>
                     <th className="px-5 py-3.5">Kind (Participation)</th>
@@ -443,26 +560,44 @@ export function RolesAdmin({
                 <tbody className="divide-y divide-gray-100">
                   {dbLoading ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-[#1e1e1e]/40 text-[13px]">
+                      <td colSpan={8} className="px-5 py-8 text-center text-[#1e1e1e]/40 text-[13px]">
                         Loading user accounts…
                       </td>
                     </tr>
                   ) : dbError ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-6 text-center text-red-500 text-[13px]">
+                      <td colSpan={8} className="px-5 py-6 text-center text-red-500 text-[13px]">
                         {dbError}
                       </td>
                     </tr>
                   ) : filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-[#1e1e1e]/50">
+                      <td colSpan={8} className="px-5 py-8 text-center text-[#1e1e1e]/50">
                         No user accounts found matching query.
                       </td>
                     </tr>
                   ) : (
-                    paginatedUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-gray-50/70 transition-colors">
-                        <td className="px-5 py-4">
+                    paginatedUsers.map((u) => {
+                      const isSelected = selectedUserIds.has(u.id);
+
+                      return (
+                        <tr
+                          key={u.id}
+                          onClick={() => toggleSelectUser(u.id)}
+                          className={`transition-colors cursor-pointer ${
+                            isSelected ? "bg-amber-50/80 hover:bg-amber-100/60" : "hover:bg-gray-50/70"
+                          }`}
+                        >
+                          <td className="px-3 py-4 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={u.role === "superadmin" || u.email === currentSession.email || !canDeleteRoles}
+                              onChange={() => toggleSelectUser(u.id)}
+                              className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle disabled:opacity-30 disabled:cursor-not-allowed"
+                            />
+                          </td>
+                          <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] font-bold text-sm flex items-center justify-center">
                               {(u.name || "?").charAt(0).toUpperCase()}
@@ -511,7 +646,7 @@ export function RolesAdmin({
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {u.role !== "superadmin" && (
+                            {u.role !== "superadmin" && canEditRoles && (
                               <button
                                 onClick={() => {
                                   const basePerms = u.permissions || getRoleById(u.role).permissions;
@@ -530,8 +665,9 @@ export function RolesAdmin({
                                 setEditingUser(u);
                                 setShowUserModal(true);
                               }}
-                              className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer"
-                              title="Edit user account details"
+                              disabled={!canEditRoles || (u.role === "superadmin" && !isSuperAdmin)}
+                              className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={u.role === "superadmin" && !isSuperAdmin ? "Only Super Admin can edit this account" : "Edit user account details"}
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
@@ -548,7 +684,7 @@ export function RolesAdmin({
                         </td>
 
                       </tr>
-                    ))
+                    )})
                   )}
                 </tbody>
               </table>
@@ -721,7 +857,7 @@ export function RolesAdmin({
                   <label className="block text-[11px] font-semibold text-[#1e1e1e]/60 uppercase mb-1">Password</label>
                   <input
                     type="password"
-                    placeholder="Defaults to 123456"
+                    placeholder="Defaults to Mahila@2026"
                     value={editingUser?.password || ""}
                     onChange={e => setEditingUser((prev: any) => ({ ...prev, password: e.target.value }))}
                     className={inputBase}
@@ -743,9 +879,13 @@ export function RolesAdmin({
                       onChange={e => setEditingUser((prev: any) => ({ ...prev, role: e.target.value }))}
                       className={inputBase}
                     >
-                      <option value="admin">Admin (Full Access)</option>
-                      <option value="staff">Staff (View Only Admin Access)</option>
-                      <option value="user">User (No Admin Access)</option>
+                      {roles
+                        .filter((r) => isSuperAdmin || r.id !== "superadmin")
+                        .map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
                     </select>
                   </div>
 

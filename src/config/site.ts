@@ -6,7 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 // GitHub Pages project site → https://<username>.github.io/<repo-name>/
-// IMPORTANT: also update `base` in vite.config.ts to "/<repo-name>/" to match.
+// Keep deployment URL settings here in sync with the Next.js deployment.
 export const GITHUB_USERNAME = "mahilaactionvsk-ops";
 export const GITHUB_REPO = "mahila-action-site";
 

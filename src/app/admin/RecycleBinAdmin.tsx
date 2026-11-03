@@ -29,8 +29,8 @@ export function RecycleBinAdmin() {
   const [filterType, setFilterType] = useState<string>("all");
 
   const session = getCurrentAdminSession();
-  const canDelete = hasPermission(session, "trash" as any, "delete") ?? true;
-  const canEdit = hasPermission(session, "trash" as any, "edit") ?? true;
+  const canDelete = hasPermission(session, "trash", "delete");
+  const canEdit = hasPermission(session, "trash", "edit");
 
   function reload() {
     setItems(getTrashItems());
@@ -62,6 +62,7 @@ export function RecycleBinAdmin() {
   }, []);
 
   function handleRestore(item: TrashItem) {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to restore items.");
     const ok = restoreTrashItem(item);
     if (ok) {
       toast.success(`Restored "${item.title}" successfully!`);
@@ -72,6 +73,7 @@ export function RecycleBinAdmin() {
   }
 
   function handlePermanentDelete(item: TrashItem) {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required to permanently delete items.");
     if (!confirm(`Are you sure you want to permanently delete "${item.title}"? This cannot be undone.`)) {
       return;
     }
@@ -81,6 +83,7 @@ export function RecycleBinAdmin() {
   }
 
   function handleEmptyTrash() {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required to empty recycle bin.");
     if (!items.length) {
       return toast.error("Recycle Bin is already empty.");
     }
@@ -116,6 +119,68 @@ export function RecycleBinAdmin() {
     setPage,
     setPageSize,
   } = usePagination(filtered, { initialPageSize: 10 });
+
+  const [selectedTrashKeys, setSelectedTrashKeys] = useState<Set<string>>(new Set());
+
+  const isAllTrashPageSelected =
+    paginatedItems.length > 0 &&
+    paginatedItems.every((item) => selectedTrashKeys.has(`${item.type}_${item.id}`));
+  const isSomeTrashPageSelected =
+    paginatedItems.some((item) => selectedTrashKeys.has(`${item.type}_${item.id}`)) &&
+    !isAllTrashPageSelected;
+
+  const toggleSelectAllTrash = () => {
+    if (isAllTrashPageSelected) {
+      setSelectedTrashKeys((prev) => {
+        const next = new Set(prev);
+        paginatedItems.forEach((item) => next.delete(`${item.type}_${item.id}`));
+        return next;
+      });
+    } else {
+      setSelectedTrashKeys((prev) => {
+        const next = new Set(prev);
+        paginatedItems.forEach((item) => next.add(`${item.type}_${item.id}`));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectTrashItem = (key: string) => {
+    setSelectedTrashKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleBatchRestore = () => {
+    if (!canEdit) return toast.error("Permission denied: EDIT rights required to restore items.");
+    const targets = items.filter((item) => selectedTrashKeys.has(`${item.type}_${item.id}`));
+    if (!targets.length) return;
+    let count = 0;
+    targets.forEach((item) => {
+      if (restoreTrashItem(item)) count++;
+    });
+    toast.success(`Restored ${count} item(s) successfully!`);
+    setSelectedTrashKeys(new Set());
+    reload();
+  };
+
+  const handleBatchPermanentDelete = () => {
+    if (!canDelete) return toast.error("Permission denied: DELETE rights required to permanently delete items.");
+    const targets = items.filter((item) => selectedTrashKeys.has(`${item.type}_${item.id}`));
+    if (!targets.length) return;
+    if (!confirm(`Are you sure you want to permanently erase ${targets.length} item(s)? This cannot be undone.`)) {
+      return;
+    }
+    targets.forEach((item) => {
+      removeFromTrash(item.id, item.type);
+    });
+    toast.success(`Permanently deleted ${targets.length} item(s).`);
+    setSelectedTrashKeys(new Set());
+    reload();
+  };
 
   const getTypeIcon = (type: TrashItem["type"]) => {
     switch (type) {
@@ -167,7 +232,7 @@ export function RecycleBinAdmin() {
           </button>
           <button
             onClick={handleEmptyTrash}
-            disabled={!items.length}
+            disabled={!items.length || !canDelete}
             className="inline-flex items-center gap-2 bg-rose-600 text-white font-medium text-[13px] px-4 py-2.5 rounded-xl hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Trash2 size={15} /> Empty Recycle Bin
@@ -249,6 +314,39 @@ export function RecycleBinAdmin() {
 
       {/* Recycle Bin Table */}
       <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden">
+        {/* Bulk Selection Toolbar */}
+        {selectedTrashKeys.size > 0 && (
+          <div className="bg-[#fcf8f5] border-b border-[#a65a4a]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[13px] animate-in fade-in duration-150">
+            <div className="flex items-center gap-3">
+              <span className="bg-[#a65a4a] text-white font-bold text-[11px] px-2.5 py-1 rounded-full">
+                {selectedTrashKeys.size} Selected
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleBatchRestore}
+                disabled={!canEdit}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-800 hover:bg-emerald-600 hover:text-white transition-colors cursor-pointer border border-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <RotateCcw size={13} /> Restore Selected
+              </button>
+              <button
+                onClick={handleBatchPermanentDelete}
+                disabled={!canDelete}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={13} /> Permanently Erase Selected
+              </button>
+              <button
+                onClick={() => setSelectedTrashKeys(new Set())}
+                className="px-3 py-1 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+
         {!filtered.length ? (
           <div className="p-12 text-center">
             <div className="size-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
@@ -266,6 +364,18 @@ export function RecycleBinAdmin() {
             <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
               <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
                 <tr>
+                  <th className="py-3.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllTrashPageSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeTrashPageSelected;
+                      }}
+                      onChange={toggleSelectAllTrash}
+                      className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                      title={isAllTrashPageSelected ? "Deselect page" : "Select entire page"}
+                    />
+                  </th>
                   <th className="py-3.5 px-4">Item Type</th>
                   <th className="py-3.5 px-4">Title / Name</th>
                   <th className="py-3.5 px-4">Details</th>
@@ -274,9 +384,27 @@ export function RecycleBinAdmin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#a65a4a]/10">
-                {paginatedItems.map((item) => (
-                  <tr key={`${item.type}_${item.id}`} className="hover:bg-[#a65a4a]/5 transition-colors">
-                    <td className="py-3.5 px-4">
+                {paginatedItems.map((item) => {
+                  const key = `${item.type}_${item.id}`;
+                  const isSelected = selectedTrashKeys.has(key);
+
+                  return (
+                    <tr
+                      key={key}
+                      onClick={() => toggleSelectTrashItem(key)}
+                      className={`transition-colors cursor-pointer ${
+                        isSelected ? "bg-amber-50/80 hover:bg-amber-100/60" : "hover:bg-[#a65a4a]/5"
+                      }`}
+                    >
+                      <td className="py-3.5 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectTrashItem(key)}
+                          className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                        />
+                      </td>
+                      <td className="py-3.5 px-4">
                       <div className="flex items-center gap-2">
                         {getTypeIcon(item.type)}
                         <span className="font-semibold text-[#1e1e1e]">
@@ -302,14 +430,16 @@ export function RecycleBinAdmin() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleRestore(item)}
-                          className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          disabled={!canEdit}
+                          className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Restore back to live site"
                         >
                           <RotateCcw size={14} /> Restore
                         </button>
                         <button
                           onClick={() => handlePermanentDelete(item)}
-                          className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          disabled={!canDelete}
+                          className="inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-200 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Permanently erase"
                         >
                           <Trash2 size={14} /> Erase
@@ -317,7 +447,7 @@ export function RecycleBinAdmin() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
             <div className="p-4 border-t border-[#a65a4a]/10 bg-[#faf7f3]/50">

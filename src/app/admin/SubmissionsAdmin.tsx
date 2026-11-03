@@ -16,6 +16,7 @@ import {
   MessageSquare,
   RefreshCw,
   UserMinus,
+  Printer,
 } from "lucide-react";
 import {
   getSubmissions,
@@ -79,6 +80,16 @@ export function categoryOf(item: SubmissionItem): SubmissionCategory {
   return item.type;
 }
 
+export function isStatusEligible(typeOrCategory: string): boolean {
+  return [
+    "volunteer",
+    "vendor",
+    "reservation",
+    "perm_volunteer_request",
+    "perm_volunteer_deactivate",
+  ].includes(typeOrCategory);
+}
+
 export function SubmissionsAdmin() {
   // Synchronous instant 0ms initial load from memory
   const [submissions, setSubmissions] = useState<SubmissionItem[]>(() => getSubmissions());
@@ -90,6 +101,8 @@ export function SubmissionsAdmin() {
   const [filterDonorType, setFilterDonorType] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedItem, setSelectedItem] = useState<SubmissionItem | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const showStatusColumn = filterType === "all" || isStatusEligible(filterType);
 
   const session = getCurrentAdminSession();
   const canEdit = hasPermission(session, "submissions", "edit");
@@ -104,8 +117,10 @@ export function SubmissionsAdmin() {
         // list doesn't contain them. Merging them back in stops every Refresh
         // from wiping those requests off the panel.
         const localOnly = getSubmissions().filter(s => LOCAL_ONLY_SUBMISSION_TYPES.includes(s.type));
+        const remoteKeys = new Set(remote.map(r => `${r.type}_${r.id}`));
+        const dedupedLocal = localOnly.filter(l => !remoteKeys.has(`${l.type}_${l.id}`));
         setSubmissions(
-          [...remote, ...localOnly].sort(
+          [...remote, ...dedupedLocal].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
         );
@@ -227,7 +242,7 @@ export function SubmissionsAdmin() {
   const filtered = list.filter(item => {
     if (!item || !item.id) return false;
     if (filterType !== "all" && categoryOf(item) !== filterType) return false;
-    if (filterStatus !== "all" && item.status !== filterStatus) return false;
+    if (filterStatus !== "all" && (!isStatusEligible(categoryOf(item)) || item.status !== filterStatus)) return false;
     if (filterDonorType !== "all" && categoryOf(item) === "donation") {
       const isAnon =
         item.data?.anonymous === true ||
@@ -272,22 +287,171 @@ export function SubmissionsAdmin() {
     setPageSize,
   } = usePagination(filtered, { initialPageSize: 10 });
 
+  const isAllPageSelected = paginatedItems.length > 0 && paginatedItems.every(i => selectedKeys.has(`${i.type}::${i.id}`));
+  const isSomePageSelected = paginatedItems.some(i => selectedKeys.has(`${i.type}::${i.id}`)) && !isAllPageSelected;
+
+  const toggleSelectAll = () => {
+    if (isAllPageSelected) {
+      setSelectedKeys(prev => {
+        const next = new Set(prev);
+        paginatedItems.forEach(i => next.delete(`${i.type}::${i.id}`));
+        return next;
+      });
+    } else {
+      setSelectedKeys(prev => {
+        const next = new Set(prev);
+        paginatedItems.forEach(i => next.add(`${i.type}::${i.id}`));
+        return next;
+      });
+    }
+  };
+
+  const toggleSelectItem = (item: SubmissionItem) => {
+    const key = `${item.type}::${item.id}`;
+    setSelectedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedKeys(new Set(filtered.map(i => `${i.type}::${i.id}`)));
+  };
+
+  const clearSelection = () => {
+    setSelectedKeys(new Set());
+  };
+
+  const handleBatchStatusChange = async (status: SubmissionItem["status"]) => {
+    if (!canEdit) {
+      return toast.error("Permission denied: You lack EDIT rights for submissions.");
+    }
+    const targetItems = submissions.filter(i => selectedKeys.has(`${i.type}::${i.id}`));
+    if (!targetItems.length) return;
+
+    let updatedCount = 0;
+    for (const item of targetItems) {
+      const res = await updateSubmissionStatusRemote(item, status);
+      if (res.ok) updatedCount++;
+    }
+
+    setSubmissions(prev =>
+      prev.map(s => (selectedKeys.has(`${s.type}::${s.id}`) ? { ...s, status } : s))
+    );
+    if (selectedItem && selectedKeys.has(`${selectedItem.type}::${selectedItem.id}`)) {
+      setSelectedItem(prev => (prev ? { ...prev, status } : null));
+    }
+    toast.success(`Updated status of ${updatedCount} submissions to ${status}`);
+    clearSelection();
+  };
+
+  const handleBatchDelete = async () => {
+    if (!canDelete) {
+      return toast.error("Permission denied: You lack DELETE rights for submissions.");
+    }
+    const targetItems = submissions.filter(i => selectedKeys.has(`${i.type}::${i.id}`));
+    const validItems = targetItems.filter(i => i.type !== "member");
+    const memberCount = targetItems.length - validItems.length;
+
+    if (memberCount > 0) {
+      toast.info(`${memberCount} member account(s) skipped — members cannot be deleted here.`);
+    }
+    if (!validItems.length) return;
+
+    if (!confirm(`Are you sure you want to move ${validItems.length} submission(s) to the Recycle Bin?`)) {
+      return;
+    }
+
+    let deletedCount = 0;
+    for (const item of validItems) {
+      addToTrash({
+        id: String(item.id),
+        type: "submission",
+        title: item.data?.name || item.data?.contact_name || `Submission #${item.id}`,
+        subtitle: `${CATEGORY_LABEL[categoryOf(item)] || item.type} • ${item.data?.email || "No email"}`,
+        data: item,
+      });
+
+      const res = await deleteSubmissionRemote(item);
+      if (res.ok) deletedCount++;
+    }
+
+    const deletedKeySet = new Set(validItems.map(i => `${i.type}::${i.id}`));
+    setSubmissions(prev => prev.filter(s => !deletedKeySet.has(`${s.type}::${s.id}`)));
+    if (selectedItem && deletedKeySet.has(`${selectedItem.type}::${selectedItem.id}`)) {
+      setSelectedItem(null);
+    }
+    toast.success(`Moved ${deletedCount} submission(s) to Recycle Bin`);
+    clearSelection();
+  };
+
   function exportCSV() {
     if (!filtered.length) {
       toast.error("No submissions to export");
       return;
     }
-    const headers = ["ID", "Type", "Status", "Date", "Name/Contact", "Email", "Phone", "Details"];
-    const rows = filtered.map(item => [
-      item.id,
-      categoryOf(item),
-      item.status,
-      new Date(item.createdAt).toLocaleString(),
-      `"${(item.data.name || item.data.contact_name || "").replace(/"/g, '""')}"`,
-      `"${(item.data.email || "").replace(/"/g, '""')}"`,
-      `"${(item.data.phone || "").replace(/"/g, '""')}"`,
-      `"${JSON.stringify(item.data).replace(/"/g, '""')}"`,
-    ]);
+
+    if (filterType === "donation") {
+      const headers = [
+        "Receipt Number",
+        "Date",
+        "Donor Name",
+        "Amount (INR)",
+        "Donation Type",
+        "Payment Method",
+        "Transaction / UTR ID",
+        "Donor PAN",
+        "Donor Address",
+        "Email",
+        "Phone",
+        "Campaign",
+      ];
+      const rows = filtered.map((item) => [
+        `"${(item.data.receipt_number || `MA-REC-${new Date(item.createdAt).getFullYear()}-${item.id}`).replace(/"/g, '""')}"`,
+        `"${new Date(item.createdAt).toLocaleString("en-IN")}"`,
+        `"${(item.data.anonymous ? "Anonymous" : item.data.name || "").replace(/"/g, '""')}"`,
+        Number(item.data.amount) || 0,
+        `"${(item.data.donation_type || "one-time").replace(/"/g, '""')}"`,
+        `"${(item.data.payment_method || "UPI").toUpperCase().replace(/"/g, '""')}"`,
+        `"${(item.data.transaction_id || "").replace(/"/g, '""')}"`,
+        `"${(item.data.pan_number || "").replace(/"/g, '""')}"`,
+        `"${(item.data.address || "").replace(/"/g, '""')}"`,
+        `"${(item.data.anonymous ? "" : item.data.email || "").replace(/"/g, '""')}"`,
+        `"${(item.data.phone || "").replace(/"/g, '""')}"`,
+        `"${(item.data.campaign_name || item.data.event_name || "").replace(/"/g, '""')}"`,
+      ]);
+      const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mahila_action_donations_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Donations CSV exported!");
+      return;
+    }
+
+    const includeStatus = filterType === "all" || isStatusEligible(filterType);
+    const headers = includeStatus
+      ? ["ID", "Type", "Status", "Date", "Name/Contact", "Email", "Phone", "Details"]
+      : ["ID", "Type", "Date", "Name/Contact", "Email", "Phone", "Details"];
+    const rows = filtered.map((item) => {
+      const row = [item.id, categoryOf(item)];
+      if (includeStatus) {
+        row.push(isStatusEligible(categoryOf(item)) ? item.status : "N/A");
+      }
+      row.push(
+        new Date(item.createdAt).toLocaleString(),
+        `"${(item.data.name || item.data.contact_name || "").replace(/"/g, '""')}"`,
+        `"${(item.data.email || "").replace(/"/g, '""')}"`,
+        `"${(item.data.phone || "").replace(/"/g, '""')}"`,
+        `"${JSON.stringify(item.data).replace(/"/g, '""')}"`
+      );
+      return row;
+    });
     const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -467,123 +631,201 @@ export function SubmissionsAdmin() {
       </div>
 
       {/* Page Tab Selector Bar */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-[#a65a4a]/15 shadow-sm">
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setFilterType("all")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "all" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            All Submissions ({list.length})
-          </button>
-          <button
-            onClick={() => setFilterType("volunteer")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "volunteer" ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🙋‍♀️ Volunteers ({volunteerList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("member")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "member" ? "bg-teal-600 text-white shadow-sm ring-2 ring-teal-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🧡 Members ({memberList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("vendor")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "vendor" ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🛍️ Vendors ({vendorList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("reservation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "reservation" ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            🎟️ Event Attendees ({reservationList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("donation")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "donation" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            💖 Donors ({donationList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("contact")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "contact" ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            ✉️ Contact ({contactList.length})
-          </button>
-          <button
-            onClick={() => setFilterType("perm_volunteer_request")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_request" ? "bg-[#a65a4a] text-white shadow-sm ring-2 ring-[#a65a4a]/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            ⭐ Perm Volunteers ({permVolList.length})
-            {permVolList.filter(v => v.status === "New").length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-amber-400 text-white text-[10px] font-bold">
-                {permVolList.filter(v => v.status === "New").length}
+      {/* Search & Filter Toolbar Container */}
+      <div className="bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden flex flex-col">
+        {/* Tier 1: Category Filter Tabs */}
+        <div className="p-3 sm:p-3.5 bg-[#faf7f3]/50 border-b border-[#a65a4a]/10">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setFilterType("all")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                filterType === "all"
+                  ? "bg-[#a65a4a] text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 hover:text-black"
+              }`}
+            >
+              <span>All Submissions</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "all" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"}`}>
+                {list.length}
               </span>
-            )}
-          </button>
-          <button
-            onClick={() => setFilterType("perm_volunteer_deactivate")}
-            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${filterType === "perm_volunteer_deactivate" ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            ❌ Deactivations ({permDeactivateList.length})
-            {permDeactivateList.filter(v => v.status === "New").length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold">
-                {permDeactivateList.filter(v => v.status === "New").length}
+            </button>
+            <button
+              onClick={() => setFilterType("volunteer")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "volunteer"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-emerald-50 hover:text-emerald-800"
+              }`}
+            >
+              <span>🙋‍♀️ Volunteers</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "volunteer" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"}`}>
+                {volunteerList.length}
               </span>
-            )}
-          </button>
+            </button>
+            <button
+              onClick={() => setFilterType("member")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "member"
+                  ? "bg-teal-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-teal-50 hover:text-teal-800"
+              }`}
+            >
+              <span>🧡 Members</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "member" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800"}`}>
+                {memberList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("vendor")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "vendor"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-purple-50 hover:text-purple-800"
+              }`}
+            >
+              <span>🛍️ Vendors</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "vendor" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"}`}>
+                {vendorList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("reservation")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "reservation"
+                  ? "bg-amber-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-amber-50 hover:text-amber-800"
+              }`}
+            >
+              <span>🎟️ Event Attendees</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "reservation" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"}`}>
+                {reservationList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("donation")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "donation"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-rose-50 hover:text-rose-800"
+              }`}
+            >
+              <span>💖 Donors</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "donation" ? "bg-white/20 text-white" : "bg-rose-100 text-rose-800"}`}>
+                {donationList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("contact")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "contact"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-blue-50 hover:text-blue-800"
+              }`}
+            >
+              <span>✉️ Contact</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "contact" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"}`}>
+                {contactList.length}
+              </span>
+            </button>
+            <button
+              onClick={() => setFilterType("perm_volunteer_request")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "perm_volunteer_request"
+                  ? "bg-[#a65a4a] text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-[#a65a4a]/10 hover:text-[#a65a4a]"
+              }`}
+            >
+              <span>⭐ Perm Volunteers</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "perm_volunteer_request" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"}`}>
+                {permVolList.length}
+              </span>
+              {permVolList.filter(v => v.status === "New").length > 0 && (
+                <span className="inline-flex items-center justify-center size-4 rounded-full bg-amber-400 text-white text-[10px] font-bold" title="Pending review">
+                  {permVolList.filter(v => v.status === "New").length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setFilterType("perm_volunteer_deactivate")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+                filterType === "perm_volunteer_deactivate"
+                  ? "bg-rose-600 text-white shadow-xs"
+                  : "bg-white text-gray-700 border border-gray-200 hover:bg-rose-50 hover:text-rose-800"
+              }`}
+            >
+              <span>❌ Deactivations</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterType === "perm_volunteer_deactivate" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-700"}`}>
+                {permDeactivateList.length}
+              </span>
+              {permDeactivateList.filter(v => v.status === "New").length > 0 && (
+                <span className="inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold" title="Pending review">
+                  {permDeactivateList.filter(v => v.status === "New").length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-[220px]">
+        {/* Tier 2: Search Input & Dropdown Filters Bar */}
+        <div className="p-3 sm:p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Left: Search Bar */}
+          <div className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="absolute left-3 top-2.5 size-4 text-[#1e1e1e]/40" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full pl-9 pr-3 py-1.5 text-[13px] border border-[#a65a4a]/25 rounded-lg focus:outline-none focus:border-[#a65a4a] bg-white"
+              placeholder="Search by name, email, phone, or details..."
+              className="w-full pl-9 pr-3 py-2 text-[13px] border border-[#a65a4a]/25 rounded-xl focus:outline-none focus:border-[#a65a4a] bg-white transition-all shadow-2xs"
             />
           </div>
 
-          {availableEventTitles.length > 0 && (
-            <select
-              value={filterEvent}
-              onChange={e => setFilterEvent(e.target.value)}
-              className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium max-w-[180px] truncate"
-            >
-              <option value="all">All Events</option>
-              {availableEventTitles.map(title => (
-                <option key={title} value={title}>
-                  🗓️ {title}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* Right: Dropdown Filters & Counter */}
+          <div className="flex flex-wrap items-center gap-2">
+            {availableEventTitles.length > 0 && (
+              <select
+                value={filterEvent}
+                onChange={e => setFilterEvent(e.target.value)}
+                className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium max-w-[190px] truncate shadow-2xs cursor-pointer"
+              >
+                <option value="all">🗓️ All Events</option>
+                {availableEventTitles.map(title => (
+                  <option key={title} value={title}>
+                    🗓️ {title}
+                  </option>
+                ))}
+              </select>
+            )}
 
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a]"
-          >
-            <option value="all">All Statuses</option>
-            <option value="New">New</option>
-            <option value="Contacted">Contacted</option>
-            <option value="Completed">Completed</option>
-          </select>
+            {showStatusColumn && (
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium shadow-2xs cursor-pointer"
+              >
+                <option value="all">📋 All Statuses</option>
+                <option value="New">🟡 New</option>
+                <option value="Contacted">🔵 Contacted</option>
+                <option value="Completed">🟢 Completed</option>
+              </select>
+            )}
 
-          {(filterType === "donation" || filterType === "all") && (
-            <select
-              value={filterDonorType}
-              onChange={e => setFilterDonorType(e.target.value)}
-              className="px-3 py-1.5 text-[12px] border border-[#a65a4a]/25 rounded-lg bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium"
-            >
-              <option value="all">All Donors (Users & Anonymous)</option>
-              <option value="named">👤 Named Users ({namedDonationList.length})</option>
-              <option value="anonymous">🕵️ Anonymous Donors ({anonDonationList.length})</option>
-            </select>
-          )}
+            {(filterType === "donation" || filterType === "all") && (
+              <select
+                value={filterDonorType}
+                onChange={e => setFilterDonorType(e.target.value)}
+                className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white focus:outline-none focus:border-[#a65a4a] text-gray-700 font-medium shadow-2xs cursor-pointer"
+              >
+                <option value="all">💖 All Donors (Users & Anon)</option>
+                <option value="named">👤 Named Users ({namedDonationList.length})</option>
+                <option value="anonymous">🕵️ Anonymous ({anonDonationList.length})</option>
+              </select>
+            )}
+
+            <p className="text-[12px] text-gray-500 font-medium shrink-0 ml-1">
+              Showing <span className="font-semibold text-gray-800">{filtered.length}</span> of {list.length}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -591,6 +833,62 @@ export function SubmissionsAdmin() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Submissions List */}
         <div className={`bg-white rounded-2xl border border-[#a65a4a]/15 shadow-sm overflow-hidden ${selectedItem ? "lg:col-span-2" : "lg:col-span-3"}`}>
+          {/* Bulk Selection Toolbar */}
+          {selectedKeys.size > 0 && (
+            <div className="bg-[#fcf8f5] border-b border-[#a65a4a]/20 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-[13px] animate-in fade-in duration-150">
+              <div className="flex items-center gap-3">
+                <span className="bg-[#a65a4a] text-white font-bold text-[11px] px-2.5 py-1 rounded-full">
+                  {selectedKeys.size} Selected
+                </span>
+                {filtered.length > paginatedItems.length && selectedKeys.size < filtered.length && (
+                  <button
+                    onClick={selectAllFiltered}
+                    className="text-[#a65a4a] hover:underline text-[12px] font-semibold cursor-pointer"
+                  >
+                    Select all {filtered.length} matching submissions
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {showStatusColumn && (
+                  <>
+                    <span className="text-[12px] text-gray-500 font-medium">Mark as:</span>
+                    <button
+                      onClick={() => handleBatchStatusChange("New")}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-100 text-amber-900 hover:bg-amber-200 transition-colors cursor-pointer border border-amber-300"
+                    >
+                      🟡 New
+                    </button>
+                    <button
+                      onClick={() => handleBatchStatusChange("Contacted")}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-100 text-blue-900 hover:bg-blue-200 transition-colors cursor-pointer border border-blue-300"
+                    >
+                      🔵 Contacted
+                    </button>
+                    <button
+                      onClick={() => handleBatchStatusChange("Completed")}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-100 text-emerald-900 hover:bg-emerald-200 transition-colors cursor-pointer border border-emerald-300"
+                    >
+                      🟢 Completed
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={handleBatchDelete}
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-semibold bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white transition-colors cursor-pointer border border-rose-300"
+                >
+                  <Trash2 size={13} /> Move to Trash
+                </button>
+                <button
+                  onClick={clearSelection}
+                  className="px-3 py-1 rounded-lg text-[11px] font-medium text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           {!filtered.length ? (
             <div className="p-12 text-center">
               <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/50">No submissions found matching your filters.</p>
@@ -600,16 +898,29 @@ export function SubmissionsAdmin() {
               <table className="w-full text-left font-['Inter',sans-serif] text-[13px]">
                 <thead className="bg-[#faf7f3] border-b border-[#a65a4a]/15 text-[11px] font-semibold uppercase tracking-wider text-[#1e1e1e]/55">
                   <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllPageSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isSomePageSelected;
+                        }}
+                        onChange={toggleSelectAll}
+                        className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                        title={isAllPageSelected ? "Deselect page" : "Select entire page"}
+                      />
+                    </th>
                     <th className="py-3 px-4">Type</th>
                     <th className="py-3 px-4">Contact</th>
                     <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Status</th>
+                    {showStatusColumn && <th className="py-3 px-4">Status</th>}
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#a65a4a]/10">
-                  {paginatedItems.map(item => {
+                  {paginatedItems.map((item, index) => {
                     const isSel = selectedItem?.id === item.id && selectedItem?.type === item.type;
+                    const isKeySelected = selectedKeys.has(`${item.type}::${item.id}`);
                     const isAnon =
                       categoryOf(item) === "donation" &&
                       (item.data?.anonymous === true ||
@@ -624,10 +935,20 @@ export function SubmissionsAdmin() {
 
                     return (
                       <tr
-                        key={`${item.type}_${item.id}`}
+                        key={`${item.type}_${item.id}_${index}`}
                         onClick={() => setSelectedItem(item)}
-                        className={`hover:bg-[#a65a4a]/5 cursor-pointer transition-colors ${isSel ? "bg-[#a65a4a]/10" : ""}`}
+                        className={`hover:bg-[#a65a4a]/5 cursor-pointer transition-colors ${
+                          isKeySelected ? "bg-amber-50/80 hover:bg-amber-100/60" : isSel ? "bg-[#a65a4a]/10" : ""
+                        }`}
                       >
+                        <td className="py-3 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isKeySelected}
+                            onChange={() => toggleSelectItem(item)}
+                            className="rounded text-[#a65a4a] focus:ring-[#a65a4a] size-4 cursor-pointer accent-[#a65a4a] align-middle"
+                          />
+                        </td>
                         <td className="py-3.5 px-4 font-medium">
                           <div className="flex items-center gap-2">
                             {getTypeIcon(categoryOf(item))}
@@ -646,16 +967,37 @@ export function SubmissionsAdmin() {
                         <td className="py-3.5 px-4 text-[#1e1e1e]/60 whitespace-nowrap">
                           {new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </td>
-                        <td className="py-3.5 px-4">{getStatusBadge(item.status)}</td>
+                        {showStatusColumn && (
+                          <td className="py-3.5 px-4">
+                            {isStatusEligible(categoryOf(item)) ? (
+                              getStatusBadge(item.status)
+                            ) : (
+                              <span className="text-[#1e1e1e]/25 text-[12px] font-mono">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="py-3.5 px-4 text-right" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleDelete(item)}
-                            disabled={categoryOf(item) === "member"}
-                            className="p-1.5 text-[#1e1e1e]/40 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#1e1e1e]/40 disabled:cursor-not-allowed"
-                            title={categoryOf(item) === "member" ? "Member accounts can't be deleted here" : "Delete submission"}
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            {categoryOf(item) === "donation" && (
+                              <a
+                                href={`/api/donations/${item.id}/receipt`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 text-[#1e1e1e]/40 hover:text-[#993925] rounded-lg hover:bg-[#993925]/10 transition-colors inline-block"
+                                title="View & Print Receipt"
+                              >
+                                <Printer size={15} />
+                              </a>
+                            )}
+                            <button
+                              onClick={() => handleDelete(item)}
+                              disabled={categoryOf(item) === "member"}
+                              className="p-1.5 text-[#1e1e1e]/40 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#1e1e1e]/40 disabled:cursor-not-allowed"
+                              title={categoryOf(item) === "member" ? "Member accounts can't be deleted here" : "Delete submission"}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -694,65 +1036,67 @@ export function SubmissionsAdmin() {
               </button>
             </div>
 
-            {/* Status Switcher — replaced with Accept/Reject for perm volunteer requests & deactivations */}
-            {categoryOf(selectedItem) === "perm_volunteer_request" || categoryOf(selectedItem) === "perm_volunteer_deactivate" ? (
-              <div>
-                <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Decision</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleStatusChange(selectedItem, "Completed")}
-                    className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer border ${
-                      selectedItem.status === "Completed"
-                        ? "bg-emerald-600 text-white border-emerald-600"
-                        : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                    }`}
-                  >
-                    {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "✅ Approve Deactivation" : "✅ Accept"}
-                  </button>
-                  <button
-                    onClick={() => handleStatusChange(selectedItem, "Contacted")}
-                    className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer border ${
-                      selectedItem.status === "Contacted"
-                        ? "bg-rose-600 text-white border-rose-600"
-                        : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
-                    }`}
-                  >
-                    {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "✕ Reject Deactivation" : "✕ Reject"}
-                  </button>
-                </div>
-                {selectedItem.status === "New" && (
-                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mt-2">
-                    ⏳ Pending — no decision made yet.
-                  </p>
-                )}
-                {selectedItem.data?.message && (
-                  <div className="mt-3">
-                    <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Applicant's Note</span>
-                    <div className="p-3 bg-gray-50 rounded-lg text-[13px] text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">
-                      {selectedItem.data.message}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Change Status</label>
-                <div className="flex gap-2">
-                  {(["New", "Contacted", "Completed"] as const).map(st => (
+            {/* Status Switcher — only for volunteer, vendor, reservation (attendee), perm_volunteer_request, perm_volunteer_deactivate */}
+            {isStatusEligible(categoryOf(selectedItem)) && (
+              categoryOf(selectedItem) === "perm_volunteer_request" || categoryOf(selectedItem) === "perm_volunteer_deactivate" ? (
+                <div>
+                  <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Decision</label>
+                  <div className="flex gap-2">
                     <button
-                      key={st}
-                      onClick={() => handleStatusChange(selectedItem, st)}
-                      className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer border ${
-                        selectedItem.status === st
-                          ? "bg-[#a65a4a] text-white border-[#a65a4a]"
-                          : "bg-white text-[#1e1e1e]/70 border-[#a65a4a]/25 hover:border-[#a65a4a]"
+                      onClick={() => handleStatusChange(selectedItem, "Completed")}
+                      className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer border ${
+                        selectedItem.status === "Completed"
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
                       }`}
                     >
-                      {st}
+                      {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "✅ Approve Deactivation" : "✅ Accept"}
                     </button>
-                  ))}
+                    <button
+                      onClick={() => handleStatusChange(selectedItem, "Contacted")}
+                      className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer border ${
+                        selectedItem.status === "Contacted"
+                          ? "bg-rose-600 text-white border-rose-600"
+                          : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                      }`}
+                    >
+                      {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "✕ Reject Deactivation" : "✕ Reject"}
+                    </button>
+                  </div>
+                  {selectedItem.status === "New" && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mt-2">
+                      ⏳ Pending — no decision made yet.
+                    </p>
+                  )}
+                  {selectedItem.data?.message && (
+                    <div className="mt-3">
+                      <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Applicant's Note</span>
+                      <div className="p-3 bg-gray-50 rounded-lg text-[13px] text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">
+                        {selectedItem.data.message}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider block mb-1.5">Change Status</label>
+                  <div className="flex gap-2">
+                    {(["New", "Contacted", "Completed"] as const).map(st => (
+                      <button
+                        key={st}
+                        onClick={() => handleStatusChange(selectedItem, st)}
+                        className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer border ${
+                          selectedItem.status === st
+                            ? "bg-[#a65a4a] text-white border-[#a65a4a]"
+                            : "bg-white text-[#1e1e1e]/70 border-[#a65a4a]/25 hover:border-[#a65a4a]"
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
             )}
 
             {/* Metadata */}
@@ -797,7 +1141,54 @@ export function SubmissionsAdmin() {
               {selectedItem.data.amount && (
                 <div>
                   <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block">Donation Amount</span>
-                  <p className="text-[18px] font-bold text-rose-600">₹{selectedItem.data.amount.toLocaleString()}</p>
+                  <p className="text-[20px] font-bold text-rose-600">₹{Number(selectedItem.data.amount).toLocaleString("en-IN")}</p>
+                </div>
+              )}
+              {categoryOf(selectedItem) === "donation" && (
+                <div className="bg-[#faf5f1] border border-[#eaded6] rounded-xl p-3.5 space-y-2 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#993925] uppercase tracking-wider">Receipt No</span>
+                    <span className="text-[12px] font-mono font-bold text-[#1e1e1e]">
+                      {selectedItem.data.receipt_number || `MA-REC-${new Date(selectedItem.createdAt).getFullYear()}-${selectedItem.id}`}
+                    </span>
+                  </div>
+
+                  {selectedItem.data.pan_number && (
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="text-[#6e625d] font-medium">Donor PAN:</span>
+                      <span className="font-mono font-bold text-[#3d5a23]">{selectedItem.data.pan_number}</span>
+                    </div>
+                  )}
+
+                  {selectedItem.data.payment_method && (
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="text-[#6e625d] font-medium">Payment Mode:</span>
+                      <span className="font-semibold text-[#1e1e1e]">{(selectedItem.data.payment_method).toUpperCase()}</span>
+                    </div>
+                  )}
+
+                  {selectedItem.data.transaction_id && (
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="text-[#6e625d] font-medium">UTR / Transaction ID:</span>
+                      <span className="font-mono text-[#1e1e1e] text-[11px]">{selectedItem.data.transaction_id}</span>
+                    </div>
+                  )}
+
+                  {selectedItem.data.address && (
+                    <div className="text-[12px] pt-1 border-t border-[#eaded6]">
+                      <span className="text-[#6e625d] font-medium block">Billing Address:</span>
+                      <span className="text-[#1e1e1e]">{selectedItem.data.address}</span>
+                    </div>
+                  )}
+
+                  <a
+                    href={`/api/donations/${selectedItem.id}/receipt`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full mt-2 py-2 px-3 bg-[#993925] text-white rounded-lg text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-[#802f1e] transition-colors shadow-sm"
+                  >
+                    <Printer size={15} /> View & Print Receipt
+                  </a>
                 </div>
               )}
               {selectedItem.data.event_name && (

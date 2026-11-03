@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { marked } from "marked";
 import { type BlogPost } from "@/lib/data";
 import { fraunces, inter } from "../components/shared/styleHelpers";
 import { Badge } from "../components/ui/Badge";
+import { SafeImage } from "../components/SafeImage";
 
 function isLikelyHtml(s: string) {
   return /<\/?[a-z][\s\S]*>/i.test(s);
@@ -30,6 +31,23 @@ export function BlogDetailModal({
   onNavigate?: (dir: -1 | 1) => void;
 }) {
   const [galleryTop, setGalleryTop] = useState(0);
+
+  useEffect(() => {
+    setGalleryTop(0);
+  }, [post.id]);
+
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = origOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
   const gallery = post.gallery ?? [];
   const n = gallery.length;
   const idxTop = n ? galleryTop % n : 0;
@@ -40,9 +58,9 @@ export function BlogDetailModal({
 
   return (
     <div className="fixed inset-0 z-[400] bg-[#f4efe7] overflow-y-auto">
-      <div className="sticky top-0 bg-[#f4efe7] shadow-[0_2px_16px_rgba(0,0,0,0.06)] z-10 py-4 px-6">
+      <div className="sticky top-0 bg-[#f4efe7] shadow-[0_2px_16px_rgba(0,0,0,0.06)] z-10 py-3 sm:py-4 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 font-['Inter',sans-serif] text-[15px]">
+          <div className="flex items-center gap-2 font-['Inter',sans-serif] text-[14px] sm:text-[15px]">
             <span className="text-[#a65a4a] font-medium">{categoryLabel}</span>
           </div>
           <button
@@ -55,22 +73,29 @@ export function BlogDetailModal({
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-6 pb-20">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
         {post.coverImage && (
-          <div className="mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px]">
-            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
+          <div className="mt-4 sm:mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px] relative bg-[#a65a4a]/10">
+            <SafeImage
+              src={post.coverImage}
+              alt={post.title}
+              className="w-full h-full object-cover"
+              containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-2 select-none"
+              errorText="Image not available"
+              iconSize={48}
+            />
           </div>
         )}
 
         <h1
-          className={`${fraunces()} font-normal text-[#a65a4a] text-[24px] sm:text-[36px] md:text-[52px] leading-[1.25] mt-4 max-w-[900px]`}
+          className={`${fraunces()} font-normal text-[#a65a4a] text-[22px] sm:text-[36px] md:text-[52px] leading-[1.25] mt-4 max-w-[900px]`}
           style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
         >
           {post.title}
         </h1>
 
         {post.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-3.5 sm:mt-4">
             {post.tags.map((tag, i) => (
               <Badge key={i} variant="secondary">
                 {tag}
@@ -80,23 +105,23 @@ export function BlogDetailModal({
         )}
 
         <div
-          className="blog-rich-content mt-8 max-w-[1152px]"
+          className="blog-rich-content mt-6 sm:mt-8 max-w-[1152px]"
           dangerouslySetInnerHTML={{ __html: richHtml }}
         />
 
         {n > 0 && (
-          <div className="mt-20">
+          <div className="mt-12 sm:mt-20">
             <h2
-              className={`${fraunces()} font-normal text-[#a65a4a] text-[24px] sm:text-[36px] md:text-[52px] leading-[1.25]`}
+              className={`${fraunces()} font-normal text-[#a65a4a] text-[22px] sm:text-[36px] md:text-[52px] leading-[1.25]`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
             >
               Gallery
             </h2>
 
-            <div className="flex items-center justify-center gap-2 sm:gap-6 md:gap-8 mt-10">
+            <div className="flex items-center justify-center gap-2 sm:gap-6 md:gap-8 mt-6 sm:mt-10">
               <button
                 onClick={() => setGalleryTop((i) => (i - 1 + n) % n)}
-                className="size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
+                className="size-9 sm:size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
                 aria-label="Previous gallery image"
               >
                 <ChevronRight size={18} className="rotate-180" />
@@ -111,12 +136,19 @@ export function BlogDetailModal({
                     className="absolute inset-0 flex items-center justify-center"
                     style={{ transform: "rotate(-6.09deg)" }}
                   >
-                    <img
-                      src={gallery[idxBot]}
-                      alt=""
-                      className="shadow-xl object-cover rounded-sm"
+                    <div
                       style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                    />
+                      className="shadow-xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
+                    >
+                      <SafeImage
+                        src={gallery[idxBot]}
+                        alt="Gallery image"
+                        className="size-full object-cover"
+                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
+                        errorText="Image not available"
+                        iconSize={32}
+                      />
+                    </div>
                   </div>
                 )}
                 {n > 1 && (
@@ -124,21 +156,35 @@ export function BlogDetailModal({
                     className="absolute inset-0 flex items-center justify-center"
                     style={{ transform: "rotate(-3.13deg)" }}
                   >
-                    <img
-                      src={gallery[idxMid]}
-                      alt=""
-                      className="shadow-xl object-cover rounded-sm"
+                    <div
                       style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                    />
+                      className="shadow-xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
+                    >
+                      <SafeImage
+                        src={gallery[idxMid]}
+                        alt="Gallery image"
+                        className="size-full object-cover"
+                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
+                        errorText="Image not available"
+                        iconSize={32}
+                      />
+                    </div>
                   </div>
                 )}
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <img
-                    src={gallery[idxTop]}
-                    alt=""
-                    className="shadow-2xl object-cover rounded-sm"
+                  <div
                     style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                  />
+                    className="shadow-2xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
+                  >
+                    <SafeImage
+                      src={gallery[idxTop]}
+                      alt="Gallery image"
+                      className="size-full object-cover"
+                      containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
+                      errorText="Image not available"
+                      iconSize={36}
+                    />
+                  </div>
                 </div>
               </div>
 

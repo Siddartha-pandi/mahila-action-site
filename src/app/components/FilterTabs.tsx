@@ -27,14 +27,14 @@ export function FilterTabs({
   className = "",
 }: FilterTabsProps) {
   const pillStyle = (isActive: boolean) =>
-    `${inter()} text-[15px] sm:text-[16px] font-semibold px-5 sm:px-6 py-2 sm:py-2.5 rounded-full transition-all cursor-pointer ${
+    `${inter()} text-[13px] sm:text-[15px] md:text-[16px] font-semibold px-4 sm:px-6 py-2 sm:py-2.5 rounded-full transition-all cursor-pointer whitespace-nowrap shrink-0 ${
       isActive
         ? "bg-[#a65a4a] text-[#f4efe7] shadow-sm"
         : "bg-[#f4efe7] border border-[#a65a4a]/40 text-[#a65a4a] hover:bg-[#a65a4a]/10"
     }`;
 
   return (
-    <div className={`flex flex-wrap gap-2.5 sm:gap-3 justify-center items-center ${className}`}>
+    <div className={`flex flex-wrap gap-2 sm:gap-3 justify-center items-center px-1 ${className}`}>
       {showAllOption && (
         <button
           type="button"
@@ -44,9 +44,9 @@ export function FilterTabs({
           {allLabel}
         </button>
       )}
-      {options.map((opt) => (
+      {options.map((opt, index) => (
         <button
-          key={opt.id}
+          key={`${opt.id}_${index}`}
           type="button"
           onClick={() => onChange(opt.id)}
           className={pillStyle(activeId === opt.id)}

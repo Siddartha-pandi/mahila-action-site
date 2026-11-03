@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { TIMELINE_FALLBACK_IMAGES } from "../constants/fallbacks";
-import { imgAboutBanner, imgEvent, imgTakeAction, imgStory1 } from "../constants/images";
+import { SafeImage } from "../components/SafeImage";
+import { imgAboutBanner, imgTakeAction } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
@@ -15,7 +15,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const timeline = [...siteData.timeline]
     .sort((a, b) => a.order - b.order)
-    .map((t) => ({ year: t.year, img: t.image || TIMELINE_FALLBACK_IMAGES[t.id] || imgEvent, title: t.title, desc: t.description }));
+    .map((t) => ({ year: t.year, img: t.image || "", title: t.title, desc: t.description }));
 
   const [activeYear, setActiveYear] = useState(timeline[0]?.year ?? "");
   const active = timeline.find((t) => t.year === activeYear) ?? timeline[0];
@@ -23,7 +23,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
   const councilors = siteData.councilors
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((c) => ({ img: c.image || imgStory1, role: c.role, name: c.name, story: c.bio }));
+    .map((c) => ({ img: c.image || "", role: c.role, name: c.name, story: c.bio }));
 
   const yearTabOptions = timeline.map((t) => ({ id: t.year, name: t.year }));
 
@@ -32,35 +32,35 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
       <PageBanner img={imgAboutBanner} title="Who Are We" />
 
       {/* Mission + Vision */}
-      <section className="py-20 px-6">
+      <section className="py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-[#a65a4a] rounded-2xl p-8 md:p-10">
+          <div className="bg-[#a65a4a] rounded-2xl p-6 sm:p-8 md:p-10">
             <SectionLabel text="Our Mission" />
             <h3
-              className={`${fraunces()} text-[#f4efe7] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`}
+              className={`${fraunces()} text-[#f4efe7] text-[26px] sm:text-[34px] md:text-[42px] mt-3 capitalize leading-tight`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
             >
               Self-Led Sustainable Transformation
             </h3>
-            <p className={`${inter()} text-[#f4efe7]/85 text-[17px] leading-relaxed mt-5`}>
+            <p className={`${inter()} text-[#f4efe7]/85 text-[15px] sm:text-[17px] leading-relaxed mt-4 sm:mt-5`}>
               Mahila Action rejects the transactional traditional donor-victim paradigm. We operate on the unshakeable premise that local communities and marginalized women are structural change leaders — not passive beneficiaries.
             </p>
-            <p className={`${inter()} text-[#f4efe7]/85 text-[17px] leading-relaxed mt-4`}>
+            <p className={`${inter()} text-[#f4efe7]/85 text-[15px] sm:text-[17px] leading-relaxed mt-3 sm:mt-4`}>
               By building civil rights agency, providing microscale financial networks, and offering accredited educational transition schooling, we turn vulnerabilities into localized cooperative engines of sustainable success.
             </p>
           </div>
-          <div className="border-2 border-[#a65a4a] rounded-2xl p-8 md:p-10">
+          <div className="border-2 border-[#a65a4a] rounded-2xl p-6 sm:p-8 md:p-10">
             <SectionLabel text="Our Vision" />
             <h3
-              className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] mt-3 capitalize leading-tight`}
+              className={`${fraunces()} text-[#1e1e1e] text-[26px] sm:text-[34px] md:text-[42px] mt-3 capitalize leading-tight`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
             >
               Self-Led Sustainable Transformation
             </h3>
-            <p className={`${inter()} text-[#1e1e1e]/80 text-[17px] leading-relaxed mt-5`}>
+            <p className={`${inter()} text-[#1e1e1e]/80 text-[15px] sm:text-[17px] leading-relaxed mt-4 sm:mt-5`}>
               Mahila Action rejects the transactional traditional donor-victim paradigm. We operate on the unshakeable premise that local communities and marginalized women are structural change leaders — not passive beneficiaries.
             </p>
-            <p className={`${inter()} text-[#1e1e1e]/80 text-[17px] leading-relaxed mt-4`}>
+            <p className={`${inter()} text-[#1e1e1e]/80 text-[15px] sm:text-[17px] leading-relaxed mt-3 sm:mt-4`}>
               By building civil rights agency, providing microscale financial networks, and offering accredited educational transition schooling, we turn vulnerabilities into localized cooperative engines of sustainable success.
             </p>
           </div>
@@ -68,9 +68,9 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
       </section>
 
       {/* Councilors */}
-      <section className="py-16 px-6 bg-white/20">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/20">
         <div className="max-w-[1200px] mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-10 sm:mb-12">
             <SectionLabel text="Councilors" />
             <SectionTitle text="The Advocates Leading the Way" center />
           </div>
@@ -83,15 +83,15 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
       </section>
 
       {/* Impact Timeline */}
-      <section className="py-20 px-6">
+      <section className="py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8 sm:mb-10">
             <SectionLabel text="Our Impacts" />
             <SectionTitle text="Our Impacts Since 1995" center />
           </div>
           {timeline.length > 0 && (
             <>
-              <div className="mb-10">
+              <div className="mb-8 sm:mb-10">
                 <FilterTabs
                   options={yearTabOptions}
                   activeId={activeYear}
@@ -100,26 +100,27 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
                 />
               </div>
               {active && (
-                <div className="flex flex-col lg:flex-row gap-8 items-center">
-                  <div className="relative w-full lg:w-[520px] h-[380px] rounded-2xl overflow-hidden shrink-0">
-                    <img
-                      loading="lazy"
-                      decoding="async"
+                <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 items-center">
+                  <div className="relative w-full lg:w-[520px] h-[220px] sm:h-[300px] md:h-[380px] rounded-2xl overflow-hidden shrink-0 bg-[#a65a4a]/10 border border-[#a65a4a]/20">
+                    <SafeImage
                       src={active.img}
                       alt={active.title}
                       className="absolute inset-0 size-full object-cover"
+                      containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-2 select-none"
+                      errorText="Image not available"
+                      iconSize={40}
                     />
                   </div>
                   <div>
-                    <p className={`${inter()} text-[14px] text-[#1e1e1e]/60 mb-1`}>{active.year}</p>
+                    <p className={`${inter()} text-[13px] sm:text-[14px] text-[#1e1e1e]/60 mb-1`}>{active.year}</p>
                     <h3
-                      className={`${fraunces()} text-[#1e1e1e] text-[36px] md:text-[42px] leading-tight capitalize`}
+                      className={`${fraunces()} text-[#1e1e1e] text-[26px] sm:text-[34px] md:text-[42px] leading-tight capitalize`}
                       style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
                     >
                       {active.title}
                     </h3>
-                    <p className={`${inter()} text-[#1e1e1e]/80 text-[18px] leading-relaxed mt-5`}>{active.desc}</p>
-                    <p className={`${inter()} text-[#1e1e1e]/80 text-[18px] leading-relaxed mt-3`}>
+                    <p className={`${inter()} text-[#1e1e1e]/80 text-[15px] sm:text-[18px] leading-relaxed mt-3 sm:mt-5`}>{active.desc}</p>
+                    <p className={`${inter()} text-[#1e1e1e]/80 text-[15px] sm:text-[18px] leading-relaxed mt-2 sm:mt-3`}>
                       Each milestone represents thousands of lives touched, hundreds of communities strengthened, and one unwavering commitment to human dignity and justice.
                     </p>
                   </div>
@@ -131,12 +132,12 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
       </section>
 
       {/* Take Action teaser */}
-      <section className="relative py-24 px-6 overflow-hidden">
+      <section className="relative py-16 sm:py-24 px-4 sm:px-6 overflow-hidden">
         <img loading="lazy" decoding="async" src={imgTakeAction} alt="" className="absolute inset-0 size-full object-cover" />
         <div className="absolute inset-0 bg-[#993925]/85" />
         <div className="relative max-w-[800px] mx-auto text-center flex flex-col items-center">
           <h2
-            className={`${fraunces()} text-[#f4efe7] text-[42px] md:text-[52px] leading-tight`}
+            className={`${fraunces()} text-[#f4efe7] text-[32px] sm:text-[42px] md:text-[52px] leading-tight`}
             style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
           >
             One Contribution. Many Futures.
@@ -144,7 +145,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
           <Button
             variant="secondary"
             size="lg"
-            className="mt-8 px-12 py-4"
+            className="mt-6 sm:mt-8 w-full sm:w-auto px-8 sm:px-12 py-3.5 sm:py-4"
             onClick={() => {
               setPage("donate");
               window.scrollTo({ top: 0 });

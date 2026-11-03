@@ -1,8 +1,8 @@
 // Thin fetch client for the Admin & Backend API.
-// Set VITE_API_URL in your .env (see .env.example) to point at your API instance —
-// e.g. http://localhost:4000 in development, or your deployed API URL in production.
+// Set NEXT_PUBLIC_API_URL in your .env (see .env.example) when using a separate
+// deployed API. Local Next.js API routes use same-origin requests by default.
 
-const envApiUrl = typeof process !== "undefined" ? (process.env.NEXT_PUBLIC_API_URL || process.env.VITE_API_URL) : undefined;
+const envApiUrl = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL : undefined;
 export const BASE_URL = typeof window !== "undefined"
   ? ""
   : ((envApiUrl as string | undefined)?.replace(/\/$/, "") || "");
@@ -11,7 +11,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boole
   try {
     const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
     const validJwt = token && token !== "session" && token.includes(".") ? token : null;
-    const authHeaders: Record<string, string> = validJwt ? { Authorization: `Bearer ${validJwt}` } : {};
+    const authHeaders: Record<string, string> = validJwt
+      ? { Authorization: `Bearer ${validJwt}` }
+      : token
+      ? { Authorization: `Bearer ${token}` }
+      : {};
 
     const url = BASE_URL ? `${BASE_URL}${path}` : path;
     const res = await fetch(url, {

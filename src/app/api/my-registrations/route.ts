@@ -51,7 +51,19 @@ export async function GET(req: NextRequest) {
       params
     );
 
-    return NextResponse.json([...result.rows, ...permResult.rows]);
+    const donationsResult = await queryDb(
+      `SELECT id, amount, name, email, phone, donation_type, anonymous, event_name, campaign_name, status, pan_number, address, payment_method, transaction_id, receipt_number, created_at, 'donation' AS item_source
+       FROM donations
+       WHERE ${where}
+       ORDER BY created_at DESC`,
+      params
+    );
+
+    const allRows = [...result.rows, ...permResult.rows, ...donationsResult.rows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    return NextResponse.json(allRows);
 
   } catch (err: any) {
     console.error("GET /api/my-registrations error:", err);

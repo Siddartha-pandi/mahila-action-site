@@ -82,7 +82,7 @@ export function Navigation({
 
   return (
     <header className="sticky top-0 z-50 bg-[#f4efe7]/95 backdrop-blur-md border-b border-[#a65a4a]/15 shadow-xs transition-all">
-      <div className="max-w-[1280px] mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 flex items-center justify-between">
+      <div className="max-w-[1280px] mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-3 flex items-center justify-between">
         {/* Brand Logo */}
         <button
           onClick={() => nav("home")}
@@ -132,7 +132,7 @@ export function Navigation({
                 clearIntendedDestination();
                 openModal("login");
               }}
-              className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[12px] sm:text-[14px] font-semibold px-3 sm:px-5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap`}
+              className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[12px] sm:text-[14px] font-semibold px-2.5 sm:px-5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap`}
             >
               <LogIn size={14} className="shrink-0" />
               <span>Login</span>
@@ -140,7 +140,7 @@ export function Navigation({
           ) : (
             <button
               onClick={() => nav("account")}
-              className={`${inter()} border-2 border-[#a65a4a] text-[12px] sm:text-[14px] font-semibold px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
+              className={`${inter()} border-2 border-[#a65a4a] text-[12px] sm:text-[14px] font-semibold px-2 sm:px-4 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
                 page === "account"
                   ? "bg-[#a65a4a] text-[#f4efe7] hover:bg-[#993925]"
                   : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/15 hover:text-[#993925]"
@@ -156,7 +156,7 @@ export function Navigation({
               >
                 {userSession.name.charAt(0).toUpperCase()}
               </div>
-              <span className="max-w-[55px] sm:max-w-[100px] lg:max-w-[140px] truncate">
+              <span className="max-w-[48px] sm:max-w-[100px] lg:max-w-[140px] truncate">
                 {userSession.name.split(" ")[0]}
               </span>
             </button>
@@ -164,7 +164,7 @@ export function Navigation({
 
           {/* Mobile Menu Hamburger Toggle */}
           <button
-            className="md:hidden p-1.5 sm:p-2 rounded-xl text-[#1e1e1e] hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 transition-colors cursor-pointer shrink-0"
+            className="md:hidden p-1.5 rounded-xl text-[#1e1e1e] hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 transition-colors cursor-pointer shrink-0"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={menuOpen}
@@ -176,15 +176,15 @@ export function Navigation({
 
       {/* Mobile Drawer Menu (Mobile Screens < 768px) */}
       {menuOpen && (
-        <div className="fixed inset-0 top-[56px] sm:top-[68px] z-40 md:hidden flex flex-col justify-start">
+        <div className="fixed inset-0 top-[52px] sm:top-[64px] z-40 md:hidden flex flex-col justify-start">
           {/* Semi-transparent backdrop overlay */}
           <div
-            className="absolute inset-0 bg-black/45 backdrop-blur-xs transition-opacity"
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"
             onClick={() => setMenuOpen(false)}
           />
 
           {/* Drawer menu body */}
-          <div className="relative z-10 bg-[#f4efe7] border-b-2 border-[#a65a4a]/30 shadow-2xl rounded-b-3xl px-4 sm:px-6 pt-3 pb-6 flex flex-col gap-1 max-h-[calc(100vh-75px)] overflow-y-auto">
+          <div className="relative z-10 bg-[#f4efe7] border-b-2 border-[#a65a4a]/30 shadow-2xl rounded-b-3xl px-4 sm:px-6 pt-3 pb-6 flex flex-col gap-1 max-h-[calc(100dvh-64px)] overflow-y-auto">
             <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#a65a4a] px-3 py-1 mb-1">
               Navigation Menu
             </div>

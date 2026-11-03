@@ -15,6 +15,7 @@ build/
 .next/
 .nuxt/
 .cache/
+*.tsbuildinfo
 
 # Strapi specific
 .tmp/
@@ -38,7 +39,3 @@ Thumbs.db
 
 # Local Netlify folder
 .netlify
-
-# Local SQLite databases
-src/data/*.db*
-*.db

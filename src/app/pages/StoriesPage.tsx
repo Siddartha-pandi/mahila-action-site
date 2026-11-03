@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { STORY_FALLBACK_IMAGES } from "../constants/fallbacks";
-import { imgHeroCard, imgStory1 } from "../constants/images";
+import { imgHeroCard } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { PageBanner } from "../components/PageBanner";
@@ -10,22 +9,26 @@ import { FilterTabs } from "../components/FilterTabs";
 import { StoryCard } from "../components/StoryCard";
 import { EmptyState } from "../components/ui/EmptyState";
 import { type Page } from "../components/shared/styleHelpers";
+import { findCategory } from "@/lib/data";
 
 export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const { openModal } = useModal();
 
-  const storyPosts = siteData.blogPosts.filter((p) => p.section === "story");
-  const selectedCatObj = siteData.categories.find((c) => c.id === activeCategory || c.name === activeCategory);
-  const targetCategoryKeys = new Set(
-    [activeCategory, selectedCatObj?.id, selectedCatObj?.name].filter(Boolean) as string[]
-  );
+  const storyPosts = siteData.blogPosts.filter((p) => p.section === "story" && p.published !== false);
 
   const filtered =
     activeCategory === "All"
       ? storyPosts
-      : storyPosts.filter((s) => s.categoryId && targetCategoryKeys.has(s.categoryId));
+      : storyPosts.filter((s) => {
+          const sCat = findCategory(siteData.categories, s.categoryId);
+          const actCat = findCategory(siteData.categories, activeCategory);
+          if (sCat && actCat) {
+            return String(sCat.id) === String(actCat.id);
+          }
+          return String(s.categoryId) === String(activeCategory) || s.categoryId === activeCategory;
+        });
 
   const activeCategoryHasNoPosts = activeCategory !== "All" && filtered.length === 0;
 
@@ -34,7 +37,7 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
       <PageBanner img={imgHeroCard} title="Our Stories" />
 
       {/* Filter tabs */}
-      <section className="py-10 px-6">
+      <section className="py-8 sm:py-10 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
           <FilterTabs
             options={siteData.categories}
@@ -45,7 +48,7 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
       </section>
 
       {/* Story grid */}
-      <section className="pb-20 px-6">
+      <section className="pb-16 sm:pb-20 px-4 sm:px-6">
         {filtered.length > 0 && (
           <div className="max-w-[1200px] mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 items-stretch">
             {filtered.map((s) => (
@@ -54,7 +57,6 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
                 title={s.title}
                 excerpt={s.excerpt}
                 coverImage={s.coverImage}
-                fallbackImage={STORY_FALLBACK_IMAGES[s.id]?.banner || imgStory1}
                 onClick={() => openModal("story", { id: s.id })}
                 ctaText="Read Story →"
               />

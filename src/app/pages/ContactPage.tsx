@@ -45,7 +45,7 @@ export function ContactPage() {
     const invalid = firstError(
       validateName(form.name),
       validateEmail(form.email),
-      form.phone.trim() ? validatePhone(form.phone) : null,
+      validatePhone(form.phone, "phone number", { required: false }),
       validateText(form.subject, "a subject", { max: LIMITS.subject.max, required: false }),
       validateText(form.message, "your message", { min: LIMITS.message.min, max: LIMITS.message.max })
     );
@@ -98,17 +98,17 @@ export function ContactPage() {
       <PageBanner img={imgAboutBanner} title="Contact Us" />
 
       {/* Contact info cards */}
-      <section className="py-16 px-6">
+      <section className="py-10 sm:py-16 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
           {contactCards.map((c) => (
-            <a key={c.label} href={c.href} className="group bg-white border-2 border-transparent hover:border-[#a65a4a] rounded-2xl p-6 flex flex-col gap-4 transition-all hover:shadow-md cursor-pointer">
-              <div className="size-12 bg-[#a65a4a]/10 text-[#a65a4a] rounded-xl flex items-center justify-center group-hover:bg-[#a65a4a] group-hover:text-[#f4efe7] transition-colors">
+            <a key={c.label} href={c.href} className="group bg-white border-2 border-transparent hover:border-[#a65a4a] rounded-2xl p-5 sm:p-6 flex flex-col gap-3.5 sm:gap-4 transition-all hover:shadow-md cursor-pointer">
+              <div className="size-11 sm:size-12 bg-[#a65a4a]/10 text-[#a65a4a] rounded-xl flex items-center justify-center group-hover:bg-[#a65a4a] group-hover:text-[#f4efe7] transition-colors shrink-0">
                 {c.icon}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider`}>{c.label}</p>
-                <p className={`${inter()} text-[15px] font-semibold text-[#1e1e1e] mt-1`}>{c.value}</p>
-                <p className={`${inter()} text-[13px] text-[#1e1e1e]/55 mt-0.5`}>{c.sub}</p>
+                <p className={`${inter()} text-[14px] sm:text-[15px] font-semibold text-[#1e1e1e] mt-1 break-words`}>{c.value}</p>
+                <p className={`${inter()} text-[12px] sm:text-[13px] text-[#1e1e1e]/55 mt-0.5`}>{c.sub}</p>
               </div>
             </a>
           ))}
@@ -116,38 +116,38 @@ export function ContactPage() {
       </section>
 
       {/* Form + sidebar */}
-      <section className="pb-20 px-6">
-        <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row gap-10">
-          <div className="flex-[1.4] bg-white rounded-2xl shadow-sm p-5 sm:p-8 md:p-10">
+      <section className="pb-16 sm:pb-20 px-4 sm:px-6">
+        <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row gap-8 sm:gap-10">
+          <div className="flex-[1.4] bg-white rounded-2xl shadow-sm p-4 sm:p-8 md:p-10">
             {submitted ? (
-              <div className="flex flex-col items-center text-center gap-5 py-10">
-                <div className="size-20 bg-[#587735]/10 rounded-full flex items-center justify-center">
-                  <CheckCircle size={40} className="text-[#587735]" />
+              <div className="flex flex-col items-center text-center gap-5 py-8 sm:py-10">
+                <div className="size-16 sm:size-20 bg-[#587735]/10 rounded-full flex items-center justify-center">
+                  <CheckCircle size={36} className="text-[#587735]" />
                 </div>
-                <h3 className={`${fraunces()} text-[#1e1e1e] text-[30px]`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Message Sent!</h3>
-                <p className={`${inter()} text-[#1e1e1e]/65 text-[16px] leading-relaxed max-w-[380px]`}>
+                <h3 className={`${fraunces()} text-[#1e1e1e] text-[24px] sm:text-[30px]`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Message Sent!</h3>
+                <p className={`${inter()} text-[#1e1e1e]/65 text-[15px] sm:text-[16px] leading-relaxed max-w-[380px]`}>
                   Thank you, <strong className="text-[#a65a4a]">{form.name}</strong>! We've received your message and will get back to you at <strong className="text-[#a65a4a]">{form.email}</strong> within 24 hours.
                 </p>
                 <button
                   onClick={() => { setForm({ name: "", email: "", phone: "", subject: "", message: "" }); setSubmitted(false); }}
-                  className={`${inter()} mt-2 bg-[#a65a4a] text-[#f4efe7] text-[16px] font-semibold px-10 py-3.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer`}
+                  className={`${inter()} mt-2 w-full sm:w-auto bg-[#a65a4a] text-[#f4efe7] text-[15px] sm:text-[16px] font-semibold px-8 sm:px-10 py-3.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer text-center`}
                 >
                   Send Another Message
                 </button>
               </div>
             ) : (
               <>
-                <div className="mb-8">
+                <div className="mb-6 sm:mb-8">
                   <SectionLabel text="Get In Touch" />
-                  <h2 className={`${fraunces()} text-[#1e1e1e] text-[22px] sm:text-[30px] md:text-[42px] leading-tight mt-2`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+                  <h2 className={`${fraunces()} text-[#1e1e1e] text-[24px] sm:text-[30px] md:text-[42px] leading-tight mt-2`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
                     We'd Love to Hear From You
                   </h2>
-                  <p className={`${inter()} text-[#1e1e1e]/60 text-[15px] leading-relaxed mt-3`}>
+                  <p className={`${inter()} text-[#1e1e1e]/60 text-[14px] sm:text-[15px] leading-relaxed mt-2.5 sm:mt-3`}>
                     Whether you want to volunteer, partner, donate, or simply learn more — drop us a message and our team will respond promptly.
                   </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className={labelBase}>Full Name *</label>
@@ -245,9 +245,9 @@ export function ContactPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-6 bg-white/40">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/40">
         <div className="max-w-[800px] mx-auto">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8 sm:mb-10">
             <SectionLabel text="FAQ" />
             <SectionTitle text="Frequently Asked Questions" center />
           </div>
@@ -256,16 +256,16 @@ export function ContactPage() {
               <div key={i} className="bg-white rounded-2xl overflow-hidden border border-[#a65a4a]/15">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className={`${inter()} w-full flex items-center justify-between px-6 py-5 text-left cursor-pointer hover:bg-[#f4efe7]/50 transition-colors`}
+                  className={`${inter()} w-full flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 text-left cursor-pointer hover:bg-[#f4efe7]/50 transition-colors`}
                 >
-                  <span className="text-[15px] font-semibold text-[#1e1e1e] pr-4">{faq.q}</span>
+                  <span className="text-[14px] sm:text-[15px] font-semibold text-[#1e1e1e] pr-3 sm:pr-4">{faq.q}</span>
                   <span className={`text-[#a65a4a] shrink-0 transition-transform duration-200 ${openFaq === i ? "rotate-45" : ""}`}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-5"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                   </span>
                 </button>
                 {openFaq === i && (
-                  <div className="px-6 pb-5">
-                    <p className={`${inter()} text-[14px] text-[#1e1e1e]/65 leading-relaxed border-t border-[#a65a4a]/10 pt-4`}>{faq.a}</p>
+                  <div className="px-4 sm:px-6 pb-4 sm:pb-5">
+                    <p className={`${inter()} text-[13px] sm:text-[14px] text-[#1e1e1e]/65 leading-relaxed border-t border-[#a65a4a]/10 pt-3 sm:pt-4`}>{faq.a}</p>
                   </div>
                 )}
               </div>
@@ -275,17 +275,17 @@ export function ContactPage() {
       </section>
 
       {/* Map placeholder */}
-      <section className="px-6 pb-16">
+      <section className="px-4 sm:px-6 pb-12 sm:pb-16">
         <div className="max-w-[1200px] mx-auto">
-          <div className="relative bg-[#e8e4df] rounded-2xl overflow-hidden h-[300px] md:h-[400px] flex items-center justify-center">
+          <div className="relative bg-[#e8e4df] rounded-2xl overflow-hidden h-[240px] sm:h-[300px] md:h-[400px] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-gradient-to-br from-[#a65a4a]/10 to-[#993925]/10" />
             <div className="relative text-center">
-              <div className="size-16 bg-[#a65a4a] rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+              <div className="size-14 sm:size-16 bg-[#a65a4a] rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-7 sm:size-8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
               </div>
-              <p className={`${fraunces()} text-[#1e1e1e] text-[24px] font-semibold`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Hyderabad, Telangana</p>
-              <p className={`${inter()} text-[#1e1e1e]/60 text-[15px] mt-1`}>India – 500 001</p>
-              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className={`${inter()} inline-block mt-5 bg-[#a65a4a] text-[#f4efe7] text-[14px] font-semibold px-7 py-3 rounded-full hover:bg-[#993925] transition-colors`}>
+              <p className={`${fraunces()} text-[#1e1e1e] text-[20px] sm:text-[24px] font-semibold`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Hyderabad, Telangana</p>
+              <p className={`${inter()} text-[#1e1e1e]/60 text-[13px] sm:text-[15px] mt-1`}>India – 500 001</p>
+              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className={`${inter()} inline-block mt-4 sm:mt-5 bg-[#a65a4a] text-[#f4efe7] text-[13px] sm:text-[14px] font-semibold px-6 sm:px-7 py-2.5 sm:py-3 rounded-full hover:bg-[#993925] transition-colors`}>
                 Open in Google Maps
               </a>
             </div>

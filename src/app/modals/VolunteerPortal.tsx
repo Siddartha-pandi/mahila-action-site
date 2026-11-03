@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   X, CheckCircle, AlertCircle, LogIn, LogOut, Calendar, MapPin, Heart, Clock,
-  UserCheck, Plus, UserPlus,
+  UserCheck, Plus, UserPlus, FileText, ExternalLink,
 } from "lucide-react";
 import {
   saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer,
@@ -13,12 +13,12 @@ import {
   getUserSubmissions, loadUserSubmissions, getSavedUserSession, saveUserSession,
   type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
-import { isEventOpen, type EventItem } from "@/lib/data";
+import { isEventOpen, findCategory, type EventItem } from "@/lib/data";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { setCurrentAdminSession } from "@/lib/permissions";
 import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination, consumeIntendedDestination } from "../hooks/useAuthGuard";
-import { type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
+import { useSiteData, type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
 
 // Fallback static volunteer events (used as display items when no CMS events exist)
 const VOLUNTEER_EVENTS = [
@@ -63,8 +63,9 @@ const VOLUNTEER_EVENTS = [
 const inputCls = `w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]`;
 const labelCls = `font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider mb-1 block`;
 
-export function VolunteerPortal({ onClose, initialStep, resetToken, events, prompt }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events: EventItem[]; prompt?: string }) {
+export function VolunteerPortal({ onClose, initialStep, resetToken, events, prompt }: { onClose: () => void; initialStep?: VolAuthStep; resetToken?: string; events?: EventItem[]; prompt?: string }) {
   const navigate = useNavigate();
+  const siteData = useSiteData();
   const { closeModal } = useModal();
   const handleClose = useCallback(() => {
     if (onClose) onClose();
@@ -86,12 +87,23 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     handleClose();
   }, [handleClose]);
 
-  const [step, setStep] = useState<VolAuthStep>(initialStep ?? "login");
-  const [profile, setProfile] = useState<VolunteerProfile | null>(null);
+  const [profile, setProfile] = useState<VolunteerProfile | null>(() => getSavedUserSession());
+  const [step, setStep] = useState<VolAuthStep>(() => {
+    if (initialStep) return initialStep;
+    const existing = getSavedUserSession();
+    return existing ? "dashboard" : "login";
+  });
   const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse">("registered");
 
   useEffect(() => {
     if (initialStep) setStep(initialStep);
+    else {
+      const existing = getSavedUserSession();
+      if (existing) {
+        setProfile(existing);
+        setStep("dashboard");
+      }
+    }
   }, [initialStep]);
 
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
@@ -103,10 +115,19 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   useEffect(() => {
     if (!profile?.email && !profile?.phone) return;
-    // Fetch from server so we catch registrations from other devices/browsers.
-    loadUserSubmissions(profile.email, profile.phone)
-      .then(subs => setUserSubmissions(subs))
-      .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
+    const fetchSubs = () => {
+      loadUserSubmissions(profile.email, profile.phone)
+        .then(subs => setUserSubmissions(subs))
+        .catch(() => setUserSubmissions(getUserSubmissions(profile?.email, profile?.phone)));
+    };
+    fetchSubs();
+
+    window.addEventListener("mahila_submissions_changed", fetchSubs);
+    window.addEventListener("mahila_user_session_changed", fetchSubs);
+    return () => {
+      window.removeEventListener("mahila_submissions_changed", fetchSubs);
+      window.removeEventListener("mahila_user_session_changed", fetchSubs);
+    };
   }, [profile, step, confirmed]);
 
   function handleSignOut() {
@@ -163,6 +184,9 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     const adminRes = await signInAdmin(identifier, loginPass);
     if (adminRes.ok) {
       setCurrentAdminSession(identifier);
+      try {
+        localStorage.setItem("mahila_admin_active_tab", "submissions");
+      } catch {}
       setAuthBusy(false);
       // An admin sign-in is not the visitor account a protected form wants, so
       // drop any pending destination rather than bouncing them into it.
@@ -178,9 +202,15 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     if (result.ok && result.profile) {
       setProfile(result.profile);
       saveUserSession(result.profile);
-      handleClose();
       toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
-      goAfterAuth();
+      const dest = consumeIntendedDestination();
+      if (dest) {
+        if (onClose) onClose();
+        navigate(dest);
+      } else {
+        handleClose();
+        navigate("/account");
+      }
       window.scrollTo({ top: 0 });
       return;
     }
@@ -206,9 +236,15 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     }
     setProfile(result.profile);
     saveUserSession(result.profile);
-    handleClose();
     toast.success(`Registered successfully! Welcome, ${result.profile.name}!`);
-    goAfterAuth();
+    const dest = consumeIntendedDestination();
+    if (dest) {
+      if (onClose) onClose();
+      navigate(dest);
+    } else {
+      handleClose();
+      navigate("/account");
+    }
     window.scrollTo({ top: 0 });
   }
 
@@ -247,7 +283,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   function toggleEvent(id: string) {
     // Prevent selecting disabled events (already volunteer or attendee)
-    const ev = realEvents.find(e => e.id === id);
+    const ev = realEvents.find(e => String(e.id) === String(id));
     if (ev?.disabled) return;
     setSelectedEvents(prev =>
       prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
@@ -256,7 +292,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   async function handleConfirm() {
     if (selectedEvents.length === 0) return toast.error("Please select at least one event");
-    const eventTitles = realEvents.filter(e => selectedEvents.includes(e.id)).map(e => e.title);
+    const eventTitles = realEvents.filter(e => selectedEvents.includes(String(e.id))).map(e => e.title);
     const res = await saveVolunteer({
       name: profile?.name ?? "",
       email: profile?.email ?? "",
@@ -301,8 +337,29 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     return s;
   }, [userSubmissions]);
 
-  const realEvents = events
+  const availableEvents: EventItem[] = (
+    events && events.length > 0
+      ? events
+      : siteData?.events && siteData.events.length > 0
+      ? siteData.events
+      : (VOLUNTEER_EVENTS.map(v => ({
+          id: String(v.id),
+          title: v.title,
+          description: v.desc,
+          image: "",
+          eventDate: v.date,
+          location: v.location,
+          totalSeats: v.slots,
+          maxVolunteers: 0,
+          windows: [{ kind: "volunteer" as const, enabled: true, regStart: "2026-01-01", regEnd: "2026-12-31" }],
+          categoryId: null,
+          createdAt: new Date().toISOString(),
+        })) as EventItem[])
+  );
+
+  const realEvents = availableEvents
     .filter((ev) => {
+      if (ev.published === false) return false;
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
       if (windows.length === 0) return true;
       return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
@@ -311,15 +368,18 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       const normTitle = ev.title.trim().toLowerCase();
       const alreadyVolunteer = registeredAsVolunteerTitles.has(normTitle);
       const alreadyAttendee = registeredAsAttendeeTitles.has(normTitle);
+      const catObj = findCategory(siteData?.categories ?? [], ev.categoryId);
+      const categoryName = catObj?.name || (typeof (ev as any).category === "string" ? (ev as any).category : "");
+
       return {
-        id: ev.id,
+        id: String(ev.id),
         status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
         title: ev.title,
         date: ev.eventDate ? new Date(ev.eventDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "TBD",
         location: ev.location || "Online / TBD",
-        category: "",
-        slots: ev.totalSeats || 0,
-        desc: ev.description || "",
+        category: categoryName,
+        slots: ev.maxVolunteers && ev.maxVolunteers > 0 ? ev.maxVolunteers : ev.totalSeats || 0,
+        desc: ev.description || (ev as any).desc || "",
         // Mutual exclusion: attendees don't need to volunteer, volunteers don't need to attend
         disabled: alreadyVolunteer || alreadyAttendee,
         disabledReason: alreadyVolunteer
@@ -399,28 +459,30 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
-        amount: s.data?.amount || 0,
+        amount: Number(s.data?.amount) || 0,
         cause: s.data?.campaign_name || s.data?.event_name || "General Empowerment Support",
         date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: s.status || "Completed",
+        receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
+        paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
       }));
   }, [userSubmissions, profile]);
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-2.5 sm:p-4 bg-black/65 backdrop-blur-sm">
       <div className="bg-[#f4efe7] rounded-2xl sm:rounded-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh]" style={{ maxWidth: step === "dashboard" ? "min(880px, 95vw)" : "min(460px, 92vw)" }}>
 
         {/* ── Header ── */}
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             {(step === "forgot" || step === "reset") && (
               <button onClick={() => setStep("login")} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mr-1">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-5"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
               </button>
             )}
             <div>
-              <p className="font-['Inter',sans-serif] text-[#f4efe7]/70 text-[11px] uppercase tracking-wider">Mahila Action Portal</p>
-              <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[20px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+              <p className="font-['Inter',sans-serif] text-[#f4efe7]/70 text-[10px] sm:text-[11px] uppercase tracking-wider">Mahila Action Portal</p>
+              <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[17px] sm:text-[20px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
                 {step === "choice" && "User & Volunteer Portal"}
                 {step === "login" && "Account Sign In"}
                 {step === "register" && "Create Member Account"}
@@ -430,21 +492,21 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
               </h3>
             </div>
           </div>
-          <button onClick={handleDismiss} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer"><X size={20} /></button>
+          <button onClick={handleDismiss} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer p-1"><X size={20} /></button>
         </div>
 
         <div className="overflow-y-auto flex-1">
 
           {/* ── Choice screen ── */}
           {step === "choice" && (
-            <div className="p-8 flex flex-col gap-5">
-              <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
+            <div className="p-5 sm:p-8 flex flex-col gap-4 sm:gap-5">
+              <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] sm:text-[14px] leading-relaxed">
                 Welcome to Mahila Action! Sign in to access your registered events, seat reservations, and donation history, or create a new account.
               </p>
-              <button onClick={() => setStep("login")} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
+              <button onClick={() => setStep("login")} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer">
                 Sign In to My Account
               </button>
-              <button onClick={() => setStep("register")} className="w-full border-2 border-[#a65a4a] text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#a65a4a]/5 transition-colors cursor-pointer">
+              <button onClick={() => setStep("register")} className="w-full border-2 border-[#a65a4a] text-[#a65a4a] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#a65a4a]/5 transition-colors cursor-pointer">
                 Register New Account
               </button>
               <div className="bg-[#a65a4a]/8 rounded-xl p-4 border border-[#a65a4a]/20">
@@ -461,13 +523,13 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
           {/* ── Login screen ── */}
           {step === "login" && (
-            <form onSubmit={handleLogin} className="p-8 flex flex-col gap-4">
+            <form onSubmit={handleLogin} className="p-5 sm:p-8 flex flex-col gap-3.5 sm:gap-4">
               {/* Set when the visitor was sent here from a protected action, so
                   the reason for the interruption is stated rather than implied. */}
               {prompt && (
                 <div className="flex gap-2.5 items-start bg-[#a65a4a]/8 border border-[#a65a4a]/25 rounded-xl p-3.5 -mt-1">
                   <AlertCircle size={16} className="text-[#a65a4a] mt-0.5 shrink-0" />
-                  <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/75 leading-relaxed">
+                  <p className="font-['Inter',sans-serif] text-[12px] sm:text-[13px] text-[#1e1e1e]/75 leading-relaxed">
                     {prompt} We'll take you straight back once you're signed in.
                   </p>
                 </div>
@@ -487,7 +549,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                   Forgot password?
                 </button>
               </div>
-              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-1 disabled:opacity-60">
                 {authBusy ? "Signing in…" : "Sign In"}
               </button>
               <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
@@ -501,8 +563,8 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
           {/* ── Register screen ── */}
           {step === "register" && (
-            <form onSubmit={handleRegister} className="p-8 flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleRegister} className="p-5 sm:p-8 flex flex-col gap-3.5 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className={labelCls}>Full Name *</label>
                   <input value={reg.name} onChange={e => setReg(r => ({ ...r, name: e.target.value }))} placeholder="Your name" className={inputCls} />
@@ -534,7 +596,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                   <option>General Support</option>
                 </select>
               </div>
-              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-1 disabled:opacity-60">
+              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-1 disabled:opacity-60">
                 {authBusy ? "Creating account…" : "Create Account & Continue"}
               </button>
               <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
@@ -547,22 +609,22 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
           {/* ── Forgot password screen ── */}
           {step === "forgot" && (
             forgotSent ? (
-              <div className="p-8 flex flex-col items-center text-center gap-4">
-                <div className="size-16 bg-[#587735]/10 rounded-full flex items-center justify-center">
+              <div className="p-5 sm:p-8 flex flex-col items-center text-center gap-4">
+                <div className="size-14 sm:size-16 bg-[#587735]/10 rounded-full flex items-center justify-center">
                   <CheckCircle size={32} className="text-[#587735]" />
                 </div>
-                <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[19px]" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Check your email</h4>
+                <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[18px] sm:text-[19px]" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Check your email</h4>
                 {/* Reaching this screen now means the account was confirmed to
                     exist — an unknown address is rejected on the form instead. */}
-                <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[14px] leading-relaxed">
-                  We've sent a link to reset your password to <span className="font-semibold">{forgotEmail}</span>. It can take a few minutes to arrive — remember to check your spam folder.
+                <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] sm:text-[14px] leading-relaxed">
+                  We've sent a link to reset your password to <span className="font-semibold break-all">{forgotEmail}</span>. It can take a few minutes to arrive — remember to check your spam folder.
                 </p>
                 <button type="button" onClick={() => { setForgotSent(false); setStep("login"); }} className="mt-1 font-['Inter',sans-serif] text-[13px] text-[#a65a4a] font-semibold cursor-pointer hover:underline">
                   ← Back to sign in
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleForgotSubmit} className="p-8 flex flex-col gap-4">
+              <form onSubmit={handleForgotSubmit} className="p-5 sm:p-8 flex flex-col gap-3.5 sm:gap-4">
                 <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed -mt-1">
                   Enter your email address and we'll send you a password reset link.
                 </p>
@@ -582,7 +644,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                     </p>
                   </div>
                 )}
-                <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+                <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
                   {authBusy ? "Sending…" : "Send Reset Link"}
                 </button>
                 <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
@@ -594,7 +656,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
           {/* ── Choose new password (opened from the emailed reset link) ── */}
           {step === "reset" && (
-            <form onSubmit={handleResetSubmit} className="p-8 flex flex-col gap-4">
+            <form onSubmit={handleResetSubmit} className="p-5 sm:p-8 flex flex-col gap-3.5 sm:gap-4">
               {!resetToken ? (
                 <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
                   <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
@@ -621,7 +683,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
               {resetConfirm.length > 0 && resetPass !== resetConfirm && (
                 <p className="font-['Inter',sans-serif] text-[#993925] text-[12px] -mt-1">Passwords don't match.</p>
               )}
-              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
                 {authBusy ? "Saving…" : "Save New Password"}
               </button>
               <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
@@ -632,21 +694,21 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
           {/* ── Dashboard ── */}
           {step === "dashboard" && (
-            <div className="p-6 md:p-8">
+            <div className="p-4 sm:p-6 md:p-8">
               {/* User Profile Summary Card */}
-              <div className="bg-white border border-[#a65a4a]/15 rounded-2xl p-5 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="size-14 rounded-full bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[22px] font-bold flex items-center justify-center shrink-0 shadow-md">
+              <div className="bg-white border border-[#a65a4a]/15 rounded-2xl p-4 sm:p-5 mb-5 sm:mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                <div className="flex items-center gap-3.5 sm:gap-4">
+                  <div className="size-12 sm:size-14 rounded-full bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[20px] sm:text-[22px] font-bold flex items-center justify-center shrink-0 shadow-md">
                     {profile?.name?.charAt(0).toUpperCase() || "U"}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[20px] font-semibold">{profile?.name}</h4>
-                      <span className="bg-[#587735]/15 text-[#587735] text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-['Fraunces',serif] text-[#1e1e1e] text-[18px] sm:text-[20px] font-semibold">{profile?.name}</h4>
+                      <span className="bg-[#587735]/15 text-[#587735] text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
                         <CheckCircle size={12} /> Active Account
                       </span>
                     </div>
-                    <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/60 mt-0.5">
+                    <p className="font-['Inter',sans-serif] text-[12px] sm:text-[13px] text-[#1e1e1e]/60 mt-0.5 break-all">
                       {profile?.email} {profile?.phone ? `· ${profile.phone}` : ""}
                     </p>
                     {profile?.skills && (
@@ -658,17 +720,17 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-4 py-2 rounded-full transition-colors flex items-center gap-2 w-fit self-start md:self-auto cursor-pointer"
+                  className="font-['Inter',sans-serif] text-[12px] sm:text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-3.5 sm:px-4 py-2 rounded-full transition-colors flex items-center gap-2 w-fit self-start md:self-auto cursor-pointer"
                 >
                   <LogOut size={14} /> Sign Out
                 </button>
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex border-b border-[#a65a4a]/20 mb-6 gap-2 sm:gap-6 overflow-x-auto">
+              <div className="flex border-b border-[#a65a4a]/20 mb-5 sm:mb-6 gap-2 sm:gap-6 overflow-x-auto no-scrollbar">
                 <button
                   onClick={() => setDashTab("registered")}
-                  className={`pb-3 font-['Inter',sans-serif] text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${dashTab === "registered"
+                  className={`pb-2.5 sm:pb-3 font-['Inter',sans-serif] text-[13px] sm:text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 ${dashTab === "registered"
                     ? "border-[#a65a4a] text-[#a65a4a]"
                     : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                     }`}
@@ -677,7 +739,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                 </button>
                 <button
                   onClick={() => setDashTab("donations")}
-                  className={`pb-3 font-['Inter',sans-serif] text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${dashTab === "donations"
+                  className={`pb-2.5 sm:pb-3 font-['Inter',sans-serif] text-[13px] sm:text-[14px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 ${dashTab === "donations"
                     ? "border-[#a65a4a] text-[#a65a4a]"
                     : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                     }`}
@@ -747,7 +809,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                   {userDonationList.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {userDonationList.map((d) => (
-                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
@@ -758,10 +820,20 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                               </span>
                             </div>
                             <h5 className="font-['Inter',sans-serif] font-bold text-[15px] text-[#1e1e1e] mt-1">{d.cause}</h5>
+                            <p className="text-[11px] text-[#1e1e1e]/60 font-mono mt-1.5">
+                              Receipt: <strong className="text-[#1e1e1e]">{d.receiptNumber}</strong> • {d.paymentMethod}
+                            </p>
                           </div>
                           <div className="border-t border-[#a65a4a]/10 pt-3 mt-4 flex items-center justify-between text-[12px] text-[#1e1e1e]/50 font-['Inter',sans-serif]">
                             <span className="flex items-center gap-1"><Clock size={12} /> {d.date}</span>
-                            <span className="bg-[#f4efe7] text-[#a65a4a] px-2.5 py-0.5 rounded text-[11px] font-medium">80G Tax Exempt</span>
+                            <a
+                              href={`/api/donations/${d.id}/receipt`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                            >
+                              <FileText size={12} /> Receipt <ExternalLink size={10} />
+                            </a>
                           </div>
                         </div>
                       ))}

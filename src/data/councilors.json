@@ -1,0 +1,29 @@
+[
+  {
+    "id": "1",
+    "name": "Sunita Devi",
+    "role": "Community Advocate",
+    "bio": "What started as a small workshop became a journey of confidence, leadership, and self-belief.",
+    "image": "",
+    "order": 0,
+    "order_index": 0
+  },
+  {
+    "id": "2",
+    "name": "Kavitha Reddy",
+    "role": "Education Lead",
+    "bio": "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.",
+    "image": "",
+    "order": 1,
+    "order_index": 1
+  },
+  {
+    "id": "3",
+    "name": "Meena Sharma",
+    "role": "Livelihood Champion",
+    "bio": "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.",
+    "image": "",
+    "order": 2,
+    "order_index": 2
+  }
+]

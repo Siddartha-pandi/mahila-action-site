@@ -296,6 +296,30 @@ export async function loadUserSubmissions(email?: string, phone?: string): Promi
           };
         }
 
+        if (row.item_source === "donation") {
+          return {
+            id: String(row.id),
+            type: "donation" as const,
+            data: {
+              amount: Number(row.amount) || 0,
+              name: row.name,
+              email: row.email,
+              phone: row.phone,
+              donation_type: row.donation_type,
+              anonymous: row.anonymous === 1 || row.anonymous === true,
+              event_name: row.event_name,
+              campaign_name: row.campaign_name,
+              pan_number: row.pan_number,
+              address: row.address,
+              payment_method: row.payment_method,
+              transaction_id: row.transaction_id,
+              receipt_number: row.receipt_number,
+            },
+            createdAt: row.created_at || new Date().toISOString(),
+            status: (row.status as SubmissionItem["status"]) || "Completed",
+          };
+        }
+
         return {
           id: String(row.id),
           type: row.volunteer_commitment &&
@@ -323,10 +347,10 @@ export async function loadUserSubmissions(email?: string, phone?: string): Promi
         };
       });
 
-      // Merge with any un-synced local requests
+      // Merge with any un-synced local submissions (donations or volunteer requests)
       const serverIds = new Set(serverItems.map((s) => String(s.id)));
       const local = getUserSubmissions(email, phone).filter(
-        (s) => (s.type === "perm_volunteer_request" || s.type === "perm_volunteer_deactivate") && !serverIds.has(String(s.id))
+        (s) => !serverIds.has(String(s.id))
       );
 
       return [...serverItems, ...local].sort(
@@ -428,12 +452,13 @@ export function deleteSubmission(id: string) {
 // confirmation email, and is then mirrored locally (that mirror is what "My
 // Account" reads). These posts used to be wrapped in `if (BASE_URL)`, and
 // BASE_URL is always "" in the browser — Next only exposes NEXT_PUBLIC_* vars,
-// while .env sets VITE_API_URL. So nothing ever reached the server and no email
+// while the app used a separate frontend API URL. The Next.js app now uses
+// same-origin API routes by default, so nothing needs a separate Vite server.
 // was sent.
 
 /** What a public form submission reports back — `error` carries the server's own
  *  wording, so a rejected duplicate can say why rather than "try again". */
-export type SaveResult = { ok: boolean; error?: string };
+export type SaveResult = { ok: boolean; error?: string; id?: string | number; receipt_number?: string; data?: any };
 
 /**
  * Post, then mirror locally only if the server accepted it. The mirror used to
@@ -442,10 +467,48 @@ export type SaveResult = { ok: boolean; error?: string };
  * Events" as though it had gone through.
  */
 async function submitForm(type: SubmissionItem["type"], path: string, payload: any): Promise<SaveResult> {
-  const res = await api.post(path, payload);
+  const res = await api.post<any>(path, payload);
   if (res.ok) {
+    saveLocalSubmission(type, {
+      ...payload,
+      id: res.data?.id,
+      receipt_number: res.data?.receipt_number,
+    });
     notifySubmissionsChanged();
-    return { ok: true };
+
+    // Immediately reflect reserved seats on the cached event so available seats update in real time
+    if (type === "reservation" && (payload.event_name || payload.event_id)) {
+      try {
+        const rawSite = localStorage.getItem("mahila_site_data_v2");
+        if (rawSite) {
+          const site = JSON.parse(rawSite);
+          const seats = Number(payload.seats) || 1;
+          const normTitle = String(payload.event_name || "").trim().toLowerCase();
+          const targetId = payload.event_id != null ? String(payload.event_id).replace(/^evt_/, "") : "";
+          let modified = false;
+          const updatedEvents = (site.events ?? []).map((e: any) => {
+            const eId = String(e.id).replace(/^evt_/, "");
+            const matches = (targetId && eId === targetId) || (e.title && e.title.trim().toLowerCase() === normTitle);
+            if (matches) {
+              modified = true;
+              const newBooked = (Number(e.bookedSeats) || 0) + seats;
+              const newAvail = Math.max(0, (Number(e.totalSeats) || 0) - newBooked);
+              return { ...e, bookedSeats: newBooked, availableSeats: newAvail };
+            }
+            return e;
+          });
+          if (modified) {
+            site.events = updatedEvents;
+            localStorage.setItem("mahila_site_data_v2", JSON.stringify(site));
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("mahila_sitedata_changed"));
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return { ok: true, id: res.data?.id, receipt_number: res.data?.receipt_number, data: res.data };
   }
   if (res.status === 0) {
     return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
@@ -462,6 +525,11 @@ export async function saveDonation(data: {
   donation_type?: "one-time" | "monthly";
   event_name?: string;
   campaign_name?: string;
+  pan_number?: string;
+  address?: string;
+  payment_method?: string;
+  transaction_id?: string;
+  notes?: string;
 }): Promise<SaveResult> {
   return submitForm("donation", "/api/donations", { donation_type: "one-time" as const, ...data });
 }
@@ -472,6 +540,7 @@ export async function saveReservation(data: {
   phone: string;
   seats: number;
   event_name: string;
+  event_id?: string | number;
   volunteer_commitment?: "event_only" | "ongoing";
   companions?: { name: string; phone: string }[];
 }): Promise<SaveResult> {

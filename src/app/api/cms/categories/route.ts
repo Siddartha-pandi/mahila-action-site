@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
-import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
+import { readCategoriesFile, writeCategoriesFile, getNextCategoryId, CategoryItem } from "@/lib/categories";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    const result = await queryDb("SELECT * FROM cms_categories ORDER BY name ASC");
-    return NextResponse.json(result.rows, {
+    const list = await readCategoriesFile();
+    return NextResponse.json(list, {
       headers: {
-        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
       },
     });
   } catch (err: any) {
@@ -18,28 +20,42 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "categories", "edit");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const b = await req.json();
-    let finalId = b.id;
-
-    if (b.id && !isNaN(Number(b.id))) {
-      await queryDb(
-        `INSERT INTO cms_categories (id, name) VALUES ($1, $2)
-         ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name`,
-        [Number(b.id), b.name]
-      );
-    } else {
-      const res = await queryDb(
-        `INSERT INTO cms_categories (name) VALUES ($1)
-         ON CONFLICT(name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
-        [b.name]
-      );
-      finalId = res.rows[0]?.id;
+    const name = String(b.name || "").trim();
+    if (!name) {
+      return NextResponse.json({ error: "Category name is required" }, { status: 400 });
     }
-    return NextResponse.json({ ok: true, id: finalId });
+
+    const list = await readCategoriesFile();
+    const providedId = b.id != null ? String(b.id).trim() : "";
+
+    // Check if updating an existing category
+    const existingIdx = providedId ? list.findIndex((c) => String(c.id) === providedId) : -1;
+
+    let finalId: string;
+    if (existingIdx >= 0) {
+      // Existing category: update its name
+      finalId = list[existingIdx].id;
+      list[existingIdx] = { ...list[existingIdx], name };
+    } else {
+      // New category: assign the next sequential number as ID
+      const isPureNumber = providedId && !isNaN(Number(providedId)) && Number.isInteger(Number(providedId)) && Number(providedId) > 0;
+      if (isPureNumber && !list.some((c) => String(c.id) === providedId)) {
+        finalId = providedId;
+      } else {
+        finalId = getNextCategoryId(list);
+      }
+      list.push({ id: finalId, name });
+    }
+
+    await writeCategoriesFile(list);
+    return NextResponse.json({ ok: true, id: finalId, category: { id: finalId, name } });
   } catch (err: any) {
     console.error("POST /api/cms/categories error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

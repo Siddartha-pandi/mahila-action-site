@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send } from "lucide-react";
+import { useSearchParams } from "react-router";
+import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   getSavedUserSession, saveUserSession, validateUserSession,
@@ -28,8 +29,38 @@ const ROLE_LABEL: Record<RegistrationRole, string> = {
 export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const { openModal } = useModal();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const [profile, setProfile] = useState<VolunteerAccountProfile | null>(() => getSavedUserSession());
-  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse" | "perm">("registered");
+  const [dashTab, setDashTab] = useState<"registered" | "donations" | "browse" | "perm">(() => {
+    if (tabParam === "perm" || tabParam === "donations" || tabParam === "browse" || tabParam === "registered") {
+      return tabParam;
+    }
+    return "registered";
+  });
+
+  useEffect(() => {
+    const currentTab = searchParams.get("tab");
+    if (currentTab === "perm" || currentTab === "donations" || currentTab === "browse" || currentTab === "registered") {
+      setDashTab(currentTab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tab: "registered" | "donations" | "browse" | "perm") => {
+    setDashTab(tab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === "registered") {
+          next.delete("tab");
+        } else {
+          next.set("tab", tab);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
   const [filter, setFilter] = useState<"all" | "ongoing" | "upcoming">("all");
   /** Event the registration form is open for — registering is one event at a
    *  time now, because each role asks for different details. */
@@ -65,10 +96,12 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
     const interval = setInterval(syncSession, 60000);
 
     window.addEventListener("mahila_user_session_changed", syncSession);
+    window.addEventListener("mahila_submissions_changed", syncSession);
     window.addEventListener("storage", syncSession);
     return () => {
       clearInterval(interval);
       window.removeEventListener("mahila_user_session_changed", syncSession);
+      window.removeEventListener("mahila_submissions_changed", syncSession);
       window.removeEventListener("storage", syncSession);
     };
   }, [refreshKey]);
@@ -192,22 +225,26 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
-        amount: s.data?.amount || 0,
+        amount: Number(s.data?.amount) || 0,
         cause: s.data?.campaign_name || s.data?.event_name || "General Empowerment Support",
         date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: s.status || "Completed",
+        receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
+        paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
+        transactionId: s.data?.transaction_id || s.data?.transactionId || "",
       }));
   }, [userSubmissions, profile]);
 
   const now = new Date();
   const realEvents = siteData.events
     .filter((ev) => {
+      if (ev.published === false) return false;
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
       if (windows.length === 0) return true;
       return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
     })
     .map((ev) => ({
-      id: ev.id,
+      id: String(ev.id),
       raw: ev,
       status: (isEventOpen(ev, now) ? "ongoing" : "upcoming") as "ongoing" | "upcoming",
       title: ev.title,
@@ -220,7 +257,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       ),
     }));
 
-  const registeringEvent = realEvents.find(e => e.id === registeringEventId) ?? null;
+  const registeringEvent = realEvents.find(e => String(e.id) === String(registeringEventId)) ?? null;
 
   return (
     <main className="bg-[#f4efe7] min-h-screen">
@@ -231,15 +268,19 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
           {!profile ? (
             <div className="max-w-[520px] mx-auto bg-white rounded-3xl p-8 sm:p-10 border border-[#a65a4a]/20 text-center shadow-lg">
               <div className="size-16 rounded-full bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center mx-auto mb-4">
-                <User size={32} />
+                {dashTab === "perm" ? <Star size={32} className="text-[#a65a4a] fill-[#a65a4a]" /> : <User size={32} />}
               </div>
-              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">Sign In to View Your Account</h3>
+              <h3 className="font-['Fraunces',serif] text-[24px] font-semibold text-[#1e1e1e]">
+                {dashTab === "perm" ? "Permanent Volunteer Program" : "Sign In to View Your Account"}
+              </h3>
               <p className="font-['Inter',sans-serif] text-[15px] text-[#1e1e1e]/65 max-w-md mx-auto mt-2 leading-relaxed">
-                Please sign in to access your registered events, seat reservations, volunteer activities, and contribution history.
+                {dashTab === "perm"
+                  ? "Please sign in or create an account to view or apply for Permanent Volunteer status with Mahila Action."
+                  : "Please sign in to access your registered events, seat reservations, volunteer activities, and contribution history."}
               </p>
               <button
                 onClick={() => {
-                  rememberIntendedDestination("/account");
+                  rememberIntendedDestination(window.location.pathname + (window.location.search || (dashTab === "perm" ? "?tab=perm" : "")));
                   openModal("login");
                 }}
                 className="mt-6 px-8 py-3.5 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
@@ -249,34 +290,34 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
             </div>
           ) : (
             <div className="max-w-[960px] mx-auto">
-              <div className="bg-white border border-[#a65a4a]/20 rounded-3xl p-6 sm:p-8 mb-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="flex items-center gap-5">
-                  <div className="size-16 rounded-2xl bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[26px] font-bold flex items-center justify-center shrink-0 shadow-md">
+              <div className="bg-white border border-[#a65a4a]/20 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
+                <div className="flex items-start sm:items-center gap-3.5 sm:gap-5">
+                  <div className="size-12 sm:size-16 rounded-xl sm:rounded-2xl bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[20px] sm:text-[26px] font-bold flex items-center justify-center shrink-0 shadow-md">
                     {profile.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[24px] font-semibold">{profile.name}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[20px] sm:text-[24px] font-semibold">{profile.name}</h3>
                       {isPermanentVolunteer && (
-                        <span className="bg-[#a65a4a] text-[#f4efe7] text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                        <span className="bg-[#a65a4a] text-[#f4efe7] text-[11px] sm:text-[12px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1 shadow-sm">
                           <Star size={12} className="fill-[#f4efe7]" /> Permanent Volunteer
                         </span>
                       )}
                       {permRequest?.status === "New" && (
-                        <span className="bg-amber-100 text-amber-800 text-[12px] font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                        <span className="bg-amber-100 text-amber-800 text-[11px] sm:text-[12px] font-semibold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                           <Clock size={12} /> Request Pending
                         </span>
                       )}
                       {deactivateRequest?.status === "New" && !isDeactivated && (
-                        <span className="bg-rose-100 text-rose-800 text-[12px] font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                        <span className="bg-rose-100 text-rose-800 text-[11px] sm:text-[12px] font-semibold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                           <Clock size={12} /> Deactivation Pending
                         </span>
                       )}
-                      <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                      <span className="bg-emerald-100 text-emerald-800 text-[11px] sm:text-[12px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                         <CheckCircle size={13} /> Active Member
                       </span>
                     </div>
-                    <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 mt-1">
+                    <p className="font-['Inter',sans-serif] text-[13px] sm:text-[14px] text-[#1e1e1e]/60 mt-1 break-all">
                       {profile.email} {profile.phone ? `· ${profile.phone}` : ""}
                     </p>
                     {profile.skills && (
@@ -290,56 +331,56 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleSignOut}
-                    className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-5 py-2.5 rounded-full transition-colors flex items-center gap-2 cursor-pointer"
+                    className="w-full sm:w-auto justify-center font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-5 py-2.5 rounded-full transition-colors flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut size={15} /> Sign Out
                   </button>
                 </div>
               </div>
 
-              <div className="flex border-b-2 border-[#a65a4a]/20 mb-8 gap-4 sm:gap-8 overflow-x-auto">
+              <div className="flex border-b-2 border-[#a65a4a]/20 mb-6 sm:mb-8 gap-3 sm:gap-8 overflow-x-auto no-scrollbar scroll-smooth">
                 <button
-                  onClick={() => setDashTab("registered")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  onClick={() => handleTabChange("registered")}
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "registered"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <UserCheck size={18} /> My Registered Events ({registeredEventsList.length})
+                  <UserCheck size={17} /> My Registered Events ({registeredEventsList.length})
                 </button>
 
                 <button
-                  onClick={() => setDashTab("donations")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  onClick={() => handleTabChange("donations")}
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "donations"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <Heart size={18} /> My Contributions ({userDonationList.length})
+                  <Heart size={17} /> My Contributions ({userDonationList.length})
                 </button>
 
                 <button
-                  onClick={() => setDashTab("browse")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  onClick={() => handleTabChange("browse")}
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "browse"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <Plus size={18} /> Browse Upcoming Events
+                  <Plus size={17} /> Browse Upcoming Events
                 </button>
 
                 <button
-                  onClick={() => setDashTab("perm")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  onClick={() => handleTabChange("perm")}
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "perm"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <Star size={18} /> Permanent Volunteer
+                  <Star size={17} /> Permanent Volunteer
                   {(permRequest?.status === "New" || (deactivateRequest?.status === "New" && !isDeactivated)) && (
                     <span className="size-2 rounded-full bg-amber-400 inline-block ml-0.5" />
                   )}
@@ -402,25 +443,43 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                   {userDonationList.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       {userDonationList.map((d) => (
-                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+                        <div key={d.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-6 shadow-sm flex flex-col justify-between transition-all">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-3">
                               <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                                <CheckCircle size={12} /> Donation
+                                <CheckCircle size={12} /> Confirmed Contribution
                               </span>
                               <span className="text-[#a65a4a] font-['Fraunces',serif] text-[22px] font-bold">
                                 ₹{d.amount.toLocaleString("en-IN")}
                               </span>
                             </div>
-                            <h4 className="font-['Inter',sans-serif] font-bold text-[16px] text-[#1e1e1e] mt-1">
+                            <h4 className="font-['Inter',sans-serif] font-bold text-[17px] text-[#1e1e1e] mt-1 leading-snug">
                               {d.cause}
                             </h4>
+                            <div className="flex flex-wrap items-center gap-3 text-[12px] text-[#1e1e1e]/60 mt-2 font-mono">
+                              <span>Receipt: <strong className="text-[#1e1e1e]">{d.receiptNumber}</strong></span>
+                              <span>•</span>
+                              <span>Mode: <strong className="text-[#1e1e1e]">{d.paymentMethod}</strong></span>
+                              {d.transactionId && (
+                                <>
+                                  <span>•</span>
+                                  <span className="truncate max-w-[200px]" title={d.transactionId}>Ref: {d.transactionId}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex items-center justify-between text-[13px] text-[#1e1e1e]/55 font-['Inter',sans-serif]">
+                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-[12px] sm:text-[13px] text-[#1e1e1e]/60 font-['Inter',sans-serif]">
                             <span className="flex items-center gap-1.5">
                               <Clock size={14} /> Date: {d.date}
                             </span>
-                            <span className="bg-[#f4efe7] text-[#a65a4a] px-3 py-1 rounded-full text-[12px] font-medium">80G Tax Exempt</span>
+                            <a
+                              href={`/api/donations/${d.id}/receipt`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[12px] font-semibold transition-colors cursor-pointer w-full sm:w-auto"
+                            >
+                              <FileText size={13} /> View / Print Receipt <ExternalLink size={11} />
+                            </a>
                           </div>
                         </div>
                       ))}
@@ -554,7 +613,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
               )}
 
               {dashTab === "perm" && (
-                <div>
+                <div id="permanent-volunteer-section">
                   {/* ── 1. Deactivated State (Only if not re-applying) ── */}
                   {isDeactivated && !reApplying && (
                     <div className="bg-white rounded-3xl border border-gray-250 p-8 sm:p-10 text-center shadow-sm">

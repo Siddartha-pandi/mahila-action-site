@@ -196,6 +196,7 @@ export function EventRegistrationModal({
         name, email, phone,
         seats: Number(volunteerParty.count),
         event_name: event.title,
+        event_id: event.id,
         volunteer_commitment: commitment,
         companions: volunteerParty.companions,
       });
@@ -217,6 +218,7 @@ export function EventRegistrationModal({
       name, email, phone,
       seats: Number(attendeeParty.count),
       event_name: event.title,
+      event_id: event.id,
       companions: attendeeParty.companions,
     });
     if (!res.ok) return fail(res.error || "Something went wrong reserving your seat — please try again.");
@@ -284,15 +286,15 @@ export function EventRegistrationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[560px] max-h-[88vh] overflow-y-auto shadow-2xl">
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-start justify-between sticky top-0 z-10">
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-[94vw] sm:w-[92vw] max-w-[560px] max-h-[88vh] overflow-y-auto shadow-2xl">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-start justify-between sticky top-0 z-10">
           <div>
-            <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] uppercase tracking-wider">Register for</p>
-            <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[22px] font-semibold mt-0.5" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[11px] sm:text-[12px] uppercase tracking-wider">Register for</p>
+            <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold mt-0.5" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               {event.title}
             </h3>
-            <div className="font-['Inter',sans-serif] text-[#f4efe7]/80 text-[13px] flex flex-wrap gap-4 mt-2">
+            <div className="font-['Inter',sans-serif] text-[#f4efe7]/80 text-[12px] sm:text-[13px] flex flex-wrap gap-2.5 sm:gap-4 mt-1.5 sm:mt-2">
               {event.eventDate && (
                 <span className="flex items-center gap-1.5">
                   <Calendar size={13} /> {new Date(event.eventDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -301,10 +303,10 @@ export function EventRegistrationModal({
               <span className="flex items-center gap-1.5"><MapPin size={13} /> {event.location || "Online / TBD"}</span>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-0.5 sm:mt-1 p-1"><X size={20} /></button>
         </div>
 
-        <div className="p-7">
+        <div className="p-4 sm:p-7">
           {doneRole ? (
             <div className="flex flex-col items-center text-center gap-4">
               <div className="size-16 bg-[#587735]/15 rounded-full flex items-center justify-center">
@@ -468,9 +470,27 @@ export function EventRegistrationModal({
                   {role === "attendee" && (
                     <>
                       <div>
-                        <label className={reserveLabelClass}>No. of Members Attending</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className={reserveLabelClass}>No. of Members Attending</label>
+                          {event.totalSeats > 0 && (
+                            <span className="text-[11px] font-semibold text-emerald-700">
+                              {event.availableSeats !== undefined
+                                ? `${event.availableSeats} available`
+                                : `${Math.max(0, event.totalSeats - (event.bookedSeats ?? 0))} available`}
+                              {Number(event.bookedSeats) > 0 && ` (${event.bookedSeats} booked)`}
+                            </span>
+                          )}
+                        </div>
                         <select value={attendeeParty.count} onChange={e => attendeeParty.setCountAndRows(e.target.value)} className={`${reserveInputClass} cursor-pointer`}>
-                          {["1", "2", "3", "4", "5", "6"].map(n => <option key={n} value={n}>{n} member{Number(n) > 1 ? "s" : ""}</option>)}
+                          {(() => {
+                            const avail = event.availableSeats !== undefined
+                              ? Number(event.availableSeats)
+                              : (event.totalSeats ? Math.max(0, event.totalSeats - (event.bookedSeats ?? 0)) : 6);
+                            const maxOptions = Math.min(6, Math.max(1, avail));
+                            return Array.from({ length: maxOptions }, (_, i) => String(i + 1)).map(n => (
+                              <option key={n} value={n}>{n} member{Number(n) > 1 ? "s" : ""}</option>
+                            ));
+                          })()}
                         </select>
                       </div>
                       <CompanionFields
@@ -480,12 +500,21 @@ export function EventRegistrationModal({
                         onChange={attendeeParty.update}
                       />
                       {event.totalSeats > 0 && (
-                        <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center gap-2.5">
-                          <span className="relative flex size-2">
-                            <span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" />
-                            <span className="relative inline-flex size-2 rounded-full bg-red-500" />
-                          </span>
-                          <p className="font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold">{event.totalSeats} seats total — reserve yours now!</p>
+                        <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="relative flex size-2">
+                              <span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" />
+                              <span className="relative inline-flex size-2 rounded-full bg-red-500" />
+                            </span>
+                            <p className="font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold">
+                              {Number(event.bookedSeats) > 0
+                                ? `${event.availableSeats ?? Math.max(0, event.totalSeats - (event.bookedSeats ?? 0))} of ${event.totalSeats} seats available — reserve yours now!`
+                                : `${event.totalSeats} seats total — reserve yours now!`}
+                            </p>
+                          </div>
+                          {Number(event.bookedSeats) > 0 && (
+                            <span className="text-[11px] text-[#a65a4a]/80 font-medium">({event.bookedSeats} booked)</span>
+                          )}
                         </div>
                       )}
                     </>
@@ -494,7 +523,7 @@ export function EventRegistrationModal({
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[15px] sm:text-[17px] font-semibold py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Submitting…" : submitLabel[role]}
                   </button>

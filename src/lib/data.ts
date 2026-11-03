@@ -1,5 +1,8 @@
 import { api, BASE_URL } from "./api";
 import { comingSoon } from "./comingSoon";
+import contactJson from "../data/contact.json";
+import councilorsJson from "../data/councilors.json";
+import timelineJson from "../data/timeline.json";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -22,9 +25,12 @@ export interface EventItem {
   eventDate: string; // ISO date — when the event itself happens
   location: string;
   totalSeats: number;
+  bookedSeats?: number;
+  availableSeats?: number;
   maxVolunteers: number; // 0 = unlimited; admin-set cap on volunteer sign-ups
   windows: RegWindow[];
   categoryId: string | null; // e.g. "Women & Leadership" — shares the same categories as Stories
+  published?: boolean; // true = visible to public, false = unpublished draft
   createdAt: string;
 }
 
@@ -43,6 +49,7 @@ export interface BlogPost {
   coverImage: string;
   gallery: string[];
   tags: string[];
+  published?: boolean; // true = visible to public, false = unpublished draft
   createdAt: string;
 }
 
@@ -134,11 +141,56 @@ function daysFromNow(n: number) {
 }
 
 export const DEFAULT_CATEGORIES: Category[] = [
-  { id: "cat_women", name: "Women & Leadership" },
-  { id: "cat_education", name: "Education & Learning" },
-  { id: "cat_livelihood", name: "Livelihood & Skills" },
-  { id: "cat_wellbeing", name: "Community Wellbeing" },
+  { id: "1", name: "Women & Leadership" },
+  { id: "2", name: "Education & Learning" },
+  { id: "3", name: "Livelihood & Skills" },
+  { id: "4", name: "Community Wellbeing" },
 ];
+
+export function findCategory(
+  categories: Category[],
+  catIdOrSlugOrName: string | number | null | undefined
+): Category | undefined {
+  if (catIdOrSlugOrName == null || catIdOrSlugOrName === "") return undefined;
+  const target = String(catIdOrSlugOrName).trim();
+  const lower = target.toLowerCase();
+
+  const ALIAS_MAP: Record<string, string> = {
+    cat_women: "1",
+    cat_education: "2",
+    cat_livelihood: "3",
+    cat_wellbeing: "4",
+    "women-leadership": "1",
+    education: "2",
+    livelihood: "3",
+    wellbeing: "4",
+    "women & leadership": "1",
+    "education & learning": "2",
+    "livelihood & skills": "3",
+    "community wellbeing": "4",
+  };
+  const resolvedId = ALIAS_MAP[lower];
+
+  return categories.find((c) => {
+    const cId = String(c.id).trim();
+    const cName = c.name.trim().toLowerCase();
+    return (
+      cId === target ||
+      cId.toLowerCase() === lower ||
+      (resolvedId && cId === resolvedId) ||
+      cName === lower
+    );
+  });
+}
+
+export function resolveCategoryId(
+  categories: Category[],
+  catIdOrSlugOrName: string | number | null | undefined
+): string | null {
+  if (catIdOrSlugOrName == null || catIdOrSlugOrName === "") return null;
+  const found = findCategory(categories, catIdOrSlugOrName);
+  return found ? String(found.id) : String(catIdOrSlugOrName);
+}
 
 export const DEFAULT_EVENTS: EventItem[] = [
   {
@@ -155,23 +207,24 @@ export const DEFAULT_EVENTS: EventItem[] = [
       { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18) },
       { kind: "donor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(10) },
     ],
-    categoryId: "cat_women",
+    categoryId: "1",
+    published: true,
     createdAt: new Date().toISOString(),
   },
 ];
 
 export const DEFAULT_BLOG_POSTS: BlogPost[] = [
-  { id: "story_she_found_voice", section: "story", categoryId: "cat_women", title: "She Found Her Voice", excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", content: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 5 * 86400000).toISOString() },
-  { id: "story_new_dawn_priya", section: "story", categoryId: "cat_education", title: "A New Dawn for Priya", excerpt: "Access to education transformed one family's future across three generations.", content: "Access to education transformed one family's future across three generations.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 4 * 86400000).toISOString() },
-  { id: "story_building_futures", section: "story", categoryId: "cat_livelihood", title: "Building Futures Together", excerpt: "How a community cooperative changed the economic landscape of an entire village.", content: "How a community cooperative changed the economic landscape of an entire village.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 3 * 86400000).toISOString() },
-  { id: "story_health_all", section: "story", categoryId: "cat_wellbeing", title: "Health for All", excerpt: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", content: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-  { id: "story_first_sarpanch", section: "story", categoryId: "cat_women", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
-  { id: "story_breaking_cycle", section: "story", categoryId: "cat_education", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
+  { id: "1", section: "story", categoryId: "1", title: "She Found Her Voice", excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", content: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 5 * 86400000).toISOString() },
+  { id: "2", section: "story", categoryId: "2", title: "A New Dawn for Priya", excerpt: "Access to education transformed one family's future across three generations.", content: "Access to education transformed one family's future across three generations.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 4 * 86400000).toISOString() },
+  { id: "3", section: "story", categoryId: "3", title: "Building Futures Together", excerpt: "How a community cooperative changed the economic landscape of an entire village.", content: "How a community cooperative changed the economic landscape of an entire village.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 3 * 86400000).toISOString() },
+  { id: "4", section: "story", categoryId: "4", title: "Health for All", excerpt: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", content: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
+  { id: "5", section: "story", categoryId: "1", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
+  { id: "6", section: "story", categoryId: "2", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
 
   {
-    id: "women-leadership",
+    id: "7",
     section: "impact",
-    categoryId: "cat_women",
+    categoryId: "1",
     title: "When Women Rise, Communities Thrive.",
     excerpt: "Women & Leadership — grassroots training, civic engagement, and mentorship that puts women in decision-making roles.",
     content: "<p>Mahila Action's Women &amp; Leadership programme has been transforming the civic and economic landscape of rural Telangana for over two decades. We believe lasting change begins when women take their rightful place as decision-makers in their homes, communities, and institutions.</p><h2>1. Grassroots Leadership Training</h2><p>Our flagship 12-week leadership training immerses women in modules covering public speaking, conflict resolution, rights awareness, and community organising. Over 3,000 women have completed the programme since 2005, with 500+ now holding elected positions in local governance.</p><h2>2. Civic Engagement &amp; Panchayat Access</h2><p>We prepare women to actively engage with panchayat processes — from attending gram sabhas to filing RTI applications. Our legal literacy workshops have helped over 1,200 women access entitlements they previously didn't know existed.</p><h2>3. Mentorship Networks</h2><p>We connect emerging women leaders with experienced advocates who guide them through the challenges of public life. These networks have proven to be one of the most powerful tools for sustained participation and confidence-building.</p><h2>4. Young Women's Councils</h2><p>Recognising that leadership starts early, we run Young Women's Councils in 45 schools across Nalgonda and Warangal districts — giving girls a safe space to practise leadership, debate, and civic advocacy.</p><h2>5. Impact in Numbers</h2><p>500+ women in elected leadership positions · 3,000+ trained leaders · 1,200+ RTI applications filed successfully · 45 Young Women's Councils active in schools.</p>",
@@ -181,9 +234,9 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     createdAt: new Date(Date.now() - 9 * 86400000).toISOString(),
   },
   {
-    id: "education",
+    id: "8",
     section: "impact",
-    categoryId: "cat_education",
+    categoryId: "2",
     title: "Education Opens New Possibilities.",
     excerpt: "Education & Learning — community centres, adult literacy, and scholarships that keep girls in school.",
     content: "<p>Access to quality education remains one of the most persistent inequities facing women and children in rural India. Mahila Action's Education &amp; Learning programmes work at every stage — from early childhood literacy to adult continuing education.</p><h2>1. Community Learning Centres</h2><p>We operate 38 community learning centres serving over 12,000 students annually. Located in brick-kiln colonies, tribal hamlets, and urban slums, these centres provide remedial tutoring, life skills, and a safe after-school environment.</p><h2>2. Adult Literacy Circles</h2><p>Our adult literacy programme — where Mahila Action began in 1995 — continues to run literacy circles for women who never had the opportunity to complete schooling. To date, we have helped over 8,000 women achieve functional literacy.</p><h2>3. Scholarships &amp; Retention Support</h2><p>We provide annual scholarships to 400 girls at risk of school dropout due to economic pressure or early marriage. Our retention coordinators follow up monthly with families to resolve barriers and keep girls in school.</p><h2>4. Teacher Training &amp; Curriculum</h2><p>We work with government school teachers to improve pedagogy around girls' education. Our supplemental curriculum on gender equality has been adopted by 120 government schools across four districts.</p><h2>5. Impact in Numbers</h2><p>38 community learning centres · 12,000+ students served annually · 8,000+ adult women made literate · 400 scholarships awarded each year.</p>",
@@ -193,9 +246,9 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     createdAt: new Date(Date.now() - 8 * 86400000).toISOString(),
   },
   {
-    id: "livelihood",
+    id: "9",
     section: "impact",
-    categoryId: "cat_livelihood",
+    categoryId: "3",
     title: "Building Economic Independence Together.",
     excerpt: "Livelihood & Skills — vocational training, SHG networks, and market access that build lasting income.",
     content: "<p>Economic dependency is one of the primary barriers to women's freedom and dignity. Mahila Action's Livelihood &amp; Skills programmes build sustainable income pathways through vocational training, micro-enterprise support, and access to financial services.</p><h2>1. Vocational Skills Training</h2><p>We offer certified vocational programmes in tailoring, food processing, beauty therapy, construction trades, and digital skills. Over 6,000 women have completed vocational training, with 78% reporting increased household income within six months.</p><h2>2. Micro-Finance &amp; SHG Networks</h2><p>Our self-help group (SHG) federation connects over 4,200 women in 210 SHGs across 14 districts. Members access affordable credit, savings facilities, and insurance products tailored to their needs.</p><h2>3. Market Linkages &amp; Entrepreneurship</h2><p>We connect trained women with market opportunities — from e-commerce platforms to B2B buyers and government procurement programmes. Our annual Livelihood Skills Fair brings together 500+ women entrepreneurs with corporate buyers and mentors.</p><h2>4. Digital Financial Literacy</h2><p>In partnership with banking institutions, we have trained 5,000+ women in mobile banking, UPI transactions, and digital record-keeping — enabling them to manage businesses and savings with greater confidence.</p><h2>5. Impact in Numbers</h2><p>6,000+ women trained in vocational skills · 4,200 women in 210 SHGs · 78% report income increase post-training · ₹12 crore in micro-credit disbursed annually.</p>",
@@ -205,9 +258,9 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
   },
   {
-    id: "wellbeing",
+    id: "10",
     section: "impact",
-    categoryId: "cat_wellbeing",
+    categoryId: "4",
     title: "Health and Dignity for Every Family.",
     excerpt: "Community Wellbeing — mobile health camps, nutrition, and survivor support for women and families.",
     content: "<p>True empowerment requires physical safety and good health. Mahila Action's Community Wellbeing programmes address the healthcare access gap facing women and children through mobile clinics, health education, and survivor support services.</p><h2>1. Mobile Health Camps</h2><p>Our fleet of mobile health units visits 80 remote villages and urban slums every quarter, offering free screenings for anaemia, malnutrition, cervical cancer, and maternal health. Over 25,000 consultations are conducted annually.</p><h2>2. Maternal &amp; Child Nutrition</h2><p>We partner with government ASHA workers to identify and support malnourished children and pregnant women. Our nutrition programme has contributed to a 42% reduction in severe malnutrition in targeted communities over five years.</p><h2>3. Domestic Violence Support</h2><p>Our trauma-informed support services provide counselling, legal aid, and safe shelter referrals to survivors of gender-based violence. Last year, we supported 1,100 women across all four districts we operate in.</p><h2>4. Mental Health Awareness</h2><p>Following COVID-19, we launched community mental health awareness sessions and trained 350 community health volunteers in psychological first aid and suicide prevention protocols.</p><h2>5. Impact in Numbers</h2><p>25,000+ health consultations annually · 42% reduction in severe malnutrition in target areas · 1,100 GBV survivors supported · 350 mental health volunteers trained.</p>",
@@ -218,30 +271,181 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
   },
 ];
 
-export const DEFAULT_COUNCILORS: Councilor[] = [
-  { id: "coun_1", name: "Sunita Devi", role: "Community Advocate", bio: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", image: "", order: 0 },
-  { id: "coun_2", name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order: 1 },
-  { id: "coun_3", name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order: 2 },
-];
+export function findImpactPost(
+  posts: BlogPost[],
+  categories: Category[],
+  modalIdOrSlug: string | null | undefined
+): BlogPost | undefined {
+  if (!modalIdOrSlug) return undefined;
+  const raw = String(modalIdOrSlug).trim();
+  const lower = raw.toLowerCase();
 
-export const DEFAULT_TIMELINE: TimelineEntry[] = [
-  { id: "tl_1995", year: "1995", title: "Foundation of Mahila Action", description: "Registered by a small group of six local women, starting with a single room operating basic literacy circles for children of brick-kiln laborers.", image: "", order: 0 },
-  { id: "tl_2002", year: "2002", title: "Expanding Educational Access", description: "Launched three community learning centers reaching over 800 children and 400 adult learners across rural areas.", image: "", order: 1 },
-  { id: "tl_2009", year: "2009", title: "Women's Leadership Programme", description: "Introduced the flagship leadership programme, training over 200 women to take civic and economic leadership roles.", image: "", order: 2 },
-  { id: "tl_2016", year: "2016", title: "Livelihood & Skills Scale-Up", description: "Partnered with 12 corporate organizations to provide vocational training and employment to 3,000+ women.", image: "", order: 3 },
-  { id: "tl_2021", year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order: 4 },
-  { id: "tl_2026", year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order: 5 },
-];
+  const impactPosts = (posts || []).filter((p) => p.section === "impact");
+  const allAvailable = impactPosts.length > 0 ? impactPosts : (posts || []);
+
+  // 1. Direct ID match
+  const byId = allAvailable.find((p) => String(p.id).toLowerCase() === lower);
+  if (byId) return byId;
+
+  // 2. Map canonical topic keys
+  type Topic = "women" | "education" | "livelihood" | "wellbeing";
+  let topic: Topic | null = null;
+
+  if (
+    lower === "women-leadership" ||
+    lower === "women" ||
+    lower === "leadership" ||
+    lower === "cat_women" ||
+    lower === "1" ||
+    lower === "7"
+  ) {
+    topic = "women";
+  } else if (
+    lower === "education" ||
+    lower === "education-learning" ||
+    lower === "learning" ||
+    lower === "cat_education" ||
+    lower === "2" ||
+    lower === "8"
+  ) {
+    topic = "education";
+  } else if (
+    lower === "livelihood" ||
+    lower === "livelihood-skills" ||
+    lower === "skills" ||
+    lower === "economic" ||
+    lower === "cat_livelihood" ||
+    lower === "3" ||
+    lower === "9"
+  ) {
+    topic = "livelihood";
+  } else if (
+    lower === "wellbeing" ||
+    lower === "community-wellbeing" ||
+    lower === "health" ||
+    lower === "dignity" ||
+    lower === "cat_wellbeing" ||
+    lower === "4" ||
+    lower === "10"
+  ) {
+    topic = "wellbeing";
+  }
+
+  function matchTopic(p: BlogPost, t: Topic): boolean {
+    const title = (p.title || "").toLowerCase();
+    const excerpt = (p.excerpt || "").toLowerCase();
+    const pCatId = String(p.categoryId || "").toLowerCase();
+    const catName = (findCategory(categories, p.categoryId)?.name || "").toLowerCase();
+    const pId = String(p.id).toLowerCase();
+
+    if (t === "women") {
+      if (pId === "7" || pCatId === "1" || pCatId === "cat_women") return true;
+      if (catName.includes("women") || catName.includes("leadership")) return true;
+      if (title.includes("women") || title.includes("leadership") || excerpt.includes("women")) return true;
+    } else if (t === "education") {
+      if (pId === "8" || pCatId === "2" || pCatId === "cat_education") return true;
+      if (catName.includes("education") || catName.includes("learning")) return true;
+      if (title.includes("education") || title.includes("learning") || excerpt.includes("education")) return true;
+    } else if (t === "livelihood") {
+      if (pId === "9" || pCatId === "3" || pCatId === "cat_livelihood") return true;
+      if (catName.includes("livelihood") || catName.includes("skills")) return true;
+      if (title.includes("economic") || title.includes("livelihood") || title.includes("skills") || excerpt.includes("livelihood")) return true;
+    } else if (t === "wellbeing") {
+      if (pId === "10" || pCatId === "4" || pCatId === "cat_wellbeing") return true;
+      if (catName.includes("wellbeing") || catName.includes("health")) return true;
+      if (title.includes("health") || title.includes("wellbeing") || title.includes("dignity") || excerpt.includes("wellbeing")) return true;
+    }
+    return false;
+  }
+
+  if (topic) {
+    // Check in impact posts first
+    const matchInImpact = impactPosts.find((p) => matchTopic(p, topic!));
+    if (matchInImpact) return matchInImpact;
+
+    // Check in all posts
+    const matchInAll = (posts || []).find((p) => matchTopic(p, topic!));
+    if (matchInAll) return matchInAll;
+
+    // Check in DEFAULT_BLOG_POSTS
+    const matchInDefault = DEFAULT_BLOG_POSTS.find((p) => matchTopic(p, topic!));
+    if (matchInDefault) return matchInDefault;
+  }
+
+  // 3. Category matching via findCategory
+  const foundCat = findCategory(categories, raw);
+  if (foundCat) {
+    const byCategory = impactPosts.find((p) => {
+      const pCat = findCategory(categories, p.categoryId);
+      return pCat && String(pCat.id) === String(foundCat.id);
+    });
+    if (byCategory) return byCategory;
+  }
+
+  // 4. Default blog posts fallback by id or title substring
+  const defaultById = DEFAULT_BLOG_POSTS.find(
+    (p) => String(p.id).toLowerCase() === lower || (p.title && p.title.toLowerCase().includes(lower))
+  );
+  if (defaultById) return defaultById;
+
+  // 5. Index-based fallback if topic was identified
+  if (topic && impactPosts.length > 0) {
+    const topicIndexMap: Record<Topic, number> = {
+      women: 0,
+      education: 1,
+      livelihood: 2,
+      wellbeing: 3,
+    };
+    const idx = topicIndexMap[topic];
+    if (impactPosts[idx]) return impactPosts[idx];
+  }
+
+  // 6. Absolute last fallback: first impact post available
+  return impactPosts[0] ?? DEFAULT_BLOG_POSTS.find((p) => p.section === "impact");
+}
+
+export const DEFAULT_COUNCILORS: Councilor[] = (councilorsJson as any[])?.length
+  ? (councilorsJson as any[]).map((c) => ({
+      id: String(c.id),
+      name: c.name || "",
+      role: c.role || "",
+      bio: c.bio || "",
+      image: c.image || "",
+      order: Number(c.order_index ?? c.order ?? 0),
+    }))
+  : [
+      { id: "coun_1", name: "Sunita Devi", role: "Community Advocate", bio: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", image: "", order: 0 },
+      { id: "coun_2", name: "Kavitha Reddy", role: "Education Lead", bio: "Through Mahila Action's programmes, Kavitha became the first woman elected to the panchayat.", image: "", order: 1 },
+      { id: "coun_3", name: "Meena Sharma", role: "Livelihood Champion", bio: "From daily wage laborer to micro-entrepreneur — a story of resilience and transformation.", image: "", order: 2 },
+    ];
+
+export const DEFAULT_TIMELINE: TimelineEntry[] = (timelineJson as any[])?.length
+  ? (timelineJson as any[]).map((t) => ({
+      id: String(t.id),
+      year: String(t.year || ""),
+      title: t.title || "",
+      description: t.description || "",
+      image: t.image || "",
+      order: Number(t.order_index ?? t.order ?? 0),
+    }))
+  : [
+      { id: "tl_1995", year: "1995", title: "Foundation of Mahila Action", description: "Registered by a small group of six local women, starting with a single room operating basic literacy circles for children of brick-kiln laborers.", image: "", order: 0 },
+      { id: "tl_2002", year: "2002", title: "Expanding Educational Access", description: "Launched three community learning centers reaching over 800 children and 400 adult learners across rural areas.", image: "", order: 1 },
+      { id: "tl_2009", year: "2009", title: "Women's Leadership Programme", description: "Introduced the flagship leadership programme, training over 200 women to take civic and economic leadership roles.", image: "", order: 2 },
+      { id: "tl_2016", year: "2016", title: "Livelihood & Skills Scale-Up", description: "Partnered with 12 corporate organizations to provide vocational training and employment to 3,000+ women.", image: "", order: 3 },
+      { id: "tl_2021", year: "2021", title: "Digital & COVID Response", description: "Pivoted to digital learning; distributed 500 smartphones and provided mental health support to 10,000 families during the pandemic.", image: "", order: 4 },
+      { id: "tl_2026", year: "2026", title: "28 Years of Lasting Change", description: "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.", image: "", order: 5 },
+    ];
 
 export const DEFAULT_CONTACT: ContactInfo = {
-  email: "contact@mahilaction.org",
-  emailNote: "We reply within 24 hours",
-  phone: "+91 XXXXXXXXXX",
-  phoneNote: "Mon – Sat, 9 AM – 6 PM IST",
-  address: "Hyderabad, Telangana",
-  addressNote: "India – 500 001",
-  hours: "Mon – Friday",
-  hoursNote: "9:00 AM – 5:30 PM IST",
+  email: contactJson.email || "contact@mahilaction.org",
+  emailNote: contactJson.emailNote || "We reply within 24 hours",
+  phone: contactJson.phone || "+91 123454321",
+  phoneNote: contactJson.phoneNote || "Mon – Sat, 9 AM – 6 PM IST",
+  address: contactJson.address || "Visakapatnam, Andhra Pradesh",
+  addressNote: contactJson.addressNote || "India – 500 001",
+  hours: contactJson.hours || "Mon – Friday",
+  hoursNote: contactJson.hoursNote || "9:00 AM – 5:30 PM IST",
 };
 
 export const DEFAULT_SITE_DATA: SiteData = {
@@ -266,19 +470,43 @@ export function isWindowOpen(w: RegWindow, now = new Date()): boolean {
   return now >= start && now <= end;
 }
 
-/** An event is "open" if at least one of its enabled registration windows is currently open. */
+/**
+ * An event is open for general registration if it is upcoming (today or future).
+ * If the event date has already passed, it is closed.
+ * Specific registration windows (volunteer/vendor/donor) are evaluated when choosing roles.
+ */
 export function isEventOpen(ev: EventItem, now = new Date()): boolean {
-  const windows = Array.isArray(ev.windows) ? ev.windows : [];
-  return windows.some((w) => isWindowOpen(w, now));
+  if (!ev) return false;
+  if (ev.published === false) return false;
+
+  // If the event itself has already occurred in the past, it is closed
+  if (ev.eventDate) {
+    const eventDate = new Date(ev.eventDate);
+    eventDate.setHours(23, 59, 59, 999);
+    if (!Number.isNaN(eventDate.getTime()) && eventDate < now) {
+      return false;
+    }
+  }
+
+  // Any upcoming event is available and open for general registration
+  return true;
 }
 
 /** Events whose registration hasn't started yet, or is currently open — used to populate the "next available" modal. */
 export function upcomingOrOpenEvents(events: EventItem[], now = new Date()): EventItem[] {
   return events
     .filter((ev) => {
+      if (ev.published === false) return false;
+      if (ev.eventDate) {
+        const eventDate = new Date(ev.eventDate);
+        eventDate.setHours(23, 59, 59, 999);
+        if (!Number.isNaN(eventDate.getTime())) {
+          return eventDate >= now;
+        }
+      }
       const windows = Array.isArray(ev.windows) ? ev.windows : [];
       if (windows.length === 0) return true;
-      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now) || (ev.eventDate && new Date(ev.eventDate) >= now);
+      return windows.some((w) => w.enabled && new Date(w.regEnd) >= now);
     })
     .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
 }
@@ -337,6 +565,9 @@ export function getLocalSiteData(): Partial<SiteData> {
 export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
   try {
     const current = getLocalSiteData();
+    if (patch.events) {
+      patch.events.forEach((e) => unrecordDeletedEventId(e.id));
+    }
     const deletedIds = getDeletedEventIds();
     const rawEvents = patch.events ?? current.events ?? DEFAULT_EVENTS;
     const cleanEvents = rawEvents.filter((e) => !isDeletedEventId(e.id, deletedIds));
@@ -390,8 +621,11 @@ export async function loadSiteData(): Promise<SiteData> {
     const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
     if (Array.isArray(eventRows) && eventRows.length > 0) {
+      // Rows returned directly from database are active and not deleted
+      eventRows.forEach((r: any) => unrecordDeletedEventId(r.id));
+      const freshDeletedIds = getDeletedEventIds();
       events = eventRows
-        .filter((r: any) => !isDeletedEventId(r.id, deletedIds))
+        .filter((r: any) => !isDeletedEventId(r.id, freshDeletedIds))
         .map((r: any) => ({
           id: String(r.id),
           title: r.title,
@@ -402,28 +636,40 @@ export async function loadSiteData(): Promise<SiteData> {
           totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
           maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
           windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
-          categoryId: r.category_id || r.categoryId || null,
+          categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
+          published: r.published !== false && r.published !== 0 && r.published !== "false",
           createdAt: r.created_at || r.createdAt || new Date().toISOString(),
         }));
     }
 
     if (Array.isArray(catRows) && catRows.length > 0) {
-      categories = catRows.map((r: any) => ({ id: r.id, name: r.name }));
+      categories = catRows.map((r: any) => ({ id: String(r.id), name: r.name }));
     }
 
     if (Array.isArray(postRows) && postRows.length > 0) {
-      blogPosts = postRows.map((r: any) => ({
-        id: r.id,
-        section: r.section,
-        categoryId: r.category_id || r.categoryId || null,
-        title: r.title,
-        excerpt: r.excerpt || "",
-        content: r.content || "",
-        coverImage: mediaUrl(r.cover_image || r.coverImage),
-        gallery: mediaUrls(r.gallery),
-        tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
-        createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-      }));
+      blogPosts = postRows.map((r: any) => {
+        let catId = resolveCategoryId(categories, r.category_id ?? r.categoryId);
+        if (r.section === "impact" && (!catId || catId === "null")) {
+          const lower = (r.title || "").toLowerCase();
+          if (lower.includes("women") || lower.includes("leadership") || String(r.id) === "7") catId = "1";
+          else if (lower.includes("education") || lower.includes("learning") || String(r.id) === "8") catId = "2";
+          else if (lower.includes("economic") || lower.includes("livelihood") || lower.includes("skills") || String(r.id) === "9") catId = "3";
+          else if (lower.includes("health") || lower.includes("wellbeing") || lower.includes("dignity") || String(r.id) === "10") catId = "4";
+        }
+        return {
+          id: String(r.id),
+          section: r.section,
+          categoryId: catId,
+          title: r.title,
+          excerpt: r.excerpt || "",
+          content: r.content || "",
+          coverImage: mediaUrl(r.cover_image || r.coverImage),
+          gallery: mediaUrls(r.gallery),
+          tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+          published: r.published !== false && r.published !== 0 && r.published !== "false",
+          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+        };
+      });
     }
 
     if (Array.isArray(councilorRows) && councilorRows.length > 0) {
@@ -490,22 +736,39 @@ export function newEvent(): EventItem {
       { kind: "donor", enabled: false, regStart: daysFromNow(0), regEnd: daysFromNow(20) },
     ],
     categoryId: null,
+    published: true,
     createdAt: new Date().toISOString(),
   };
 }
 
-export async function saveEvent(ev: EventItem): Promise<boolean> {
-  const current = getLocalSiteData();
-  const events = current.events ?? DEFAULT_EVENTS;
-  const idx = events.findIndex((e) => e.id === ev.id);
-  const updated = idx >= 0 ? events.map((e) => (e.id === ev.id ? ev : e)) : [...events, ev];
-  saveLocalSiteData({ events: updated });
+export async function saveEvent(ev: EventItem): Promise<{ ok: boolean; id?: string; error?: string }> {
+  unrecordDeletedEventId(ev.id);
 
+  let itemToSave = { ...ev };
   try {
-    const res = await api.post(ENDPOINTS.events, ev);
-    return res.ok || true;
-  } catch {
-    return true;
+    const res = await api.post<any>(ENDPOINTS.events, ev);
+    const assignedId = res.data?.id != null ? String(res.data.id) : undefined;
+    if (res.data?.image) {
+      itemToSave.image = res.data.image;
+    }
+    if (assignedId && assignedId !== String(ev.id)) {
+      itemToSave.id = assignedId;
+      unrecordDeletedEventId(assignedId);
+    }
+    const cur = getLocalSiteData();
+    const curEvents = (cur.events ?? []).map((e) => (String(e.id) === String(ev.id) ? itemToSave : e));
+    if (!curEvents.some((e) => String(e.id) === String(itemToSave.id))) {
+      curEvents.push(itemToSave);
+    }
+    saveLocalSiteData({ events: curEvents }, false);
+    return { ok: res.ok ?? true, id: itemToSave.id, error: res.error };
+  } catch (err: any) {
+    const current = getLocalSiteData();
+    const events = current.events ?? DEFAULT_EVENTS;
+    const idx = events.findIndex((e) => String(e.id) === String(ev.id));
+    const updated = idx >= 0 ? events.map((e) => (String(e.id) === String(ev.id) ? ev : e)) : [...events, ev];
+    saveLocalSiteData({ events: updated });
+    return { ok: true, id: ev.id };
   }
 }
 
@@ -569,23 +832,37 @@ export async function deleteEvent(id: string): Promise<boolean> {
 export function newBlogPost(section: "story" | "event" | "impact", categoryId: string | null = null): BlogPost {
   return {
     id: uid("post"), section, categoryId, title: "New Post", excerpt: "", content: "",
-    coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString(),
+    coverImage: "", gallery: [], tags: [], published: true, createdAt: new Date().toISOString(),
   };
 }
 
 export async function saveBlogPost(p: BlogPost): Promise<boolean> {
+  let itemToSave = { ...p, id: String(p.id) };
+  try {
+    const res = await api.post<any>(ENDPOINTS.blogPosts, p);
+    if (res.data?.coverImage) {
+      itemToSave.coverImage = res.data.coverImage;
+    }
+    if (Array.isArray(res.data?.gallery)) {
+      itemToSave.gallery = res.data.gallery;
+    }
+    if (res.data?.id != null) {
+      itemToSave.id = String(res.data.id);
+    }
+    if (res.data?.categoryId != null) {
+      itemToSave.categoryId = String(res.data.categoryId);
+    }
+    if (res.data?.published !== undefined) {
+      itemToSave.published = res.data.published;
+    }
+  } catch {}
+
   const current = getLocalSiteData();
   const blogPosts = current.blogPosts ?? DEFAULT_BLOG_POSTS;
-  const idx = blogPosts.findIndex((item) => item.id === p.id);
-  const updated = idx >= 0 ? blogPosts.map((item) => (item.id === p.id ? p : item)) : [...blogPosts, p];
+  const idx = blogPosts.findIndex((item) => String(item.id) === String(p.id) || String(item.id) === String(itemToSave.id));
+  const updated = idx >= 0 ? blogPosts.map((item, i) => (i === idx ? itemToSave : item)) : [...blogPosts, itemToSave];
   saveLocalSiteData({ blogPosts: updated });
-
-  try {
-    const res = await api.post(ENDPOINTS.blogPosts, p);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return true;
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
@@ -623,23 +900,35 @@ export async function deleteBlogPost(id: string): Promise<boolean> {
 // CATEGORIES CRUD
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function newCategory(): Category {
-  return { id: uid("cat"), name: "New Category" };
+export function newCategory(existingCategories?: Category[]): Category {
+  const currentCats = existingCategories ?? getLocalSiteData().categories ?? DEFAULT_CATEGORIES;
+  const numericIds = currentCats
+    .map((c) => Number(c.id))
+    .filter((n) => !isNaN(n) && Number.isInteger(n) && n > 0);
+  const nextId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
+  return { id: String(nextId), name: "New Category" };
 }
 
-export async function saveCategory(c: Category): Promise<boolean> {
+export async function saveCategory(c: Category): Promise<Category> {
+  let saved = { ...c };
+  try {
+    const res = await api.post<any>(ENDPOINTS.categories, c);
+    if (res.data?.id) {
+      saved = { ...saved, id: String(res.data.id) };
+    }
+  } catch {
+    // offline or local fallback
+  }
+
   const current = getLocalSiteData();
   const categories = current.categories ?? DEFAULT_CATEGORIES;
-  const idx = categories.findIndex((item) => item.id === c.id);
-  const updated = idx >= 0 ? categories.map((item) => (item.id === c.id ? c : item)) : [...categories, c];
+  const idx = categories.findIndex((item) => item.id === c.id || item.id === saved.id);
+  const updated = idx >= 0
+    ? categories.map((item, i) => (i === idx ? saved : item))
+    : [...categories, saved];
   saveLocalSiteData({ categories: updated });
 
-  try {
-    const res = await api.post(ENDPOINTS.categories, c);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return saved;
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {
@@ -656,19 +945,36 @@ export async function deleteCategory(id: string): Promise<boolean> {
 }
 
 export async function reassignCategoryPosts(posts: BlogPost[], fromCategoryId: string, toCategoryId: string | null) {
-  const affected = posts.filter((p) => p.categoryId === fromCategoryId);
+  const fromCat = String(fromCategoryId);
+  const toCat = toCategoryId != null ? String(toCategoryId) : null;
+  const affected = posts.filter((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    return pCat === fromCat || (fromCat === "1" && pCat === "cat_women") || (fromCat === "2" && pCat === "cat_education") || (fromCat === "3" && pCat === "cat_livelihood") || (fromCat === "4" && pCat === "cat_wellbeing");
+  });
   for (const p of affected) {
-    await saveBlogPost({ ...p, categoryId: toCategoryId });
+    await saveBlogPost({ ...p, categoryId: toCat });
   }
-  return posts.map((p) => (p.categoryId === fromCategoryId ? { ...p, categoryId: toCategoryId } : p));
+  return posts.map((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    const matches = pCat === fromCat || (fromCat === "1" && pCat === "cat_women") || (fromCat === "2" && pCat === "cat_education") || (fromCat === "3" && pCat === "cat_livelihood") || (fromCat === "4" && pCat === "cat_wellbeing");
+    return matches ? { ...p, categoryId: toCat } : p;
+  });
 }
 
 export async function deleteCategoryPosts(posts: BlogPost[], categoryId: string) {
-  const affected = posts.filter((p) => p.categoryId === categoryId);
+  const cat = String(categoryId);
+  const affected = posts.filter((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    return pCat === cat || (cat === "1" && pCat === "cat_women") || (cat === "2" && pCat === "cat_education") || (cat === "3" && pCat === "cat_livelihood") || (cat === "4" && pCat === "cat_wellbeing");
+  });
   for (const p of affected) {
     await deleteBlogPost(p.id);
   }
-  return posts.filter((p) => p.categoryId !== categoryId);
+  return posts.filter((p) => {
+    const pCat = p.categoryId != null ? String(p.categoryId) : "";
+    const matches = pCat === cat || (cat === "1" && pCat === "cat_women") || (cat === "2" && pCat === "cat_education") || (cat === "3" && pCat === "cat_livelihood") || (cat === "4" && pCat === "cat_wellbeing");
+    return !matches;
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -680,18 +986,23 @@ export function newCouncilor(order: number): Councilor {
 }
 
 export async function saveCouncilor(c: Councilor): Promise<boolean> {
+  let itemToSave = { ...c };
+  try {
+    const res = await api.post<any>(ENDPOINTS.councilors, c);
+    if (res.data?.image) {
+      itemToSave.image = res.data.image;
+    }
+    if (res.data?.id != null) {
+      itemToSave.id = String(res.data.id);
+    }
+  } catch {}
+
   const current = getLocalSiteData();
   const councilors = current.councilors ?? DEFAULT_COUNCILORS;
-  const idx = councilors.findIndex((item) => item.id === c.id);
-  const updated = idx >= 0 ? councilors.map((item) => (item.id === c.id ? c : item)) : [...councilors, c];
+  const idx = councilors.findIndex((item) => item.id === c.id || item.id === itemToSave.id);
+  const updated = idx >= 0 ? councilors.map((item, i) => (i === idx ? itemToSave : item)) : [...councilors, itemToSave];
   saveLocalSiteData({ councilors: updated });
-
-  try {
-    const res = await api.post(ENDPOINTS.councilors, c);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+  return true;
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
@@ -734,18 +1045,35 @@ export function newTimelineEntry(order: number): TimelineEntry {
 }
 
 export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
+  let itemToSave = { ...t };
+  try {
+    const res = await api.post<any>(ENDPOINTS.timeline, t);
+    if (res.data?.image) {
+      itemToSave.image = res.data.image;
+    }
+    if (res.data?.id != null) {
+      itemToSave.id = String(res.data.id);
+    }
+  } catch {}
+
   const current = getLocalSiteData();
   const timeline = current.timeline ?? DEFAULT_TIMELINE;
-  const idx = timeline.findIndex((item) => item.id === t.id);
-  const updated = idx >= 0 ? timeline.map((item) => (item.id === t.id ? t : item)) : [...timeline, t];
+  const idx = timeline.findIndex((item) => item.id === t.id || item.id === itemToSave.id);
+  const updated = idx >= 0 ? timeline.map((item, i) => (i === idx ? itemToSave : item)) : [...timeline, itemToSave];
   saveLocalSiteData({ timeline: updated });
+  return true;
+}
 
+export async function saveTimelineOrder(items: TimelineEntry[]): Promise<boolean> {
+  const normalized = items.map((t, idx) => ({
+    ...t,
+    order: idx,
+  }));
   try {
-    const res = await api.post(ENDPOINTS.timeline, t);
-    return res.ok || true;
-  } catch {
-    return true;
-  }
+    await api.post<any>(ENDPOINTS.timeline, normalized);
+  } catch {}
+  saveLocalSiteData({ timeline: normalized });
+  return true;
 }
 
 export async function deleteTimelineEntry(id: string): Promise<boolean> {

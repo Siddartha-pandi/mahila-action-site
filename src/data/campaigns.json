@@ -1,0 +1,30 @@
+[
+  {
+    "id": "learning-centres",
+    "name": "Help Build Community Learning Centres",
+    "tag": "Education",
+    "goal": 600000,
+    "raised": 0
+  },
+  {
+    "id": "women-leadership-fund",
+    "name": "Women Leadership Fund",
+    "tag": "Women & Leadership",
+    "goal": 500000,
+    "raised": 0
+  },
+  {
+    "id": "skills-for-tomorrow",
+    "name": "Skills for Tomorrow",
+    "tag": "Livelihood & Skills",
+    "goal": 300000,
+    "raised": 0
+  },
+  {
+    "id": "community-health-drive",
+    "name": "Community Health Drive",
+    "tag": "Community Wellbeing",
+    "goal": 600000,
+    "raised": 0
+  }
+]

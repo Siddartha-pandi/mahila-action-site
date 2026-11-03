@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { sendContactAcknowledgementEmail } from "@/lib/email";
+import { sendContactAcknowledgementEmail, sendContactAlertToAdmin } from "@/lib/email";
 import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       validateName(body.name),
       validateEmail(body.email),
       // Phone is optional on the contact form, but must be sane when supplied.
-      body.phone ? validatePhone(body.phone) : null,
+      validatePhone(body.phone, "phone number", { required: false }),
       validateText(body.subject, "a subject", { max: LIMITS.subject.max, required: false }),
       validateText(body.message, "your message", { min: LIMITS.message.min, max: LIMITS.message.max })
     );
@@ -36,6 +36,14 @@ export async function POST(req: NextRequest) {
     sendContactAcknowledgementEmail(body.email, body.name, body.subject || undefined).catch((err) =>
       console.error("sendContactAcknowledgementEmail failed:", err)
     );
+
+    sendContactAlertToAdmin({
+      name: body.name,
+      email: body.email,
+      phone: body.phone,
+      subject: body.subject,
+      message: body.message,
+    }).catch((err) => console.error("sendContactAlertToAdmin failed:", err));
 
     return NextResponse.json({ ok: true, id }, { status: 201 });
   } catch (err: any) {

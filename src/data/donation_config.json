@@ -1,0 +1,31 @@
+{
+  "ngo": {
+    "name": "Mahila Action Society",
+    "shortName": "Mahila Action",
+    "regNumber": "123/2000",
+    "pan": "AAATM1234M",
+    "80g_urn": "AAATM1234MF20214",
+    "12a_urn": "AAATM1234ME20203",
+    "address": "Visakhapatnam, Andhra Pradesh, India - 530001",
+    "email": "mahilaaction.vsk@gmail.com",
+    "phone": "+91 123454321",
+    "website": "http://localhost:3000"
+  },
+  "upi": {
+    "vpa": "mahilaaction.vsk@gmail.com",
+    "payeeName": "Mahila Action",
+    "merchantCode": ""
+  },
+  "bank": {
+    "accountName": "Mahila Action",
+    "accountNumber": "39485720194",
+    "accountType": "Current Account",
+    "bankName": "State Bank of India",
+    "ifsc": "SBIN0001234",
+    "branch": "Visakhapatnam Main Branch"
+  },
+  "razorpay": {
+    "enabled": true
+  }
+}
+

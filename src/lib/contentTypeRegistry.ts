@@ -44,7 +44,7 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
     displayName: "Blog Post / Story",
     kind: "collectionType",
     description: "Articles, community impact stories, and event news blogs",
-    tableName: "cms_blog_posts",
+    tableName: "blog_posts",
     apiEndpoint: "/api/cms/blog-posts",
     fields: [
       { name: "id", type: "string", required: true, unique: true, description: "Unique Post ID" },
@@ -64,7 +64,7 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
     displayName: "Upcoming Event",
     kind: "collectionType",
     description: "Scheduled workshops, rallies, fairs, and community events",
-    tableName: "cms_events",
+    tableName: "events",
     apiEndpoint: "/api/cms/events",
     fields: [
       { name: "id", type: "string", required: true, unique: true, description: "Event ID" },
@@ -83,7 +83,7 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
     displayName: "Story Category",
     kind: "collectionType",
     description: "Categories for grouping stories and events (e.g., Leadership, Livelihood)",
-    tableName: "cms_categories",
+    tableName: "categories",
     apiEndpoint: "/api/cms/categories",
     fields: [
       { name: "id", type: "string", required: true, unique: true, description: "Category ID" },
@@ -96,7 +96,7 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
     displayName: "Councilor",
     kind: "collectionType",
     description: "Leadership team and advisory council members",
-    tableName: "cms_councilors",
+    tableName: "councilors",
     apiEndpoint: "/api/cms/councilors",
     fields: [
       { name: "id", type: "string", required: true, unique: true, description: "Councilor ID" },
@@ -112,7 +112,7 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
     displayName: "Timeline Entry",
     kind: "collectionType",
     description: "Historical milestones and organizational journey entries",
-    tableName: "cms_timeline",
+    tableName: "timeline",
     apiEndpoint: "/api/cms/timeline",
     fields: [
       { name: "id", type: "string", required: true, unique: true, description: "Timeline Item ID" },
@@ -127,8 +127,8 @@ export const BUILTIN_CONTENT_TYPES: ContentTypeModel[] = [
     uid: "api::contact-info.contact-info",
     displayName: "Contact Info",
     kind: "singleType",
-    description: "Single-instance contact details (email, phone, office address, working hours)",
-    tableName: "cms_contact",
+    description: "Single-instance contact details (email, phone, office address, working hours) stored in JSON format",
+    tableName: "contact_json",
     apiEndpoint: "/api/cms/contact-info",
     fields: [
       { name: "id", type: "number", required: true, unique: true, defaultValue: 1, description: "Singleton ID" },
@@ -285,7 +285,7 @@ export function createCustomContentType(newModel: {
     displayName: newModel.displayName,
     kind: newModel.kind,
     description: newModel.description || `${newModel.displayName} collection`,
-    tableName: `cms_custom_${slug.replace(/-/g, "_")}`,
+    tableName: `custom_${slug.replace(/-/g, "_")}`,
     apiEndpoint: `/api/cms/custom/${slug}`,
     isCustom: true,
     createdAt: new Date().toISOString(),
