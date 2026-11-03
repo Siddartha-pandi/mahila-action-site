@@ -124,7 +124,7 @@ export function DonationFormCard({
 
   if (paymentSuccess) {
     return (
-      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-3xl p-7 flex flex-col items-center text-center gap-5 shadow-xl animate-in zoom-in-95 duration-200">
+      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-2xl sm:rounded-3xl p-5 sm:p-7 flex flex-col items-center text-center gap-4 sm:gap-5 shadow-xl animate-in zoom-in-95 duration-200">
         <div className="size-16 bg-[#587735]/15 rounded-full flex items-center justify-center text-[#587735] shadow-inner">
           <CheckCircle size={36} strokeWidth={2.5} />
         </div>
@@ -134,7 +134,7 @@ export function DonationFormCard({
             Payment Confirmed
           </span>
           <h3
-            className={`${fraunces()} text-[#1e1e1e] text-[26px] font-semibold capitalize mt-2`}
+            className={`${fraunces()} text-[#1e1e1e] text-[22px] sm:text-[26px] font-semibold capitalize mt-2`}
             style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
           >
             Thank You for Your Generosity!
@@ -171,7 +171,7 @@ export function DonationFormCard({
           {successData.transactionId && (
             <div className="flex justify-between items-center pb-2 border-b border-[#eaded6]">
               <span className="text-[#6e625d] font-medium">Transaction / UTR:</span>
-              <span className="font-mono text-[#1e1e1e] truncate max-w-[180px]">
+              <span className="font-mono text-[#1e1e1e] truncate max-w-[180px] break-all">
                 {successData.transactionId}
               </span>
             </div>
@@ -210,10 +210,10 @@ export function DonationFormCard({
 
   return (
     <>
-      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-3xl p-7 flex flex-col gap-5 shadow-lg">
+      <div className="bg-[#f4efe7] border-2 border-[#a65a4a] rounded-2xl sm:rounded-3xl p-5 sm:p-7 flex flex-col gap-4 sm:gap-5 shadow-lg">
         <div>
           <h3
-            className={`${fraunces()} text-[#1e1e1e] text-[24px] font-semibold capitalize`}
+            className={`${fraunces()} text-[#1e1e1e] text-[22px] sm:text-[24px] font-semibold capitalize`}
             style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
           >
             {eventName ? "Donate To This Event" : "Make a Contribution"}
@@ -254,7 +254,7 @@ export function DonationFormCard({
           <p className={`${inter()} text-[12px] font-semibold text-[#1e1e1e] uppercase tracking-wider mb-2`}>
             Select Amount:
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
             {PRESET_AMOUNTS.map((amt) => {
               const active = finalAmount === amt;
               return (
@@ -262,7 +262,7 @@ export function DonationFormCard({
                   key={amt}
                   type="button"
                   onClick={() => handleSelectPreset(amt)}
-                  className={`${inter()} py-2 text-[14px] font-bold rounded-xl border transition-all cursor-pointer ${
+                  className={`${inter()} py-2 px-1 text-[12px] sm:text-[14px] font-bold rounded-xl border transition-all cursor-pointer text-center ${
                     active
                       ? "bg-[#993925] text-white border-[#993925] shadow-sm"
                       : "bg-white/80 border-[#a65a4a]/30 text-[#1e1e1e] hover:border-[#993925]"
@@ -277,7 +277,7 @@ export function DonationFormCard({
               onClick={() => {
                 if (PRESET_AMOUNTS.includes(finalAmount)) setCustomAmount("");
               }}
-              className={`${inter()} py-2 text-[13px] font-semibold rounded-xl border transition-all cursor-pointer ${
+              className={`${inter()} py-2 px-1 text-[12px] sm:text-[13px] font-semibold rounded-xl border transition-all cursor-pointer text-center ${
                 !PRESET_AMOUNTS.includes(finalAmount) && finalAmount > 0
                   ? "bg-[#993925] text-white border-[#993925]"
                   : "bg-white/80 border-[#a65a4a]/30 text-[#6e625d] hover:border-[#993925]"
@@ -394,7 +394,7 @@ export function DonationFormCard({
         <button
           type="button"
           onClick={handleProceed}
-          className={`${inter()} w-full bg-[#993925] text-[#f4efe7] text-[18px] font-semibold py-4 rounded-full hover:bg-[#802f1e] transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg mt-1`}
+          className={`${inter()} w-full bg-[#993925] text-[#f4efe7] text-[16px] sm:text-[18px] font-semibold py-3.5 sm:py-4 rounded-full hover:bg-[#802f1e] transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-lg mt-1`}
         >
           Proceed to Donate <ChevronRight size={20} />
         </button>

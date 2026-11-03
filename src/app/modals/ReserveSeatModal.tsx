@@ -413,18 +413,18 @@ export function AttendEventForm({
 // ── Standalone "Attend an Event" modal ────────────────────────────────────────
 export function AttendEventModal({ events, onClose }: { events: EventItem[]; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[520px] max-h-[88vh] overflow-y-auto shadow-2xl">
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-start justify-between sticky top-0 z-10">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-[94vw] sm:w-[92vw] max-w-[520px] max-h-[88vh] overflow-y-auto shadow-2xl">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-start justify-between sticky top-0 z-10">
           <div>
-            <p className={`font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] uppercase tracking-wider`}>Get Involved</p>
-            <h3 className={`font-['Fraunces',serif] text-[#f4efe7] text-[22px] font-semibold mt-0.5`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <p className={`font-['Inter',sans-serif] text-[#f4efe7]/75 text-[11px] sm:text-[12px] uppercase tracking-wider`}>Get Involved</p>
+            <h3 className={`font-['Fraunces',serif] text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold mt-0.5`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               Attend an Event
             </h3>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-0.5 sm:mt-1 p-1"><X size={20} /></button>
         </div>
-        <div className="p-7">
+        <div className="p-4 sm:p-7">
           <AttendEventForm events={events} onClose={onClose} />
         </div>
       </div>
@@ -438,18 +438,18 @@ export function PartnerWithUsModal({ events, onClose }: { events: EventItem[]; o
   const selectedEvent = events.find(ev => String(ev.id) === String(eventId)) ?? events[0] ?? null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[520px] max-h-[88vh] overflow-y-auto shadow-2xl">
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-start justify-between sticky top-0 z-10">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-[94vw] sm:w-[92vw] max-w-[520px] max-h-[88vh] overflow-y-auto shadow-2xl">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-start justify-between sticky top-0 z-10">
           <div>
-            <p className={`font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] uppercase tracking-wider`}>Get Involved</p>
-            <h3 className={`font-['Fraunces',serif] text-[#f4efe7] text-[22px] font-semibold mt-0.5`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <p className={`font-['Inter',sans-serif] text-[#f4efe7]/75 text-[11px] sm:text-[12px] uppercase tracking-wider`}>Get Involved</p>
+            <h3 className={`font-['Fraunces',serif] text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold mt-0.5`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               Partner With Us
             </h3>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-0.5 sm:mt-1 p-1"><X size={20} /></button>
         </div>
-        <div className="p-7 flex flex-col gap-5">
+        <div className="p-4 sm:p-7 flex flex-col gap-4 sm:gap-5">
           {events.length > 0 ? (
             <div>
               <label className={reserveLabelClass}>Which Event Would You Like to Support? *</label>
@@ -462,7 +462,7 @@ export function PartnerWithUsModal({ events, onClose }: { events: EventItem[]; o
               </select>
             </div>
           ) : (
-            <p className="font-['Inter',sans-serif] text-[#1e1e1e]/60 text-[14px]">No events are currently open for partnerships — please check back soon.</p>
+            <p className="font-['Inter',sans-serif] text-[#1e1e1e]/60 text-[13px] sm:text-[14px]">No events are currently open for partnerships — please check back soon.</p>
           )}
           {selectedEvent && <VendorReserveForm event={selectedEvent} onClose={onClose} />}
         </div>
@@ -476,32 +476,32 @@ export function ClosedEventNoticeModal({ events, onClose }: { events: EventItem[
   const upcoming = upcomingOrOpenEvents(events);
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[520px] shadow-2xl overflow-hidden">
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-start justify-between">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-[94vw] sm:w-[92vw] max-w-[520px] shadow-2xl overflow-hidden">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-start justify-between">
           <div>
-            <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] uppercase tracking-wider">Registration Closed</p>
-            <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[22px] font-semibold mt-0.5" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[11px] sm:text-[12px] uppercase tracking-wider">Registration Closed</p>
+            <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold mt-0.5" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               This event's registration has ended
             </h3>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-0.5 sm:mt-1 p-1"><X size={20} /></button>
         </div>
-        <div className="p-7">
-          <p className="font-['Inter',sans-serif] text-[#1e1e1e]/70 text-[14px] mb-5">
+        <div className="p-4 sm:p-7">
+          <p className="font-['Inter',sans-serif] text-[#1e1e1e]/70 text-[13px] sm:text-[14px] mb-4 sm:mb-5">
             Here's what's coming up next — with the date each one opens for registration.
           </p>
           <div className="flex flex-col gap-3 max-h-[360px] overflow-y-auto">
             {upcoming.map(ev => (
-              <div key={ev.id} className="border border-[#a65a4a]/20 rounded-xl p-4">
-                <p className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e]">{ev.title}</p>
-                <div className="flex flex-wrap gap-3 mt-1.5">
-                  <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><Calendar size={11} /> {new Date(ev.eventDate).toLocaleDateString()}</span>
-                  <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><MapPin size={11} /> {ev.location}</span>
+              <div key={ev.id} className="border border-[#a65a4a]/20 rounded-xl p-3.5 sm:p-4">
+                <p className="font-['Inter',sans-serif] font-semibold text-[14px] sm:text-[15px] text-[#1e1e1e]">{ev.title}</p>
+                <div className="flex flex-wrap gap-2.5 sm:gap-3 mt-1.5">
+                  <span className="font-['Inter',sans-serif] text-[11px] sm:text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><Calendar size={11} /> {new Date(ev.eventDate).toLocaleDateString()}</span>
+                  <span className="font-['Inter',sans-serif] text-[11px] sm:text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><MapPin size={11} /> {ev.location}</span>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-2">
                   {(Array.isArray(ev.windows) ? ev.windows : []).filter(w => w.enabled).map(w => (
-                    <span key={w.kind} className="font-['Inter',sans-serif] text-[11px] bg-[#a65a4a]/10 text-[#a65a4a] px-2.5 py-1 rounded-full">
+                    <span key={w.kind} className="font-['Inter',sans-serif] text-[10px] sm:text-[11px] bg-[#a65a4a]/10 text-[#a65a4a] px-2.5 py-0.5 sm:py-1 rounded-full">
                       {w.kind.charAt(0).toUpperCase() + w.kind.slice(1)} opens {new Date(w.regStart).toLocaleDateString()}
                     </span>
                   ))}
@@ -509,10 +509,10 @@ export function ClosedEventNoticeModal({ events, onClose }: { events: EventItem[
               </div>
             ))}
             {upcoming.length === 0 && (
-              <p className="font-['Inter',sans-serif] text-[#1e1e1e]/50 text-[14px]">No upcoming events scheduled right now — check back soon!</p>
+              <p className="font-['Inter',sans-serif] text-[#1e1e1e]/50 text-[13px] sm:text-[14px]">No upcoming events scheduled right now — check back soon!</p>
             )}
           </div>
-          <button onClick={onClose} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[16px] py-3.5 rounded-full mt-6 hover:bg-[#993925] transition-colors cursor-pointer">
+          <button onClick={onClose} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 rounded-full mt-5 sm:mt-6 hover:bg-[#993925] transition-colors cursor-pointer">
             Got it
           </button>
         </div>
@@ -549,26 +549,26 @@ export function ReserveSeatModal({
   const attendEvents = upcomingOrOpenEvents(siteData.events);
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[520px] max-h-[88vh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-[94vw] sm:w-[92vw] max-w-[520px] max-h-[88vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-start justify-between sticky top-0 z-10">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-start justify-between sticky top-0 z-10">
           <div>
-            <p className={`font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] uppercase tracking-wider`}>Community Event</p>
-            <h3 className={`font-['Fraunces',serif] text-[#f4efe7] text-[22px] font-semibold mt-0.5`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <p className={`font-['Inter',sans-serif] text-[#f4efe7]/75 text-[11px] sm:text-[12px] uppercase tracking-wider`}>Community Event</p>
+            <h3 className={`font-['Fraunces',serif] text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold mt-0.5`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               {event.title}
             </h3>
-            <div className={`font-['Inter',sans-serif] text-[#f4efe7]/80 text-[13px] flex gap-4 mt-2`}>
+            <div className={`font-['Inter',sans-serif] text-[#f4efe7]/80 text-[12px] sm:text-[13px] flex flex-wrap gap-2.5 sm:gap-4 mt-1.5 sm:mt-2`}>
               <span className="flex items-center gap-1.5"><Calendar size={13} /> {new Date(event.eventDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
               <span className="flex items-center gap-1.5"><MapPin size={13} /> {event.location}</span>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-0.5 sm:mt-1 p-1"><X size={20} /></button>
         </div>
 
-        <div className="p-7">
+        <div className="p-4 sm:p-7">
           {kinds.length > 1 && (
-            <div className="mb-5">
+            <div className="mb-4 sm:mb-5">
               <label className={reserveLabelClass}>Register As</label>
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {kinds.map(k => (
@@ -576,7 +576,7 @@ export function ReserveSeatModal({
                     key={k}
                     type="button"
                     onClick={() => setKind(k)}
-                    className={`flex-1 py-2 rounded-lg text-[13px] font-semibold border transition-colors cursor-pointer ${kind === k ? "bg-[#a65a4a] text-white border-[#a65a4a]" : "border-[#a65a4a]/30 text-[#a65a4a]"}`}
+                    className={`flex-1 py-2 rounded-lg text-[12px] sm:text-[13px] font-semibold border transition-colors cursor-pointer ${kind === k ? "bg-[#a65a4a] text-white border-[#a65a4a]" : "border-[#a65a4a]/30 text-[#a65a4a]"}`}
                   >
                     {RESERVE_KIND_LABEL[k]}
                   </button>

@@ -28,7 +28,7 @@ export function StoryCard({
       onClick={onClick}
       className={`rounded-2xl overflow-hidden group cursor-pointer h-full flex flex-col transition-shadow hover:shadow-lg ${className}`}
     >
-      <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl bg-[#a35848]/20 relative">
+      <div className="h-[180px] sm:h-[220px] shrink-0 overflow-hidden rounded-t-2xl bg-[#a35848]/20 relative">
         <SafeImage
           src={coverImage}
           alt={title}
@@ -38,12 +38,12 @@ export function StoryCard({
           iconSize={32}
         />
       </div>
-      <div className="bg-[#a35848] p-6 rounded-b-2xl flex flex-col flex-1">
-        <p className={`${inter()} text-[#f4efe7] text-[22px] font-semibold capitalize line-clamp-2`}>
+      <div className="bg-[#a35848] p-5 sm:p-6 rounded-b-2xl flex flex-col flex-1">
+        <p className={`${inter()} text-[#f4efe7] text-[19px] sm:text-[22px] font-semibold capitalize line-clamp-2`}>
           {title}
         </p>
         {excerpt && (
-          <p className={`${inter()} text-[#f4efe7]/85 text-[17px] leading-relaxed mt-3 line-clamp-3`}>
+          <p className={`${inter()} text-[#f4efe7]/85 text-[15px] sm:text-[17px] leading-relaxed mt-2.5 sm:mt-3 line-clamp-3`}>
             {excerpt}
           </p>
         )}
@@ -53,7 +53,7 @@ export function StoryCard({
             e.stopPropagation();
             onClick();
           }}
-          className={`${inter()} text-[#f4efe7] text-[14px] font-semibold mt-auto pt-4 opacity-85 group-hover:opacity-100 transition-opacity cursor-pointer text-left`}
+          className={`${inter()} text-[#f4efe7] text-[13px] sm:text-[14px] font-semibold mt-auto pt-4 opacity-85 group-hover:opacity-100 transition-opacity cursor-pointer text-left`}
         >
           {ctaText}
         </button>

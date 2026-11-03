@@ -232,30 +232,30 @@ export function PaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl w-[95vw] max-w-[500px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-2.5 sm:p-4 bg-black/65 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl w-[94vw] sm:w-[95vw] max-w-[500px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-[#993925] px-6 py-5 flex items-center justify-between text-[#f4efe7]">
+        <div className="bg-[#993925] px-4 sm:px-6 py-3.5 sm:py-5 flex items-center justify-between text-[#f4efe7]">
           <div>
-            <p className={`${inter()} text-[12px] uppercase tracking-wider opacity-80 font-medium`}>
+            <p className={`${inter()} text-[11px] sm:text-[12px] uppercase tracking-wider opacity-80 font-medium`}>
               Complete Donation
             </p>
             <p
-              className={`${fraunces()} text-[20px] font-semibold tracking-tight`}
+              className={`${fraunces()} text-[17px] sm:text-[20px] font-semibold tracking-tight`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
             >
               {config.ngo.shortName}
             </p>
           </div>
           <div className="text-right">
-            <p className={`${inter()} text-[12px] opacity-80`}>Amount</p>
-            <p className={`${inter()} text-[24px] font-bold text-white`}>
+            <p className={`${inter()} text-[11px] sm:text-[12px] opacity-80`}>Amount</p>
+            <p className={`${inter()} text-[20px] sm:text-[24px] font-bold text-white`}>
               ₹{amount.toLocaleString("en-IN")}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="ml-3 p-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            className="ml-2 sm:ml-3 p-1 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X size={20} />
@@ -263,46 +263,46 @@ export function PaymentModal({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-[#eaded6] bg-[#faf6f2] px-4 pt-3 gap-2">
+        <div className="flex border-b border-[#eaded6] bg-[#faf6f2] px-2.5 sm:px-4 pt-2.5 sm:pt-3 gap-1 sm:gap-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab("upi")}
-            className={`flex items-center gap-2 pb-3 px-3 text-[14px] font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 pb-2.5 sm:pb-3 px-2 sm:px-3 text-[12px] sm:text-[14px] font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "upi"
                 ? "border-[#993925] text-[#993925]"
                 : "border-transparent text-[#6e625d] hover:text-[#1e1e1e]"
             }`}
           >
-            <QrCode size={16} />
+            <QrCode size={15} />
             UPI QR
           </button>
 
           <button
             onClick={() => setActiveTab("bank")}
-            className={`flex items-center gap-2 pb-3 px-3 text-[14px] font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 pb-2.5 sm:pb-3 px-2 sm:px-3 text-[12px] sm:text-[14px] font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "bank"
                 ? "border-[#993925] text-[#993925]"
                 : "border-transparent text-[#6e625d] hover:text-[#1e1e1e]"
             }`}
           >
-            <Building size={16} />
+            <Building size={15} />
             Bank Transfer
           </button>
 
           <button
             onClick={() => setActiveTab("razorpay")}
-            className={`flex items-center gap-2 pb-3 px-3 text-[14px] font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 pb-2.5 sm:pb-3 px-2 sm:px-3 text-[12px] sm:text-[14px] font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "razorpay"
                 ? "border-[#993925] text-[#993925]"
                 : "border-transparent text-[#6e625d] hover:text-[#1e1e1e]"
             }`}
           >
-            <CreditCard size={16} />
+            <CreditCard size={15} />
             Cards / Online
           </button>
         </div>
 
         {/* Tab Content - Scrollable */}
-        <div className="p-6 overflow-y-auto space-y-5">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5">
           {/* Summary Pill */}
           <div className="bg-[#f4efe7] border border-[#a65a4a]/20 rounded-xl px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -320,17 +320,17 @@ export function PaymentModal({
 
           {/* TAB 1: UPI QR CODE */}
           {activeTab === "upi" && (
-            <div className="flex flex-col items-center gap-4 text-center">
+            <div className="flex flex-col items-center gap-3.5 sm:gap-4 text-center">
               <p className={`${inter()} text-[13px] text-[#6e625d]`}>
                 Scan with <strong>Google Pay</strong>, <strong>PhonePe</strong>, <strong>Paytm</strong>, or any UPI app:
               </p>
 
               {/* Dynamic QR Code */}
-              <div className="p-3 bg-white border-2 border-[#993925]/30 rounded-2xl shadow-sm">
+              <div className="p-2.5 sm:p-3 bg-white border-2 border-[#993925]/30 rounded-2xl shadow-sm">
                 <img
                   src={qrImageUrl}
                   alt={`UPI QR Code for ₹${amount}`}
-                  className="size-[200px] sm:size-[220px] object-contain"
+                  className="size-[170px] sm:size-[220px] object-contain"
                 />
               </div>
 

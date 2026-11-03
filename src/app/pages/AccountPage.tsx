@@ -290,34 +290,34 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
             </div>
           ) : (
             <div className="max-w-[960px] mx-auto">
-              <div className="bg-white border border-[#a65a4a]/20 rounded-3xl p-6 sm:p-8 mb-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="flex items-center gap-5">
-                  <div className="size-16 rounded-2xl bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[26px] font-bold flex items-center justify-center shrink-0 shadow-md">
+              <div className="bg-white border border-[#a65a4a]/20 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 sm:gap-6">
+                <div className="flex items-start sm:items-center gap-3.5 sm:gap-5">
+                  <div className="size-12 sm:size-16 rounded-xl sm:rounded-2xl bg-[#a65a4a] text-[#f4efe7] font-['Fraunces',serif] text-[20px] sm:text-[26px] font-bold flex items-center justify-center shrink-0 shadow-md">
                     {profile.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[24px] font-semibold">{profile.name}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-['Fraunces',serif] text-[#1e1e1e] text-[20px] sm:text-[24px] font-semibold">{profile.name}</h3>
                       {isPermanentVolunteer && (
-                        <span className="bg-[#a65a4a] text-[#f4efe7] text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                        <span className="bg-[#a65a4a] text-[#f4efe7] text-[11px] sm:text-[12px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1 shadow-sm">
                           <Star size={12} className="fill-[#f4efe7]" /> Permanent Volunteer
                         </span>
                       )}
                       {permRequest?.status === "New" && (
-                        <span className="bg-amber-100 text-amber-800 text-[12px] font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                        <span className="bg-amber-100 text-amber-800 text-[11px] sm:text-[12px] font-semibold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                           <Clock size={12} /> Request Pending
                         </span>
                       )}
                       {deactivateRequest?.status === "New" && !isDeactivated && (
-                        <span className="bg-rose-100 text-rose-800 text-[12px] font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                        <span className="bg-rose-100 text-rose-800 text-[11px] sm:text-[12px] font-semibold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                           <Clock size={12} /> Deactivation Pending
                         </span>
                       )}
-                      <span className="bg-emerald-100 text-emerald-800 text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                      <span className="bg-emerald-100 text-emerald-800 text-[11px] sm:text-[12px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                         <CheckCircle size={13} /> Active Member
                       </span>
                     </div>
-                    <p className="font-['Inter',sans-serif] text-[14px] text-[#1e1e1e]/60 mt-1">
+                    <p className="font-['Inter',sans-serif] text-[13px] sm:text-[14px] text-[#1e1e1e]/60 mt-1 break-all">
                       {profile.email} {profile.phone ? `· ${profile.phone}` : ""}
                     </p>
                     {profile.skills && (
@@ -331,56 +331,56 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleSignOut}
-                    className="font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-5 py-2.5 rounded-full transition-colors flex items-center gap-2 cursor-pointer"
+                    className="w-full sm:w-auto justify-center font-['Inter',sans-serif] text-[13px] font-semibold text-[#a65a4a] hover:bg-[#a65a4a]/10 border border-[#a65a4a]/30 px-5 py-2.5 rounded-full transition-colors flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut size={15} /> Sign Out
                   </button>
                 </div>
               </div>
 
-              <div className="flex border-b-2 border-[#a65a4a]/20 mb-8 gap-4 sm:gap-8 overflow-x-auto">
+              <div className="flex border-b-2 border-[#a65a4a]/20 mb-6 sm:mb-8 gap-3 sm:gap-8 overflow-x-auto no-scrollbar scroll-smooth">
                 <button
                   onClick={() => handleTabChange("registered")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "registered"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <UserCheck size={18} /> My Registered Events ({registeredEventsList.length})
+                  <UserCheck size={17} /> My Registered Events ({registeredEventsList.length})
                 </button>
 
                 <button
                   onClick={() => handleTabChange("donations")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "donations"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <Heart size={18} /> My Contributions ({userDonationList.length})
+                  <Heart size={17} /> My Contributions ({userDonationList.length})
                 </button>
 
                 <button
                   onClick={() => handleTabChange("browse")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "browse"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <Plus size={18} /> Browse Upcoming Events
+                  <Plus size={17} /> Browse Upcoming Events
                 </button>
 
                 <button
                   onClick={() => handleTabChange("perm")}
-                  className={`pb-4 font-['Inter',sans-serif] text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap flex items-center gap-2 ${
+                  className={`pb-3 sm:pb-4 font-['Inter',sans-serif] text-[13px] sm:text-[15px] font-semibold transition-colors cursor-pointer border-b-2 whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2 ${
                     dashTab === "perm"
                       ? "border-[#a65a4a] text-[#a65a4a]"
                       : "border-transparent text-[#1e1e1e]/60 hover:text-[#a65a4a]"
                   }`}
                 >
-                  <Star size={18} /> Permanent Volunteer
+                  <Star size={17} /> Permanent Volunteer
                   {(permRequest?.status === "New" || (deactivateRequest?.status === "New" && !isDeactivated)) && (
                     <span className="size-2 rounded-full bg-amber-400 inline-block ml-0.5" />
                   )}
@@ -468,7 +468,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                               )}
                             </div>
                           </div>
-                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex items-center justify-between text-[13px] text-[#1e1e1e]/60 font-['Inter',sans-serif]">
+                          <div className="border-t border-[#a65a4a]/10 pt-4 mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-[12px] sm:text-[13px] text-[#1e1e1e]/60 font-['Inter',sans-serif]">
                             <span className="flex items-center gap-1.5">
                               <Clock size={14} /> Date: {d.date}
                             </span>
@@ -476,7 +476,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                               href={`/api/donations/${d.id}/receipt`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[12px] font-semibold transition-colors cursor-pointer w-full sm:w-auto"
                             >
                               <FileText size={13} /> View / Print Receipt <ExternalLink size={11} />
                             </a>

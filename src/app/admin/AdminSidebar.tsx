@@ -114,11 +114,13 @@ export function AdminSidebar({
       </nav>
 
       {/* Mobile Dropdown Nav */}
-      <div className="md:hidden w-full px-4 pt-4 font-['Inter',sans-serif]">
+      <div className="md:hidden w-full px-3.5 sm:px-4 pt-3 pb-2.5 font-['Inter',sans-serif] shrink-0 bg-white border-b border-[#a65a4a]/15">
+        <label htmlFor="admin-nav-select" className="sr-only">Admin Navigation Section</label>
         <select
+          id="admin-nav-select"
           value={activeSection}
           onChange={(e) => onSelectSection(e.target.value)}
-          className="w-full border border-[#a65a4a]/30 rounded-lg px-3 py-2 text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] bg-white mb-4"
+          className="w-full border border-[#a65a4a]/30 rounded-xl px-3 py-2 text-[13px] sm:text-[14px] text-[#1e1e1e] focus:outline-none focus:border-[#a65a4a] bg-[#fbf8f5] font-medium"
         >
           {visibleTabs.map((t) => (
             <option key={t.id} value={t.id}>

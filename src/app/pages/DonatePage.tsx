@@ -74,14 +74,14 @@ export function DonatePage() {
     <main className="bg-[#f4efe7]">
       <PageBanner img={imgDonateBanner} title={`Donate For\na Cause`} />
 
-      <section className="py-16 px-6">
-        <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row gap-10 items-start">
+      <section className="py-10 sm:py-16 px-4 sm:px-6">
+        <div className="max-w-[1200px] mx-auto flex flex-col lg:flex-row gap-8 sm:gap-10 items-start">
           {/* Campaign image side */}
           <div className="flex-1 w-full">
             <SectionLabel text="Take Action" />
             <SectionTitle text="One Contribution. Many Futures." />
 
-            <div className="relative mt-6 rounded-2xl overflow-hidden h-[260px] sm:h-[380px] md:h-[480px] shadow-sm">
+            <div className="relative mt-5 sm:mt-6 rounded-2xl overflow-hidden h-[240px] sm:h-[360px] md:h-[480px] shadow-sm">
               <img
                 loading="lazy"
                 decoding="async"
@@ -92,22 +92,22 @@ export function DonatePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent" />
 
               {/* Category tag */}
-              <div className="absolute top-6 left-8">
-                <span className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[13px] font-bold px-8 py-2 rounded-full backdrop-blur-sm bg-black/20`}>
+              <div className="absolute top-4 sm:top-6 left-4 sm:left-8">
+                <span className={`${inter()} border-2 border-[#f4efe7] text-[#f4efe7] text-[12px] sm:text-[13px] font-bold px-4 sm:px-8 py-1.5 sm:py-2 rounded-full backdrop-blur-sm bg-black/20`}>
                   {selectedCampaign.tag}
                 </span>
               </div>
 
               {/* Campaign details */}
-              <div className="absolute bottom-0 left-0 right-0 p-8">
-                <p className={`${inter()} text-[#f4efe7] text-[22px] font-semibold transition-all duration-300`}>
+              <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-8">
+                <p className={`${inter()} text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold transition-all duration-300`}>
                   {selectedCampaign.name}
                 </p>
-                <div className="mt-4 flex items-center justify-between mb-2">
-                  <p className={`${inter()} text-[#f4efe7] text-[15px] font-bold tracking-wide`}>
+                <div className="mt-3 sm:mt-4 flex flex-wrap items-center justify-between gap-1 mb-2">
+                  <p className={`${inter()} text-[#f4efe7] text-[14px] sm:text-[15px] font-bold tracking-wide`}>
                     ₹{selectedCampaign.raised.toLocaleString("en-IN")} Raised
                   </p>
-                  <p className={`${inter()} text-[#89a26e] text-[13px] font-semibold`}>
+                  <p className={`${inter()} text-[#89a26e] text-[12px] sm:text-[13px] font-semibold`}>
                     Goal: ₹{selectedCampaign.goal.toLocaleString("en-IN")}
                   </p>
                 </div>
@@ -143,7 +143,7 @@ export function DonatePage() {
       </section>
 
       {/* Other campaigns */}
-      <section className="py-16 px-6 bg-white/30">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/30">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-center mb-10">
             <SectionLabel text="More Campaigns" />

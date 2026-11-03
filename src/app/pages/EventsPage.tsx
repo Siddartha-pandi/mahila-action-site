@@ -117,17 +117,17 @@ export function EventsPage() {
       <PageBanner img={imgAboutBanner} title="Events" />
 
       {/* ── Upcoming events ── */}
-      <section className="pt-14 pb-16 px-6">
+      <section className="pt-10 sm:pt-14 pb-12 sm:pb-16 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
-          <div className="text-center mb-10">
+          <div className="text-center mb-8 sm:mb-10">
             <SectionLabel text="Upcoming Events" />
             <SectionTitle text="Join The Movement" center />
-            <p className={`${inter()} text-[#1e1e1e]/75 text-[17px] leading-relaxed mt-4 max-w-[640px] mx-auto`}>
+            <p className={`${inter()} text-[#1e1e1e]/75 text-[15px] sm:text-[17px] leading-relaxed mt-3 sm:mt-4 max-w-[640px] mx-auto`}>
               Every event we run is open to the community. Filter by the area you care about, then reserve your seat.
             </p>
           </div>
 
-          <div className="mb-10">
+          <div className="mb-8 sm:mb-10">
             <FilterTabs
               options={siteData.categories}
               activeId={activeCategory}
@@ -137,14 +137,14 @@ export function EventsPage() {
 
           {/* Admin Mode Bar */}
           {isAdmin && (
-            <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="mb-6 p-3.5 sm:p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 text-amber-900">
                 <Shield size={18} className="text-amber-700 shrink-0" />
-                <span className="text-[13px] font-semibold">
+                <span className="text-[12px] sm:text-[13px] font-semibold">
                   Admin Mode Active: Showing all events (including drafts). Use the <strong>Publish</strong> and <strong>Unpublish</strong> buttons on each card to toggle visibility.
                 </span>
               </div>
-              <span className="text-[11px] font-bold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded-full shrink-0 self-start sm:self-auto">
+              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded-full shrink-0 self-start sm:self-auto">
                 Admin Controls ON
               </span>
             </div>
@@ -159,7 +159,7 @@ export function EventsPage() {
                   categoryName={categoryName(ev.categoryId)}
                   onReserve={handleReserve}
                   onTogglePublish={isAdmin ? handleTogglePublish : undefined}
-                  className="h-[420px]"
+                  className="h-[380px] sm:h-[420px]"
                 />
               ))}
             </div>
@@ -177,7 +177,7 @@ export function EventsPage() {
       </section>
 
       {/* ── Past events blog ── */}
-      <section className="py-16 px-6 bg-white/30">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/30">
         <div className="max-w-[1200px] mx-auto">
           <div className="text-center mb-10">
             <SectionLabel text="What We've Done" />

@@ -58,9 +58,9 @@ export function BlogDetailModal({
 
   return (
     <div className="fixed inset-0 z-[400] bg-[#f4efe7] overflow-y-auto">
-      <div className="sticky top-0 bg-[#f4efe7] shadow-[0_2px_16px_rgba(0,0,0,0.06)] z-10 py-4 px-6">
+      <div className="sticky top-0 bg-[#f4efe7] shadow-[0_2px_16px_rgba(0,0,0,0.06)] z-10 py-3 sm:py-4 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 font-['Inter',sans-serif] text-[15px]">
+          <div className="flex items-center gap-2 font-['Inter',sans-serif] text-[14px] sm:text-[15px]">
             <span className="text-[#a65a4a] font-medium">{categoryLabel}</span>
           </div>
           <button
@@ -73,9 +73,9 @@ export function BlogDetailModal({
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-6 pb-20">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
         {post.coverImage && (
-          <div className="mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px] relative bg-[#a65a4a]/10">
+          <div className="mt-4 sm:mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px] relative bg-[#a65a4a]/10">
             <SafeImage
               src={post.coverImage}
               alt={post.title}
@@ -88,14 +88,14 @@ export function BlogDetailModal({
         )}
 
         <h1
-          className={`${fraunces()} font-normal text-[#a65a4a] text-[24px] sm:text-[36px] md:text-[52px] leading-[1.25] mt-4 max-w-[900px]`}
+          className={`${fraunces()} font-normal text-[#a65a4a] text-[22px] sm:text-[36px] md:text-[52px] leading-[1.25] mt-4 max-w-[900px]`}
           style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
         >
           {post.title}
         </h1>
 
         {post.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-3.5 sm:mt-4">
             {post.tags.map((tag, i) => (
               <Badge key={i} variant="secondary">
                 {tag}
@@ -105,23 +105,23 @@ export function BlogDetailModal({
         )}
 
         <div
-          className="blog-rich-content mt-8 max-w-[1152px]"
+          className="blog-rich-content mt-6 sm:mt-8 max-w-[1152px]"
           dangerouslySetInnerHTML={{ __html: richHtml }}
         />
 
         {n > 0 && (
-          <div className="mt-20">
+          <div className="mt-12 sm:mt-20">
             <h2
-              className={`${fraunces()} font-normal text-[#a65a4a] text-[24px] sm:text-[36px] md:text-[52px] leading-[1.25]`}
+              className={`${fraunces()} font-normal text-[#a65a4a] text-[22px] sm:text-[36px] md:text-[52px] leading-[1.25]`}
               style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
             >
               Gallery
             </h2>
 
-            <div className="flex items-center justify-center gap-2 sm:gap-6 md:gap-8 mt-10">
+            <div className="flex items-center justify-center gap-2 sm:gap-6 md:gap-8 mt-6 sm:mt-10">
               <button
                 onClick={() => setGalleryTop((i) => (i - 1 + n) % n)}
-                className="size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
+                className="size-9 sm:size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
                 aria-label="Previous gallery image"
               >
                 <ChevronRight size={18} className="rotate-180" />

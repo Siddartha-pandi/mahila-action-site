@@ -325,22 +325,22 @@ export function AdminPage({
   return (
     <main className="h-full w-full overflow-hidden bg-[#f0ebe3] flex flex-col">
       {/* Admin Header Bar */}
-      <div className="bg-[#a65a4a] px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between z-10 shadow-md shrink-0">
+      <div className="bg-[#a65a4a] px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between z-10 shadow-md shrink-0">
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <LogoMark invert />
           <div className="hidden xs:block">
-            <p className="font-['Fraunces',serif] text-[#f4efe7] text-[16px] sm:text-[18px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Admin Panel</p>
+            <p className="font-['Fraunces',serif] text-[#f4efe7] text-[15px] sm:text-[18px] font-semibold" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Admin Panel</p>
             <p className="font-['Inter',sans-serif] text-[#f4efe7]/65 text-[10px] sm:text-[11px] hidden sm:block">Changes go live immediately after saving</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-3">
-          <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-[#f4efe7]/15 border border-[#f4efe7]/30 text-[#f4efe7] text-[12px]">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-[#f4efe7]/15 border border-[#f4efe7]/30 text-[#f4efe7] text-[11px] sm:text-[12px]">
             <div className="w-5 sm:w-6 h-5 sm:h-6 rounded-full bg-[#f4efe7] text-[#a65a4a] font-bold text-[10px] sm:text-[11px] flex items-center justify-center shrink-0">
               {currentAdminUser.name.charAt(0).toUpperCase()}
             </div>
-            <div className="hidden md:flex items-center gap-2">
-              <span className="font-medium">{currentAdminUser.name}</span>
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="font-medium max-w-[90px] md:max-w-none truncate">{currentAdminUser.name}</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold bg-[#f4efe7] text-[#a65a4a]">
                 {currentRole.name}
               </span>
@@ -349,41 +349,43 @@ export function AdminPage({
 
           {isDirty && (
             <span className="bg-amber-300 text-amber-950 font-['Inter',sans-serif] text-[10px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 sm:py-1 rounded-full animate-pulse flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" /> Unsaved
+              <AlertTriangle className="w-3.5 h-3.5" /> <span className="hidden xs:inline">Unsaved</span>
             </span>
           )}
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className={`flex items-center gap-1.5 font-['Inter',sans-serif] text-[11px] sm:text-[13px] px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-semibold transition-all cursor-pointer disabled:opacity-60 whitespace-nowrap ${
+            className={`flex items-center gap-1 sm:gap-1.5 font-['Inter',sans-serif] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-semibold transition-all cursor-pointer disabled:opacity-60 whitespace-nowrap ${
               isDirty
                 ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300 animate-pulse"
                 : "bg-[#f4efe7]/20 hover:bg-[#f4efe7]/30 text-[#f4efe7] border border-[#f4efe7]/40"
             }`}
             title="Save all changes and publish live to website"
           >
-            <Globe className="w-3.5 h-3.5" />
-            <span>{saving ? "Publishing..." : isDirty ? "Publish Changes" : "Saved & Published"}</span>
+            <Globe className="w-3.5 h-3.5 shrink-0" />
+            <span>{saving ? "Publishing..." : isDirty ? <><span className="hidden sm:inline">Publish </span>Changes</> : <><span className="hidden sm:inline">Saved &amp; </span>Published</>}</span>
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1 sm:gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
+            title="Sign Out"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
+            <LogOut className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden xs:inline">Sign Out</span>
           </button>
           <button
             onClick={onExit}
-            className="flex items-center gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1 sm:gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
+            title="View Live Site"
           >
-            <Globe className="w-3.5 h-3.5" />
+            <Globe className="w-3.5 h-3.5 shrink-0" />
             <span>Site</span>
           </button>
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-0 h-full overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0 h-full overflow-hidden">
         <AdminSidebar
           visibleTabs={visibleTabs}
           activeSection={activeSection}
@@ -392,7 +394,7 @@ export function AdminPage({
         />
 
         {/* Main Content Area */}
-        <div className="flex-1 h-full min-h-0 overflow-y-auto p-6 md:p-8">
+        <div className="flex-1 h-full min-h-0 overflow-y-auto p-4 sm:p-6 md:p-8">
           <div className="flex items-center gap-3 mb-6">
             {customTab?.icon && (
               <div className="w-10 h-10 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center shadow-xs">

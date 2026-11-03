@@ -37,7 +37,7 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
       <PageBanner img={imgHeroCard} title="Our Stories" />
 
       {/* Filter tabs */}
-      <section className="py-10 px-6">
+      <section className="py-8 sm:py-10 px-4 sm:px-6">
         <div className="max-w-[1200px] mx-auto">
           <FilterTabs
             options={siteData.categories}
@@ -48,7 +48,7 @@ export function StoriesPage({ setPage: _setPage }: { setPage: (p: Page) => void 
       </section>
 
       {/* Story grid */}
-      <section className="pb-20 px-6">
+      <section className="pb-16 sm:pb-20 px-4 sm:px-6">
         {filtered.length > 0 && (
           <div className="max-w-[1200px] mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 items-stretch">
             {filtered.map((s) => (

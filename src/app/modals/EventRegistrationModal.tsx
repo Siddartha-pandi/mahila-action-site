@@ -286,15 +286,15 @@ export function EventRegistrationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#f4efe7] rounded-2xl w-[92vw] max-w-[560px] max-h-[88vh] overflow-y-auto shadow-2xl">
-        <div className="bg-[#a65a4a] px-7 py-5 flex items-start justify-between sticky top-0 z-10">
+    <div className="fixed inset-0 z-[250] flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#f4efe7] rounded-2xl w-[94vw] sm:w-[92vw] max-w-[560px] max-h-[88vh] overflow-y-auto shadow-2xl">
+        <div className="bg-[#a65a4a] px-4 sm:px-7 py-3.5 sm:py-5 flex items-start justify-between sticky top-0 z-10">
           <div>
-            <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[12px] uppercase tracking-wider">Register for</p>
-            <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[22px] font-semibold mt-0.5" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
+            <p className="font-['Inter',sans-serif] text-[#f4efe7]/75 text-[11px] sm:text-[12px] uppercase tracking-wider">Register for</p>
+            <h3 className="font-['Fraunces',serif] text-[#f4efe7] text-[18px] sm:text-[22px] font-semibold mt-0.5" style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
               {event.title}
             </h3>
-            <div className="font-['Inter',sans-serif] text-[#f4efe7]/80 text-[13px] flex flex-wrap gap-4 mt-2">
+            <div className="font-['Inter',sans-serif] text-[#f4efe7]/80 text-[12px] sm:text-[13px] flex flex-wrap gap-2.5 sm:gap-4 mt-1.5 sm:mt-2">
               {event.eventDate && (
                 <span className="flex items-center gap-1.5">
                   <Calendar size={13} /> {new Date(event.eventDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -303,10 +303,10 @@ export function EventRegistrationModal({
               <span className="flex items-center gap-1.5"><MapPin size={13} /> {event.location || "Online / TBD"}</span>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-1"><X size={20} /></button>
+          <button onClick={onClose} className="text-[#f4efe7]/70 hover:text-[#f4efe7] cursor-pointer mt-0.5 sm:mt-1 p-1"><X size={20} /></button>
         </div>
 
-        <div className="p-7">
+        <div className="p-4 sm:p-7">
           {doneRole ? (
             <div className="flex flex-col items-center text-center gap-4">
               <div className="size-16 bg-[#587735]/15 rounded-full flex items-center justify-center">
@@ -523,7 +523,7 @@ export function EventRegistrationModal({
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[15px] sm:text-[17px] font-semibold py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? "Submitting…" : submitLabel[role]}
                   </button>

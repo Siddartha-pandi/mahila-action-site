@@ -522,7 +522,7 @@ export function AdminListEditor<T extends { id: string }>({
           <p className="font-['Inter',sans-serif] text-[#1e1e1e]/40 text-[13px] px-1 py-2">{emptyLabel}</p>
         )}
 
-        <div className="flex flex-col gap-1.5 max-h-[460px] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-1.5 max-h-[240px] sm:max-h-[320px] md:max-h-[460px] overflow-y-auto pr-1">
           {paginatedItems.map((item, index) => (
             <div
               key={`${item.id}_${index}`}
