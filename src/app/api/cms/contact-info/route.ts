@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
+import { firstError, normalizePhone, validateEmail, validatePhone } from "@/lib/validation";
 import fs from "fs/promises";
 import path from "path";
 
@@ -8,7 +9,7 @@ const CONTACT_JSON_PATH = path.join(process.cwd(), "src", "data", "contact.json"
 const DEFAULT_CONTACT_DATA = {
   email: "contact@mahilaction.org",
   emailNote: "We reply within 24 hours",
-  phone: "+91 123454321",
+  phone: "+91 70955 48387",
   phoneNote: "Mon – Sat, 9 AM – 6 PM IST",
   address: "Visakapatnam, Andhra Pradesh",
   addressNote: "India – 500 001",
@@ -64,10 +65,18 @@ export async function PUT(req: NextRequest) {
 
   try {
     const b = await req.json();
+    const invalid = firstError(
+      b.email ? validateEmail(b.email, "contact email", { required: false }) : null,
+      b.phone ? validatePhone(b.phone, "contact phone number", { required: false }) : null
+    );
+    if (invalid) {
+      return NextResponse.json({ error: invalid }, { status: 400 });
+    }
+
     const updated = {
       email: b.email ?? "",
       emailNote: b.emailNote || b.email_note || "",
-      phone: b.phone ?? "",
+      phone: b.phone ? normalizePhone(b.phone) : "",
       phoneNote: b.phoneNote || b.phone_note || "",
       address: b.address ?? "",
       addressNote: b.addressNote || b.address_note || "",

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
 import bcrypt from "bcryptjs";
-import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const normalizedPhone = phone ? String(phone).trim() : null;
+    const normalizedPhone = phone ? normalizePhone(phone) : null;
 
     const existingRes = await queryDb(
       "SELECT email FROM users WHERE email = $1",

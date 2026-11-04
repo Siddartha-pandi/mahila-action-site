@@ -4,7 +4,7 @@ import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
 import { useSiteData } from "../context/SiteDataContext";
 import { useUserProfile } from "../hooks/useUserProfile";
-import { fraunces, inter, type Page } from "./shared/styleHelpers";
+import { fraunces, inter, scrollToTop, type Page } from "./shared/styleHelpers";
 
 const FOOTER_IMPACT_LINKS: { label: string; id: string }[] = [
   { label: "Women & Leadership", id: "women-leadership" },
@@ -18,12 +18,12 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const contact = siteData?.contact;
   const email = contact?.email || "contact@mahilaction.org";
-  const phone = contact?.phone || "+91 123454321";
+  const phone = contact?.phone || "+91 70955 48387";
   const userProfile = useUserProfile();
 
   function nav(p: Page) {
     setPage(p);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollToTop("instant");
   }
 
   function handleAttendEvents() {

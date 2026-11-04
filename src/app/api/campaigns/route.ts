@@ -23,37 +23,46 @@ async function writeCampaignsFile(data: Campaign[]): Promise<void> {
   await fs.writeFile(CAMPAIGNS_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   try {
     const isRaw = req.nextUrl.searchParams.get("raw") === "true";
     const baseCampaigns = await readCampaignsFile();
 
     if (isRaw) {
-      return NextResponse.json(baseCampaigns);
+      return NextResponse.json(baseCampaigns, {
+        headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+      });
     }
 
     const res = await queryDb(
-      `SELECT campaign_name, SUM(amount) as total_raised
+      `SELECT COALESCE(campaign_name, '') as campaign_name, SUM(amount) as total_raised
        FROM donations
        WHERE status != 'Rejected'
        GROUP BY campaign_name`
     );
 
     const donationTotals: Record<string, number> = {};
+    let unassignedRaised = 0;
     if (res && Array.isArray(res.rows)) {
       for (const row of res.rows) {
-        if (row.campaign_name) {
-          const key = row.campaign_name.trim().toLowerCase();
-          donationTotals[key] = (donationTotals[key] || 0) + (Number(row.total_raised) || 0);
+        const rawName = String(row.campaign_name || "").trim().toLowerCase();
+        const amt = Number(row.total_raised) || 0;
+        if (rawName) {
+          donationTotals[rawName] = (donationTotals[rawName] || 0) + amt;
+        } else {
+          unassignedRaised += amt;
         }
       }
     }
 
-    const updatedCampaigns: Campaign[] = baseCampaigns.map((c) => {
+    const updatedCampaigns: Campaign[] = baseCampaigns.map((c, index) => {
       const cNameKey = c.name.trim().toLowerCase();
       const cIdKey = c.id.trim().toLowerCase();
 
-      let extraRaised = 0;
+      let extraRaised = index === 0 ? unassignedRaised : 0;
       for (const [key, total] of Object.entries(donationTotals)) {
         if (key.includes(cNameKey) || cNameKey.includes(key) || key === cIdKey) {
           extraRaised += total;
@@ -67,10 +76,14 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json(updatedCampaigns);
+    return NextResponse.json(updatedCampaigns, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
   } catch (err: any) {
     console.error("GET /api/campaigns error:", err?.message || err);
-    return NextResponse.json(CAMPAIGNS);
+    return NextResponse.json(CAMPAIGNS, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
   }
 }
 

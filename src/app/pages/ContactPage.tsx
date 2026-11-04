@@ -214,7 +214,7 @@ export function ContactPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-6">
+            {/* <div className="bg-white rounded-2xl p-6">
               <p className={`${inter()} text-[13px] font-semibold text-[#1e1e1e]/50 uppercase tracking-wider mb-4`}>Follow Our Work</p>
               <div className="flex flex-col gap-3">
                 {[
@@ -229,7 +229,7 @@ export function ContactPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </div> */}
 
             <div className="border-2 border-[#a65a4a]/30 rounded-2xl p-6 flex gap-4 items-start">
               <div className="size-10 bg-[#a65a4a]/10 text-[#a65a4a] rounded-full flex items-center justify-center shrink-0 mt-0.5">

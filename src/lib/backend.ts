@@ -14,9 +14,15 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
   });
 
   if (res.ok && res.data?.ok) {
-    localStorage.setItem("admin_jwt", res.data.jwt || res.data.token || "session");
-    window.dispatchEvent(new Event("mahila_admin_auth_changed"));
-    window.dispatchEvent(new Event("storage"));
+    const token = res.data.jwt || res.data.token;
+    if (typeof window !== "undefined") {
+      if (token) {
+        sessionStorage.setItem("admin_jwt", token);
+      }
+      localStorage.removeItem("admin_jwt");
+      window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+      window.dispatchEvent(new Event("storage"));
+    }
     return { ok: true };
   }
 
@@ -27,26 +33,46 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
 }
 
 export async function signOutAdmin() {
-  localStorage.removeItem("admin_jwt");
-  window.dispatchEvent(new Event("mahila_admin_auth_changed"));
-  window.dispatchEvent(new Event("storage"));
+  try {
+    await api.post("/api/auth/logout");
+  } catch {}
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem("admin_jwt");
+    localStorage.removeItem("admin_jwt");
+    window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+    window.dispatchEvent(new Event("storage"));
+  }
 }
 
 export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
+  // Purge any stale legacy localStorage tokens from older builds
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("admin_jwt");
+      localStorage.removeItem("mahila_admin_active_session_v1");
+    } catch {}
+  }
+
   const check = async () => {
-    const hasLocalToken = Boolean(localStorage.getItem("admin_jwt"));
-    if (hasLocalToken) {
-      cb(true);
+    const token = typeof window !== "undefined" ? sessionStorage.getItem("admin_jwt") : null;
+    if (!token) {
+      cb(false);
       return;
     }
+
     try {
       const res = await api.get<{ loggedIn?: boolean }>("/api/auth/session");
       if (res.ok && res.data?.loggedIn) {
-        localStorage.setItem("admin_jwt", "session");
         cb(true);
         return;
       }
     } catch {}
+
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("admin_jwt");
+      } catch {}
+    }
     cb(false);
   };
 
@@ -153,6 +179,7 @@ function rowToSubmission(type: SubmissionItem["type"], row: any): SubmissionItem
     type: resolvedType,
     data: {
       ...rest,
+      request_type,
       companions: parseJsonColumn(rest.companions, []),
       selected_events: parseJsonColumn(rest.selected_events, []),
       anonymous: rest.anonymous === 1 || rest.anonymous === true,
@@ -176,44 +203,190 @@ export async function loadSubmissions(): Promise<SubmissionItem[]> {
     throw new Error("Could not load submissions from the server.");
   }
 
-  const items = responses.flatMap((res, i) => {
+  const rawItems = responses.flatMap((res, i) => {
     if (!res.ok || !Array.isArray(res.data)) return [];
     return res.data.map((row) => rowToSubmission(SUBMISSION_SOURCES[i].type, row));
   });
 
-  return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  // Deduplicate items:
+  // 1. Volunteer, reservation, and vendor originate from the shared `event_reservations` table.
+  //    If a record with the same ID appears under multiple types, prioritize specific types
+  //    ('vendor' or 'volunteer') over generic 'reservation'.
+  // 2. Prevent exact duplicates (same type + id).
+  const seenEventResIds = new Set<string>();
+  const seenKeys = new Set<string>();
+
+  const typePriority: Record<string, number> = {
+    volunteer: 1,
+    vendor: 1,
+    reservation: 2,
+  };
+
+  const prioritized = [...rawItems].sort((a, b) => {
+    const pA = typePriority[a.type] ?? 0;
+    const pB = typePriority[b.type] ?? 0;
+    return pA - pB;
+  });
+
+  const deduped: SubmissionItem[] = [];
+
+  for (const item of prioritized) {
+    if (!item || !item.id) continue;
+    const isEventRes = item.type === "volunteer" || item.type === "reservation" || item.type === "vendor";
+    if (isEventRes) {
+      if (seenEventResIds.has(String(item.id))) continue;
+      seenEventResIds.add(String(item.id));
+    }
+
+    const key = `${item.type}_${item.id}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+
+    deduped.push(item);
+  }
+
+  return deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export const KNOWN_SUBMISSION_TYPES: Set<SubmissionItem["type"]> = new Set([
+  "contact",
+  "volunteer",
+  "reservation",
+  "vendor",
+  "donation",
+  "member",
+  "perm_volunteer_request",
+  "perm_volunteer_deactivate",
+]);
+
+export function isKnownSubmissionType(type?: string): type is SubmissionItem["type"] {
+  return typeof type === "string" && KNOWN_SUBMISSION_TYPES.has(type as SubmissionItem["type"]);
+}
+
+/**
+ * Robustly infers or normalizes a submission's type when the raw stored type
+ * is missing, uppercase, legacy (e.g. "attendee"), or corrupted.
+ */
+export function inferSubmissionType(item?: Partial<SubmissionItem> | null): SubmissionItem["type"] | null {
+  if (!item) return null;
+
+  const rawType = String(item.type || "").trim().toLowerCase();
+  if (isKnownSubmissionType(rawType)) {
+    return rawType;
+  }
+
+  // Handle common legacy aliases
+  if (rawType === "attendee" || rawType === "booking" || rawType === "rsvp") {
+    return "reservation";
+  }
+  if (rawType === "donor") {
+    return "donation";
+  }
+  if (rawType === "user") {
+    return "member";
+  }
+  if (rawType === "perm_volunteer" || rawType === "perm-volunteer") {
+    return item.data?.request_type === "deactivate" ? "perm_volunteer_deactivate" : "perm_volunteer_request";
+  }
+
+  // Infer from ID prefix (e.g. donation_123, volunteer_456, etc.)
+  const idStr = String(item.id || "").toLowerCase();
+  if (idStr.startsWith("donation_")) return "donation";
+  if (idStr.startsWith("vendor_")) return "vendor";
+  if (idStr.startsWith("reservation_")) return "reservation";
+  if (idStr.startsWith("volunteer_")) return "volunteer";
+  if (idStr.startsWith("contact_")) return "contact";
+  if (idStr.startsWith("member_")) return "member";
+  if (idStr.startsWith("perm_volunteer_")) {
+    return item.data?.request_type === "deactivate" ? "perm_volunteer_deactivate" : "perm_volunteer_request";
+  }
+
+  // Infer from data attributes
+  const d = item.data || {};
+  if (d.receipt_number || d.amount != null || d.pan_number || d.donation_type) {
+    return "donation";
+  }
+  if (d.business_name || d.offering || d.needs_space != null) {
+    return "vendor";
+  }
+  if (d.seats != null || d.companions != null) {
+    return "reservation";
+  }
+  if (Array.isArray(d.selected_events) && d.selected_events.length > 0) {
+    return "volunteer";
+  }
+  if (d.skills != null && d.skills !== "") {
+    return "volunteer";
+  }
+  if (d.request_type === "deactivate") {
+    return "perm_volunteer_deactivate";
+  }
+  if (d.request_type === "request") {
+    return "perm_volunteer_request";
+  }
+  if (d.subject != null || (d.message != null && !d.skills)) {
+    return "contact";
+  }
+
+  return null;
 }
 
 /** Which API path owns a given submission, for status updates and deletes. */
-function submissionPath(type: SubmissionItem["type"]) {
-  return SUBMISSION_SOURCES.find((s) => s.type === type)?.path;
+export function submissionPath(type?: string): string | undefined {
+  if (!type) return undefined;
+  const cleanType = type.trim().toLowerCase();
+  if (cleanType === "perm_volunteer_deactivate" || cleanType === "perm_volunteer_request") {
+    return "/api/perm-volunteers";
+  }
+  if (cleanType === "attendee") {
+    return "/api/reservations";
+  }
+  if (cleanType === "donor") {
+    return "/api/donations";
+  }
+  return SUBMISSION_SOURCES.find((s) => s.type === cleanType)?.path;
 }
 
 export async function updateSubmissionStatusRemote(
   item: SubmissionItem,
   status: SubmissionItem["status"]
 ): Promise<{ ok: boolean; error?: string }> {
-  const path = submissionPath(item.type);
-  if (!path) return { ok: false, error: "Unknown submission type." };
+  const resolvedType = inferSubmissionType(item) || item.type;
+  const path = submissionPath(resolvedType);
+  if (!path) {
+    // If it's an offline/orphan submission without a server table, update local storage and succeed
+    updateSubmissionStatus(item.id, status);
+    return { ok: true };
+  }
   const res = await api.patch(`${path}/${encodeURIComponent(item.id)}`, { status });
+  if (res.ok) {
+    updateSubmissionStatus(item.id, status);
+  }
   return { ok: res.ok, error: res.error };
 }
 
 export async function deleteSubmissionRemote(item: SubmissionItem): Promise<{ ok: boolean; error?: string }> {
-  if (item.type === "member") {
+  const resolvedType = inferSubmissionType(item) || item.type;
+  if (resolvedType === "member" || item.type === "member") {
     return { ok: false, error: "Member accounts can't be deleted here — that would remove their sign-in." };
   }
-  const path = submissionPath(item.type);
-  if (!path) return { ok: false, error: "Unknown submission type." };
+  const path = submissionPath(resolvedType);
+  if (!path) {
+    // Unknown or local-only submission with no server table — delete locally so the admin can remove it
+    deleteSubmission(item.id);
+    return { ok: true };
+  }
   const res = await api.del(`${path}/${encodeURIComponent(item.id)}`);
+  deleteSubmission(item.id);
+  // If the server returns 404 (already deleted or was only local), treat as successful deletion
+  if (!res.ok && res.status === 404) {
+    return { ok: true };
+  }
   return { ok: res.ok, error: res.error };
 }
 
 /** Submission types with no server table — they exist only in local storage. */
-export const LOCAL_ONLY_SUBMISSION_TYPES: SubmissionItem["type"][] = [
-  "perm_volunteer_request",
-  "perm_volunteer_deactivate",
-];
+export const LOCAL_ONLY_SUBMISSION_TYPES: SubmissionItem["type"][] = [];
 
 // Demo rows ("Ananya Rao", "Kavita Reddy", "Suresh Kumar", "Pooja Verma") used
 // to be written into local storage whenever it was empty. The admin panel paints
@@ -228,18 +401,34 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
     if (!raw) return [];
     const items = JSON.parse(raw);
     if (!Array.isArray(items)) return [];
-    let valid: SubmissionItem[] = items.filter((item: any) => item && typeof item === "object" && item.id && item.type);
+    let valid: SubmissionItem[] = items.filter((item: any) => item && typeof item === "object" && item.id);
 
     // Clear the seeded demo rows out of browsers that already stored them.
     const withoutMocks = valid.filter(item => !SEEDED_MOCK_IDS.includes(item.id));
-    if (withoutMocks.length !== valid.length) {
-      valid = withoutMocks;
-      localStorage.setItem(SUBMISSION_KEY, JSON.stringify(valid));
+    let changed = withoutMocks.length !== valid.length;
+    valid = withoutMocks;
+
+    // ── Self-healing: normalize and sanitize submission types ──
+    const healed: SubmissionItem[] = [];
+    for (const item of valid) {
+      const inferred = inferSubmissionType(item);
+      if (inferred) {
+        if (item.type !== inferred) {
+          item.type = inferred;
+          changed = true;
+        }
+        healed.push(item);
+      } else if (isKnownSubmissionType(item.type)) {
+        healed.push(item);
+      } else {
+        // Drop unidentifiable corrupt item from local storage
+        changed = true;
+      }
     }
+    valid = healed;
 
     // ── Migration: remove legacy "Permanent Community Volunteer Membership" entries ──
     const LEGACY_TITLE = "Permanent Community Volunteer Membership";
-    let changed = false;
     valid = valid.filter(item => {
       if (item.type !== "volunteer") return true;
       const events: string[] = Array.isArray(item.data?.selected_events) ? item.data.selected_events : [];
@@ -255,6 +444,7 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
       }
       return true;
     });
+
     if (changed) {
       localStorage.setItem(SUBMISSION_KEY, JSON.stringify(valid));
     }
@@ -347,13 +537,86 @@ export async function loadUserSubmissions(email?: string, phone?: string): Promi
         };
       });
 
-      // Merge with any un-synced local submissions (donations or volunteer requests)
-      const serverIds = new Set(serverItems.map((s) => String(s.id)));
-      const local = getUserSubmissions(email, phone).filter(
-        (s) => !serverIds.has(String(s.id))
-      );
+      // Build comprehensive lookup sets from server items to detect any locally mirrored duplicates
+      const serverIds = new Set<string>();
+      const serverReceipts = new Set<string>();
+      const serverTxIds = new Set<string>();
 
-      return [...serverItems, ...local].sort(
+      for (const item of serverItems) {
+        if (item.id) serverIds.add(String(item.id));
+        if (item.data?.id) serverIds.add(String(item.data.id));
+        const rec = item.data?.receipt_number || item.data?.receiptNumber;
+        if (rec) serverReceipts.add(String(rec).trim().toLowerCase());
+        const tx = item.data?.transaction_id || item.data?.transactionId;
+        if (tx) serverTxIds.add(String(tx).trim().toLowerCase());
+      }
+
+      // Filter local items: only keep genuine offline/un-synced submissions that are NOT already in serverItems
+      const unSyncedLocal: SubmissionItem[] = [];
+      const staleLocalIds = new Set<string>();
+
+      for (const s of getUserSubmissions(email, phone)) {
+        let isAlreadyOnServer = false;
+
+        // Check ID and data.id
+        if (serverIds.has(String(s.id)) || (s.data?.id && serverIds.has(String(s.data.id)))) {
+          isAlreadyOnServer = true;
+        }
+
+        // For donations: match by receipt number or transaction id
+        if (!isAlreadyOnServer && s.type === "donation") {
+          const rec = s.data?.receipt_number || s.data?.receiptNumber;
+          if (rec && serverReceipts.has(String(rec).trim().toLowerCase())) {
+            isAlreadyOnServer = true;
+          }
+          const tx = s.data?.transaction_id || s.data?.transactionId;
+          if (tx && serverTxIds.has(String(tx).trim().toLowerCase())) {
+            isAlreadyOnServer = true;
+          }
+        }
+
+        // For reservations / volunteers: match by event and type if already on server
+        if (!isAlreadyOnServer && (s.type === "reservation" || s.type === "volunteer" || s.type === "vendor")) {
+          const localEvent = String(s.data?.event_name || s.data?.selected_events || "").trim().toLowerCase();
+          if (localEvent) {
+            const matchesServer = serverItems.some((srv) => {
+              if (srv.type !== s.type) return false;
+              const srvEvent = String(srv.data?.event_name || srv.data?.selected_events || "").trim().toLowerCase();
+              return srvEvent === localEvent;
+            });
+            if (matchesServer) {
+              isAlreadyOnServer = true;
+            }
+          }
+        }
+
+        // For permanent volunteer requests / deactivations: match by type if already on server
+        if (!isAlreadyOnServer && (s.type === "perm_volunteer_request" || s.type === "perm_volunteer_deactivate")) {
+          const matchesServer = serverItems.some((srv) => srv.type === s.type);
+          if (matchesServer) {
+            isAlreadyOnServer = true;
+          }
+        }
+
+        if (isAlreadyOnServer) {
+          staleLocalIds.add(String(s.id));
+        } else {
+          unSyncedLocal.push(s);
+        }
+      }
+
+      // Clean up stale mirrored duplicates from localStorage so they don't linger
+      if (staleLocalIds.size > 0) {
+        try {
+          const allStored = getSubmissions();
+          const cleaned = allStored.filter((item) => !staleLocalIds.has(String(item.id)));
+          if (cleaned.length !== allStored.length) {
+            localStorage.setItem(SUBMISSION_KEY, JSON.stringify(cleaned));
+          }
+        } catch {}
+      }
+
+      return [...serverItems, ...unSyncedLocal].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     }
@@ -366,17 +629,28 @@ export async function loadUserSubmissions(email?: string, phone?: string): Promi
 }
 
 
+export function phonesMatch(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  const digA = String(a).replace(/\D/g, "");
+  const digB = String(b).replace(/\D/g, "");
+  if (!digA || !digB) return false;
+  if (digA === digB) return true;
+  if (digA.length >= 10 && digB.length >= 10) {
+    return digA.slice(-10) === digB.slice(-10);
+  }
+  return false;
+}
+
 export function getUserSubmissions(email?: string, phone?: string): SubmissionItem[] {
   const all = getSubmissions();
   if (!email && !phone) return [];
   const normEmail = email ? email.trim().toLowerCase() : "";
-  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
   return all.filter(item => {
     const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    const itemPhone = item.data?.phone ? String(item.data.phone) : "";
     if (normEmail && itemEmail === normEmail) return true;
-    if (normPhone && itemPhone === normPhone) return true;
+    if (phone && itemPhone && phonesMatch(phone, itemPhone)) return true;
     return false;
   });
 }
@@ -409,14 +683,29 @@ export function restoreRawSubmission(item: SubmissionItem) {
 export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
   try {
     const items = getSubmissions();
+    const serverId = data?.id ? String(data.id) : null;
     const newItem: SubmissionItem = {
-      id: `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: serverId || `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       type,
       data,
       createdAt: new Date().toISOString(),
       status: "New",
     };
-    items.unshift(newItem);
+
+    // If an item with matching serverId, receipt_number, or transaction_id already exists in localStorage,
+    // update/replace it rather than creating a duplicate.
+    const existingIdx = items.findIndex((it) => {
+      if (serverId && (String(it.id) === serverId || String(it.data?.id) === serverId)) return true;
+      if (data?.receipt_number && it.data?.receipt_number && String(it.data.receipt_number).toLowerCase() === String(data.receipt_number).toLowerCase()) return true;
+      if (data?.transaction_id && it.data?.transaction_id && String(it.data.transaction_id).toLowerCase() === String(data.transaction_id).toLowerCase()) return true;
+      return false;
+    });
+
+    if (existingIdx >= 0) {
+      items[existingIdx] = newItem;
+    } else {
+      items.unshift(newItem);
+    }
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(items));
     notifySubmissionsChanged();
   } catch (err) {
@@ -426,8 +715,11 @@ export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
 
 export function updateSubmissionStatus(id: string, status: SubmissionItem["status"]) {
   try {
-    const items = getSubmissions();
-    const updated = items.map(item => item.id === id ? { ...item, status } : item);
+    const raw = localStorage.getItem(SUBMISSION_KEY);
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (!Array.isArray(items)) return;
+    const updated = items.map((item: any) => String(item?.id) === String(id) ? { ...item, status } : item);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
     notifySubmissionsChanged();
   } catch (err) {
@@ -437,8 +729,11 @@ export function updateSubmissionStatus(id: string, status: SubmissionItem["statu
 
 export function deleteSubmission(id: string) {
   try {
-    const items = getSubmissions();
-    const updated = items.filter(item => item.id !== id);
+    const raw = localStorage.getItem(SUBMISSION_KEY);
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (!Array.isArray(items)) return;
+    const updated = items.filter((item: any) => String(item?.id) !== String(id));
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
     notifySubmissionsChanged();
   } catch (err) {
@@ -770,13 +1065,12 @@ export function getUserPermVolunteerRequest(
   const all = getSubmissions("perm_volunteer_request");
   if (!email && !phone) return null;
   const normEmail = email ? email.trim().toLowerCase() : "";
-  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
   const match = all.find((item) => {
     const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    const itemPhone = item.data?.phone ? String(item.data.phone) : "";
     if (normEmail && itemEmail === normEmail) return true;
-    if (normPhone && itemPhone === normPhone) return true;
+    if (phone && itemPhone && phonesMatch(phone, itemPhone)) return true;
     return false;
   });
 
@@ -790,14 +1084,13 @@ export function getUserPermVolunteerRequestFromList(
 ): SubmissionItem | null {
   if (!email && !phone) return null;
   const normEmail = email ? email.trim().toLowerCase() : "";
-  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
   const match = all.find((item) => {
     if (item.type !== "perm_volunteer_request") return false;
     const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    const itemPhone = item.data?.phone ? String(item.data.phone) : "";
     if (normEmail && itemEmail === normEmail) return true;
-    if (normPhone && itemPhone === normPhone) return true;
+    if (phone && itemPhone && phonesMatch(phone, itemPhone)) return true;
     return false;
   });
 
@@ -822,13 +1115,12 @@ export function getUserPermVolunteerDeactivateRequest(
   const all = getSubmissions("perm_volunteer_deactivate");
   if (!email && !phone) return null;
   const normEmail = email ? email.trim().toLowerCase() : "";
-  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
   const match = all.find((item) => {
     const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    const itemPhone = item.data?.phone ? String(item.data.phone) : "";
     if (normEmail && itemEmail === normEmail) return true;
-    if (normPhone && itemPhone === normPhone) return true;
+    if (phone && itemPhone && phonesMatch(phone, itemPhone)) return true;
     return false;
   });
 
@@ -842,14 +1134,13 @@ export function getUserPermVolunteerDeactivateRequestFromList(
 ): SubmissionItem | null {
   if (!email && !phone) return null;
   const normEmail = email ? email.trim().toLowerCase() : "";
-  const normPhone = phone ? phone.trim().replace(/\s+/g, "") : "";
 
   const match = all.find((item) => {
     if (item.type !== "perm_volunteer_deactivate") return false;
     const itemEmail = item.data?.email ? item.data.email.toString().trim().toLowerCase() : "";
-    const itemPhone = item.data?.phone ? item.data.phone.toString().trim().replace(/\s+/g, "") : "";
+    const itemPhone = item.data?.phone ? String(item.data.phone) : "";
     if (normEmail && itemEmail === normEmail) return true;
-    if (normPhone && itemPhone === normPhone) return true;
+    if (phone && itemPhone && phonesMatch(phone, itemPhone)) return true;
     return false;
   });
 

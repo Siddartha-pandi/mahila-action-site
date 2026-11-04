@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await verifyAdminPermission(req, "roles", "view");
@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (phone !== undefined) {
       updates.push(`phone = $${idx++}`);
-      values.push(phone.trim());
+      values.push(phone ? normalizePhone(phone) : null);
     }
     if (skills !== undefined) {
       updates.push(`skills = $${idx++}`);

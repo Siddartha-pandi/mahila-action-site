@@ -40,6 +40,7 @@ import { addToTrash } from "../../lib/recycleBin";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
+import { firstError, validateEmail, validatePhone } from "@/lib/validation";
 import { toast } from "sonner";
 
 export function DonationsAdmin() {
@@ -210,6 +211,12 @@ export function DonationsAdmin() {
     if (!offlineForm.anonymous && !offlineForm.name.trim()) {
       return toast.error("Please enter donor name or check Anonymous Supporter.");
     }
+
+    const invalid = firstError(
+      offlineForm.phone?.trim() ? validatePhone(offlineForm.phone, "phone number", { required: false }) : null,
+      offlineForm.email?.trim() ? validateEmail(offlineForm.email, "donor email", { required: false }) : null
+    );
+    if (invalid) return toast.error(invalid);
 
     setSavingOffline(true);
     try {
@@ -438,8 +445,8 @@ export function DonationsAdmin() {
     });
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error("Could not delete donation record.");
-    setSubmissions((prev) => prev.filter((s) => s.id !== item.id));
-    if (selectedDonation?.id === item.id) setSelectedDonation(null);
+    setSubmissions((prev) => prev.filter((s) => String(s.id) !== String(item.id)));
+    if (String(selectedDonation?.id) === String(item.id)) setSelectedDonation(null);
     toast.success("Donation moved to Recycle Bin");
   };
 
@@ -638,12 +645,9 @@ export function DonationsAdmin() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {campaigns.map((c) => {
-            const campDonations = allDonations.filter((d) =>
-              String(d.data?.campaign_name || d.data?.event_name || "").toLowerCase().includes(c.name.toLowerCase())
-            );
-            const liveAdded = campDonations.reduce((sum, d) => sum + (Number(d.data?.amount) || 0), 0);
-            const currentTotal = c.raised + liveAdded;
-            const pct = Math.min(100, Math.round((currentTotal / c.goal) * 100));
+            const currentTotal = Number(c.raised) || 0;
+            const pct = c.goal > 0 ? (currentTotal / c.goal) * 100 : 0;
+            const pctDisplay = pct > 0 ? (pct < 1 ? pct.toFixed(1) : Math.round(pct)) : 0;
 
             return (
               <div key={c.id} className="bg-[#faf7f3] border border-[#a65a4a]/15 p-3.5 rounded-xl flex flex-col justify-between">
@@ -656,10 +660,13 @@ export function DonationsAdmin() {
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-[11px] mb-1 font-medium">
                     <span className="text-gray-900 font-bold">₹{currentTotal.toLocaleString("en-IN")}</span>
-                    <span className="text-gray-500">Goal: {formatLakh(c.goal)} ({pct}%)</span>
+                    <span className="text-gray-500">Goal: {formatLakh(c.goal)} ({pctDisplay}%)</span>
                   </div>
                   <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#587735] rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                    <div
+                      className="h-full bg-[#587735] rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.max(pct, currentTotal > 0 ? 3 : 0))}%` }}
+                    />
                   </div>
                 </div>
               </div>

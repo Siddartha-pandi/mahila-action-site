@@ -12,7 +12,7 @@ import { useModal } from "../hooks/useModal";
 import { Carousel } from "../components/Carousel";
 import { EventCard } from "../components/EventCard";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
-import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
+import { inter, fraunces, scrollToTop, type Page } from "../components/shared/styleHelpers";
 
 // Homepage rails stay short — the full sets live on /events and /stories.
 const MAX_RAIL_ITEMS = 5;
@@ -65,7 +65,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   function goToPage(p: Page) {
     setPage(p);
-    window.scrollTo({ top: 0 });
+    scrollToTop("instant");
   }
 
   function categoryName(categoryId: string | null) {
@@ -141,7 +141,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               <button
                 onClick={() => {
                   navigate("/account?tab=perm");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  scrollToTop("instant");
                 }}
                 className="border-2 border-[#f4efe7] text-[#f4efe7] font-['Inter',sans-serif] font-semibold w-full text-center rounded-full hover:bg-[#f4efe7] hover:text-[#a65a4a] transition-all cursor-pointer leading-tight"
                 style={{ fontSize: "clamp(9px,0.85vw,14px)", padding: "clamp(5px,0.65vw,9px) 0.5rem" }}
@@ -212,7 +212,7 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
               <button
                 onClick={() => {
                   navigate("/account?tab=perm");
-                  window.scrollTo({ top: 0, behavior: "smooth" });
+                  scrollToTop("instant");
                 }}
                 className="flex-1 border-2 border-[#f4efe7] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[14px] sm:text-[15px] py-3 px-5 rounded-full text-center hover:bg-[#f4efe7] hover:text-[#a65a4a] transition-all cursor-pointer"
               >
@@ -424,10 +424,10 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
             Your support directly funds programs that transform lives. Help us reach more women, more families, more communities.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mt-8">
-            <button onClick={() => { setPage("donate"); window.scrollTo({ top: 0 }); }} className={`${inter()} w-full sm:w-auto bg-[#f4efe7] text-[#a65a4a] text-[15px] sm:text-[17px] font-bold px-8 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-white transition-colors cursor-pointer text-center`}>
+            <button onClick={() => { setPage("donate"); scrollToTop("instant"); }} className={`${inter()} w-full sm:w-auto bg-[#f4efe7] text-[#a65a4a] text-[15px] sm:text-[17px] font-bold px-8 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-white transition-colors cursor-pointer text-center`}>
               Donate Now
             </button>
-            <button onClick={() => { setPage("about"); window.scrollTo({ top: 0 }); }} className={`${inter()} w-full sm:w-auto border-2 border-[#f4efe7] text-[#f4efe7] text-[15px] sm:text-[17px] font-semibold px-8 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}>
+            <button onClick={() => { setPage("about"); scrollToTop("instant"); }} className={`${inter()} w-full sm:w-auto border-2 border-[#f4efe7] text-[#f4efe7] text-[15px] sm:text-[17px] font-semibold px-8 sm:px-10 py-3.5 sm:py-4 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}>
               Learn More
             </button>
           </div>

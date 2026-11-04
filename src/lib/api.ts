@@ -9,12 +9,12 @@ export const BASE_URL = typeof window !== "undefined"
 
 async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; data?: T; error?: string; status: number }> {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("admin_jwt") : null;
+    const token = typeof window !== "undefined"
+      ? (sessionStorage.getItem("admin_jwt") || localStorage.getItem("admin_jwt"))
+      : null;
     const validJwt = token && token !== "session" && token.includes(".") ? token : null;
     const authHeaders: Record<string, string> = validJwt
       ? { Authorization: `Bearer ${validJwt}` }
-      : token
-      ? { Authorization: `Bearer ${token}` }
       : {};
 
     const url = BASE_URL ? `${BASE_URL}${path}` : path;

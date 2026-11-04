@@ -13,6 +13,7 @@ import {
   getRoleById,
   type AdminUser,
   type AdminModule,
+  UNAUTHENTICATED_ADMIN_USER,
 } from "@/lib/permissions";
 import {
   Inbox,
@@ -32,7 +33,9 @@ import {
   Lock,
   Trash2,
   HeartHandshake,
+  Eye,
 } from "lucide-react";
+import { type Page } from "../components/shared/styleHelpers";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
 import { DonationsAdmin } from "@/app/admin/DonationsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
@@ -73,13 +76,18 @@ export function AdminPage({
   siteData,
   onSiteDataChange,
 }: {
-  onExit: () => void;
+  onExit: (targetPage?: Page) => void;
   onContentSaved: (c: ContentMap) => void;
   siteData: SiteData;
   onSiteDataChange: (d: SiteData) => void;
 }) {
   const existing = useContent();
-  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(() => {
+    if (typeof window !== "undefined" && sessionStorage.getItem("admin_jwt")) {
+      return true;
+    }
+    return null;
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
@@ -160,6 +168,8 @@ export function AdminPage({
       if (isLoggedIn) {
         setDraft({ ...existing });
         setCurrentAdminUser(getCurrentAdminSession());
+      } else {
+        setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
       }
     });
 
@@ -187,6 +197,7 @@ export function AdminPage({
         await signOutAdmin();
         clearAdminSession();
         setLoggedIn(false);
+        setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
         toast.error("Signed out automatically after 5 minutes of inactivity");
         onExit();
       }, INACTIVITY_LIMIT_MS);
@@ -254,6 +265,7 @@ export function AdminPage({
     await signOutAdmin();
     clearAdminSession();
     try {
+      sessionStorage.setItem("mahila_admin_active_tab", "submissions");
       localStorage.setItem("mahila_admin_active_tab", "submissions");
       const url = new URL(window.location.href);
       url.searchParams.set("tab", "submissions");
@@ -261,6 +273,7 @@ export function AdminPage({
     } catch {}
     setActiveSection("submissions");
     setLoggedIn(false);
+    setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
     toast("Signed out");
     onExit();
   }
@@ -309,7 +322,7 @@ export function AdminPage({
             <button type="submit" disabled={signingIn} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] py-3 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
               {signingIn ? "Signing in…" : "Sign In"}
             </button>
-            <button type="button" onClick={onExit} className="w-full text-[#1e1e1e]/50 font-['Inter',sans-serif] text-[13px] cursor-pointer hover:text-[#a65a4a] transition-colors">
+            <button type="button" onClick={() => onExit()} className="w-full text-[#1e1e1e]/50 font-['Inter',sans-serif] text-[13px] cursor-pointer hover:text-[#a65a4a] transition-colors">
               ← Back to website
             </button>
           </form>
@@ -375,12 +388,20 @@ export function AdminPage({
             <span className="hidden xs:inline">Sign Out</span>
           </button>
           <button
-            onClick={onExit}
-            className="flex items-center gap-1 sm:gap-1.5 font-['Inter',sans-serif] border border-[#f4efe7]/40 text-[#f4efe7] text-[11px] sm:text-[13px] px-2 sm:px-4 py-1.5 sm:py-2 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer whitespace-nowrap"
-            title="View Live Site"
+            onClick={() => {
+              let targetPage: Page = "home";
+              if (activeSection === "events" || activeSection === "eventsBlog") targetPage = "eventsBlog";
+              else if (activeSection === "stories" || activeSection === "impactStories" || activeSection === "categories") targetPage = "stories";
+              else if (activeSection === "donations") targetPage = "donate";
+              else if (activeSection === "contact") targetPage = "contact";
+              else if (activeSection === "timeline" || activeSection === "councilors") targetPage = "about";
+              onExit(targetPage);
+            }}
+            className="flex items-center gap-1.5 font-['Inter',sans-serif] bg-amber-400/20 hover:bg-amber-400/30 text-[#f4efe7] border border-amber-300/40 text-[11px] sm:text-[13px] px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full transition-all cursor-pointer whitespace-nowrap shadow-xs font-medium"
+            title="Observe live website as visitors see it — return anytime via the observation toolbar"
           >
-            <Globe className="w-3.5 h-3.5 shrink-0" />
-            <span>Site</span>
+            <Eye className="w-3.5 h-3.5 shrink-0 text-amber-300" />
+            <span>Observe Live Site</span>
           </button>
         </div>
       </div>
@@ -424,7 +445,7 @@ export function AdminPage({
                 </button>
               ) : (
                 <button
-                  onClick={onExit}
+                  onClick={() => onExit()}
                   className="mt-5 px-5 py-2.5 bg-[#a65a4a] text-white text-[13px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
                 >
                   ← Back to Website

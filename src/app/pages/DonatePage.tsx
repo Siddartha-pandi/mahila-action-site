@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Search } from "lucide-react";
 import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
 import { imgDonateBanner, imgTakeAction, imgStory1, imgStory2, imgStory3 } from "../constants/images";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
 import { DonationFormCard } from "../forms/DonationFormCard";
+import { TransactionCheckerModal } from "../modals/TransactionCheckerModal";
 import { inter } from "../components/shared/styleHelpers";
 import { useUserProfile } from "../hooks/useUserProfile";
 
@@ -13,6 +15,7 @@ export function DonatePage() {
   const profile = useUserProfile();
   const [campaigns, setCampaigns] = useState<Campaign[]>(CAMPAIGNS);
   const [selectedCampaignId, setSelectedCampaignId] = useState(CAMPAIGNS[0].id);
+  const [showChecker, setShowChecker] = useState(false);
 
   const campaignImages: Record<string, string> = {
     "learning-centres": imgTakeAction,
@@ -24,7 +27,7 @@ export function DonatePage() {
   // Fetch live campaign totals from the API (aggregated from database donations)
   const fetchLiveCampaigns = useCallback(async () => {
     try {
-      const res = await fetch("/api/campaigns");
+      const res = await fetch("/api/campaigns", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -104,31 +107,30 @@ export function DonatePage() {
                   {selectedCampaign.name}
                 </p>
                 <div className="mt-3 sm:mt-4 flex flex-wrap items-center justify-between gap-1 mb-2">
-                  <p className={`${inter()} text-[#f4efe7] text-[14px] sm:text-[15px] font-bold tracking-wide`}>
-                    ₹{selectedCampaign.raised.toLocaleString("en-IN")} Raised
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className={`${inter()} text-[#f4efe7] text-[15px] sm:text-[17px] font-bold tracking-wide`}>
+                      ₹{selectedCampaign.raised.toLocaleString("en-IN")} Raised
+                    </p>
+                    <span className="text-[#89a26e] text-[12px] sm:text-[13px] font-bold bg-black/30 px-2 py-0.5 rounded-full border border-[#89a26e]/30">
+                      {progress > 0 ? `${progress < 1 ? progress.toFixed(1) : Math.round(progress)}%` : "0%"}
+                    </span>
+                  </div>
                   <p className={`${inter()} text-[#89a26e] text-[12px] sm:text-[13px] font-semibold`}>
                     Goal: ₹{selectedCampaign.goal.toLocaleString("en-IN")}
                   </p>
                 </div>
-                <div className="relative bg-white/30 rounded-full h-[6px] w-full">
+                <div className="relative bg-white/30 rounded-full h-[8px] w-full overflow-hidden shadow-inner">
                   <div
-                    className="bg-[#587735] h-[6px] rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${progress}%` }}
+                    className="bg-[#587735] h-[8px] rounded-full transition-all duration-700 ease-out"
+                    style={{ width: `${Math.max(progress, selectedCampaign.raised > 0 ? 3 : 0)}%` }}
                   />
-                  <div
-                    className={`${inter()} absolute -top-8 bg-[#587735] text-[#f4efe7] text-[11px] font-bold px-2.5 py-1 rounded-md shadow-md transition-all duration-700`}
-                    style={{ left: `${Math.max(0, Math.min(progress - 4, 90))}%` }}
-                  >
-                    {Math.round(progress)}%
-                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Donation form */}
-          <div id="donate-form" className="w-full lg:w-[460px] shrink-0">
+          <div id="donate-form" className="w-full lg:w-[460px] shrink-0 space-y-4">
             <DonationFormCard
               initialCampaignId={selectedCampaignId}
               campaigns={campaigns}
@@ -138,9 +140,31 @@ export function DonatePage() {
               initialEmail={profile?.email}
               initialPhone={profile?.phone}
             />
+
+            {/* UTR / Transaction Checker Card */}
+            <div className="bg-white/70 border border-[#a65a4a]/25 rounded-2xl p-4 text-center space-y-1.5 shadow-sm">
+              <p className={`${inter()} text-[13px] font-semibold text-[#1e1e1e]`}>
+                Already contributed via UPI?
+              </p>
+              <p className={`${inter()} text-[12px] text-[#6e625d]`}>
+                Verify transaction status or retrieve your official 80G tax receipt using your 12-digit UTR number.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowChecker(true)}
+                className={`${inter()} inline-flex items-center gap-1.5 text-[13px] font-bold text-[#993925] hover:text-[#802f1e] hover:underline cursor-pointer pt-1`}
+              >
+                <Search size={14} /> Check UTR / Transaction Status &rarr;
+              </button>
+            </div>
           </div>
         </div>
       </section>
+
+      <TransactionCheckerModal
+        isOpen={showChecker}
+        onClose={() => setShowChecker(false)}
+      />
 
       {/* Other campaigns */}
       <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/30">
@@ -176,17 +200,22 @@ export function DonatePage() {
                   </div>
                   <div className="p-5">
                     <p className={`${inter()} text-[#1e1e1e] text-[18px] font-semibold line-clamp-1`}>{c.name}</p>
-                    <div className="mt-3 bg-[#d9d9d9] rounded-full h-[4px]">
-                      <div
-                        className="bg-[#587735] h-[4px] rounded-full transition-all duration-500"
-                        style={{ width: `${cProgress}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between mt-2">
-                      <p className={`${inter()} text-[#1e1e1e] text-[12px] font-semibold`}>
+                    <div className="flex justify-between items-center mt-3 mb-1.5">
+                      <p className={`${inter()} text-[#1e1e1e] text-[13px] font-bold`}>
                         ₹{c.raised.toLocaleString("en-IN")} raised
                       </p>
-                      <p className={`${inter()} text-[#89a26e] text-[12px] font-semibold`}>Goal: {formatLakh(c.goal)}</p>
+                      <span className={`${inter()} text-[#587735] text-[11px] font-bold bg-[#587735]/15 px-2 py-0.5 rounded-full`}>
+                        {cProgress > 0 ? `${cProgress < 1 ? cProgress.toFixed(1) : Math.round(cProgress)}%` : "0%"}
+                      </span>
+                    </div>
+                    <div className="bg-[#d9d9d9] rounded-full h-[6px] overflow-hidden">
+                      <div
+                        className="bg-[#587735] h-[6px] rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(cProgress, c.raised > 0 ? 3 : 0)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-end mt-1.5">
+                      <p className={`${inter()} text-[#89a26e] text-[11px] font-semibold`}>Goal: {formatLakh(c.goal)}</p>
                     </div>
                     <button
                       onClick={() => pickCampaign(c.id)}

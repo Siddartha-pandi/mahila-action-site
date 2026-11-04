@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
 
 const ALLOWED_STATUSES = ["New", "Contacted", "Completed"];
 
@@ -13,7 +13,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const { id } = await params;
-    const res = await queryDb("SELECT * FROM event_reservations WHERE id = $1", [id]);
+    const res = await queryDb(
+      `SELECT * FROM event_reservations 
+       WHERE id = $1 
+         AND (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee')`,
+      [id]
+    );
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
     }
@@ -70,7 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (phone !== undefined) {
       updates.push(`phone = $${idx++}`);
-      values.push(String(phone).trim());
+      values.push(phone ? normalizePhone(phone) : null);
     }
     if (event_name !== undefined) {
       updates.push(`event_name = $${idx++}`);
@@ -82,7 +87,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     values.push(id);
-    const res = await queryDb(`UPDATE event_reservations SET ${updates.join(", ")} WHERE id = $${idx} RETURNING *`, values);
+    const res = await queryDb(
+      `UPDATE event_reservations SET ${updates.join(", ")} 
+       WHERE id = $${idx} 
+         AND (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee') 
+       RETURNING *`,
+      values
+    );
     return NextResponse.json({ ok: true, reservation: res.rows[0] });
   } catch (err: any) {
     console.error("PATCH /api/reservations/[id] error:", err);
@@ -102,7 +113,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
-    await queryDb("DELETE FROM event_reservations WHERE id = $1", [id]);
+    await queryDb(
+      `DELETE FROM event_reservations 
+       WHERE id = $1 
+         AND (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee')`,
+      [id]
+    );
     return NextResponse.json({ ok: true, id });
   } catch (err: any) {
     console.error("DELETE /api/reservations/[id] error:", err);

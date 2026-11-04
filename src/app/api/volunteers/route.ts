@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 import { sendVolunteerConfirmationEmail, sendVolunteerAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const companions = Array.isArray(body.companions) ? body.companions : [];
     const invalid = firstError(
       validateName(body.name),
       validateEmail(body.email),
-      validatePhone(body.phone)
+      validatePhone(body.phone),
+      ...companions.flatMap((c: any, i: number) => [
+        validateName(c?.name, `name for additional volunteer ${i + 1}`),
+        validatePhone(c?.phone, `phone number for additional volunteer ${i + 1}`),
+      ])
     );
     if (invalid) {
       return NextResponse.json({ error: invalid }, { status: 400 });
@@ -19,59 +24,57 @@ export async function POST(req: NextRequest) {
     const requested: string[] = Array.isArray(body.selected_events)
       ? body.selected_events.map((t: unknown) => String(t)).filter((t: string) => t.trim() !== "")
       : [];
-    let selectedEvents = requested;
+    const eventsToCheck = requested.length > 0 ? requested : ["General Volunteer"];
 
-    if (requested.length > 0) {
-      const existing = await queryDb(
-        "SELECT event_name, volunteer_commitment FROM event_reservations WHERE LOWER(email) = LOWER($1) AND (volunteer_commitment IS NULL OR volunteer_commitment != 'vendor')",
-        [String(body.email).trim()]
-      );
-      const volunteerEvents = new Set<string>();
-      const attendeeEvents = new Set<string>();
+    const existing = await queryDb(
+      "SELECT event_name, volunteer_commitment FROM event_reservations WHERE LOWER(email) = LOWER($1) AND (volunteer_commitment IS NULL OR volunteer_commitment != 'vendor')",
+      [String(body.email).trim()]
+    );
+    const volunteerEvents = new Set<string>();
+    const attendeeEvents = new Set<string>();
 
-      for (const row of existing.rows) {
-        if (row.event_name) {
-          const normName = String(row.event_name).trim().toLowerCase();
-          if (row.volunteer_commitment) {
-            volunteerEvents.add(normName);
-          } else {
-            attendeeEvents.add(normName);
-          }
+    for (const row of existing.rows) {
+      if (row.event_name) {
+        const normName = String(row.event_name).trim().toLowerCase();
+        if (row.volunteer_commitment) {
+          volunteerEvents.add(normName);
+        } else {
+          attendeeEvents.add(normName);
         }
       }
+    }
 
-      const alreadyVol = requested.filter((t) => volunteerEvents.has(t.trim().toLowerCase()));
-      const alreadyAtt = requested.filter((t) => attendeeEvents.has(t.trim().toLowerCase()));
+    const alreadyVol = eventsToCheck.filter((t) => volunteerEvents.has(t.trim().toLowerCase()));
+    const alreadyAtt = eventsToCheck.filter((t) => attendeeEvents.has(t.trim().toLowerCase()));
 
-      selectedEvents = requested.filter((t) => !volunteerEvents.has(t.trim().toLowerCase()) && !attendeeEvents.has(t.trim().toLowerCase()));
+    const selectedEvents = eventsToCheck.filter((t) => !volunteerEvents.has(t.trim().toLowerCase()) && !attendeeEvents.has(t.trim().toLowerCase()));
 
-      if (selectedEvents.length === 0) {
-        if (alreadyAtt.length > 0 && alreadyVol.length === 0) {
-          return NextResponse.json(
-            {
-              error:
-                requested.length === 1
-                  ? `You are already registered as an attendee for ${requested[0]} (attendees do not need to register as volunteers).`
-                  : "You are already registered as an attendee for the selected event(s) (attendees do not need to register as volunteers).",
-            },
-            { status: 409 }
-          );
-        }
+    if (selectedEvents.length === 0) {
+      if (alreadyAtt.length > 0 && alreadyVol.length === 0) {
         return NextResponse.json(
           {
             error:
-              requested.length === 1
-                ? `You're already registered as a volunteer for ${requested[0]}. Check "My Registered Events" in your account.`
-                : "You're already registered as a volunteer for every event you selected.",
+              eventsToCheck.length === 1
+                ? `You are already registered as an attendee for ${eventsToCheck[0]} (attendees do not need to register as volunteers).`
+                : "You are already registered as an attendee for the selected event(s) (attendees do not need to register as volunteers).",
           },
           { status: 409 }
         );
       }
+      return NextResponse.json(
+        {
+          error:
+            eventsToCheck.length === 1
+              ? `You're already registered as a volunteer for ${eventsToCheck[0]}. Check "My Registered Events" in your account.`
+              : "You're already registered as a volunteer for every event you selected.",
+        },
+        { status: 409 }
+      );
     }
 
     let firstId: string | number = "";
     const commitment = body.volunteer_commitment || "event_only";
-    const eventsToSave = selectedEvents.length > 0 ? selectedEvents : ["General Volunteer"];
+    const eventsToSave = selectedEvents;
 
     for (const evt of eventsToSave) {
       // ── Volunteer cap check ───────────────────────────────────────────────
@@ -107,16 +110,23 @@ export async function POST(req: NextRequest) {
       }
       // ─────────────────────────────────────────────────────────────────────
 
+      const seatsToSave = Math.max(1, Number(body.seats) || 1);
+      const cleanPhone = normalizePhone(body.phone);
+      const normalizedCompanions = companions.map((c: any) => ({
+        ...c,
+        phone: c?.phone ? normalizePhone(c.phone) : "",
+      }));
       const insertRes = await queryDb(
         `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
-         VALUES ($1, $2, $3, $4, 1, $5, $6) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
         [
           evt,
           body.name.trim(),
           String(body.email).trim(),
-          String(body.phone).trim(),
+          cleanPhone,
+          seatsToSave,
           commitment,
-          JSON.stringify([]),
+          JSON.stringify(normalizedCompanions),
         ]
       );
       if (!firstId && insertRes.rows[0]?.id) firstId = String(insertRes.rows[0].id);
@@ -134,7 +144,7 @@ export async function POST(req: NextRequest) {
     sendVolunteerAlertToAdmin({
       name: body.name,
       email: body.email,
-      phone: body.phone,
+      phone: normalizePhone(body.phone),
       events: selectedEvents,
       skills: body.skills,
     }).catch((err) => console.error("sendVolunteerAlertToAdmin failed:", err));

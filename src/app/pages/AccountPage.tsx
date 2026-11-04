@@ -204,16 +204,25 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
     return getUserPermVolunteerRequestFromList(userSubmissions, profile.email, profile.phone) ?? null;
   }, [userSubmissions, profile]);
 
-  const deactivateRequest = useMemo(() => {
+  const rawDeactivateRequest = useMemo(() => {
     if (!profile) return null;
     return getUserPermVolunteerDeactivateRequestFromList(userSubmissions, profile.email, profile.phone) ?? null;
   }, [userSubmissions, profile]);
 
   const isDeactivated = useMemo(() => {
-    if (!permRequest || !deactivateRequest) return false;
-    if (deactivateRequest.status !== "Completed") return false;
-    return new Date(deactivateRequest.createdAt).getTime() > new Date(permRequest.createdAt).getTime();
-  }, [permRequest, deactivateRequest]);
+    if (!permRequest || !rawDeactivateRequest) return false;
+    if (rawDeactivateRequest.status !== "Completed") return false;
+    return new Date(rawDeactivateRequest.createdAt).getTime() > new Date(permRequest.createdAt).getTime();
+  }, [permRequest, rawDeactivateRequest]);
+
+  // Only consider deactivation request active for current cycle if submitted after the latest perm request
+  const deactivateRequest = useMemo(() => {
+    if (!rawDeactivateRequest) return null;
+    if (permRequest && new Date(rawDeactivateRequest.createdAt).getTime() < new Date(permRequest.createdAt).getTime()) {
+      return null;
+    }
+    return rawDeactivateRequest;
+  }, [rawDeactivateRequest, permRequest]);
 
   const isPermanentVolunteer = useMemo(() => {
     return permRequest?.status === "Completed" && !isDeactivated;
@@ -221,7 +230,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
 
   const userDonationList = useMemo(() => {
     if (!profile) return [];
-    return userSubmissions
+    const rawList = userSubmissions
       .filter(s => s.type === "donation")
       .map(s => ({
         id: s.id,
@@ -232,7 +241,30 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
         paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
         transactionId: s.data?.transaction_id || s.data?.transactionId || "",
+        createdAt: s.createdAt,
       }));
+
+    // Deduplicate donations so the exact same donation is never rendered twice
+    const seen = new Map<string, typeof rawList[number]>();
+    for (const d of rawList) {
+      const rec = d.receiptNumber && !d.receiptNumber.startsWith("MA-REC-donation_") ? d.receiptNumber.trim().toUpperCase() : null;
+      const tx = d.transactionId ? d.transactionId.trim().toLowerCase() : null;
+      const key = rec ? `rec:${rec}` : tx ? `tx:${tx}` : `id:${d.id}`;
+
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, d);
+      } else {
+        // Prefer server-persisted row (numeric ID) over local placeholder ID ("donation_...")
+        const isCurrentServer = !String(d.id).startsWith("donation_");
+        const isExistingServer = !String(existing.id).startsWith("donation_");
+        if (isCurrentServer && !isExistingServer) {
+          seen.set(key, d);
+        }
+      }
+    }
+
+    return [...seen.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [userSubmissions, profile]);
 
   const now = new Date();
@@ -666,15 +698,24 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
-                            await savePermVolunteerDeactivateRequest({
-                              name: profile.name,
-                              email: profile.email,
-                              phone: profile.phone,
-                              message: "Deactivation requested by user from account portal.",
-                            });
-                            const subs = await loadUserSubmissions(profile.email, profile.phone);
-                            setUserSubmissions(subs);
-                            toast.success("Deactivation request submitted");
+                            if (!profile) return;
+                            try {
+                              const res = await savePermVolunteerDeactivateRequest({
+                                name: profile.name,
+                                email: profile.email,
+                                phone: profile.phone,
+                                message: "Deactivation requested by user from account portal.",
+                              });
+                              if (!res.ok) {
+                                toast.error(res.error || "Could not submit deactivation request — please try again.");
+                                return;
+                              }
+                              const subs = await loadUserSubmissions(profile.email, profile.phone);
+                              setUserSubmissions(subs);
+                              toast.success("Deactivation request submitted");
+                            } catch {
+                              toast.error("An error occurred while submitting deactivation request.");
+                            }
                           }}
                         >
                           <button
@@ -731,7 +772,11 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                         Your previous request wasn't approved at this time. You're welcome to submit a new request — please add a brief note about your contributions.
                       </p>
                       <button
-                        onClick={() => setRequestSent(true)}
+                        onClick={() => {
+                          setRequestMsg("");
+                          setReApplying(true);
+                          setRequestSent(false);
+                        }}
                         className="mt-6 px-7 py-3 bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] rounded-full hover:bg-[#993925] transition-colors cursor-pointer inline-flex items-center gap-2"
                       >
                         <Send size={16} /> Re-apply
@@ -740,7 +785,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                   )}
 
                   {/* ── 6. Request Form: No request OR re-applying ── */}
-                  {(!permRequest || (permRequest.status === "Contacted" && requestSent) || reApplying) && (
+                  {(!permRequest || (permRequest.status === "Contacted" && (reApplying || requestSent)) || reApplying) && (
                     <div className="bg-white rounded-3xl border border-[#a65a4a]/20 p-8 sm:p-10 shadow-sm">
                       <div className="flex flex-col items-center text-center mb-8">
                         <div className="size-20 rounded-full bg-[#a65a4a]/10 flex items-center justify-center mb-5">
@@ -766,17 +811,29 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault();
-                            await savePermVolunteerRequest({
-                              name: profile.name,
-                              email: profile.email,
-                              phone: profile.phone,
-                              message: requestMsg.trim() || undefined,
-                            });
-                            const subs = await loadUserSubmissions(profile.email, profile.phone);
-                            setUserSubmissions(subs);
-                            setRequestSent(true);
-                            setReApplying(false);
-                            setRequestLoading(false);
+                            if (!profile) return;
+                            setRequestLoading(true);
+                            try {
+                              const res = await savePermVolunteerRequest({
+                                name: profile.name,
+                                email: profile.email,
+                                phone: profile.phone,
+                                message: requestMsg.trim() || undefined,
+                              });
+                              if (!res.ok) {
+                                toast.error(res.error || "Could not submit request — please try again.");
+                                return;
+                              }
+                              const subs = await loadUserSubmissions(profile.email, profile.phone);
+                              setUserSubmissions(subs);
+                              setRequestSent(true);
+                              setReApplying(false);
+                              toast.success("Permanent Volunteer request submitted!");
+                            } catch {
+                              toast.error("An error occurred while submitting your request.");
+                            } finally {
+                              setRequestLoading(false);
+                            }
                           }}
                           className="flex flex-col gap-4 max-w-xl mx-auto"
                         >

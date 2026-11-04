@@ -8,11 +8,11 @@
     "12a_urn": "AAATM1234ME20203",
     "address": "Visakhapatnam, Andhra Pradesh, India - 530001",
     "email": "mahilaaction.vsk@gmail.com",
-    "phone": "+91 123454321",
+    "phone": "+91 70955 48387",
     "website": "http://localhost:3000"
   },
   "upi": {
-    "vpa": "mahilaaction.vsk@gmail.com",
+    "vpa": "7095548387@fam",
     "payeeName": "Mahila Action",
     "merchantCode": ""
   },

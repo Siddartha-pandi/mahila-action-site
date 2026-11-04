@@ -28,9 +28,20 @@ export async function GET(req: NextRequest) {
     }
     if (phone) {
       // Normalise phone: strip spaces so "+91 70955 48387" matches "+917095548387"
-      const normPhone = phone.replace(/\s+/g, "");
+      const normPhone = phone.trim().replace(/\s+/g, "");
+      const digitsOnly = phone.replace(/\D/g, "");
+      const phoneSubConditions: string[] = [];
+
       params.push(normPhone);
-      conditions.push(`REPLACE(phone, ' ', '') = $${params.length}`);
+      phoneSubConditions.push(`REPLACE(phone, ' ', '') = $${params.length}`);
+
+      if (digitsOnly.length >= 10) {
+        const last10 = digitsOnly.slice(-10);
+        params.push(`%${last10}`);
+        phoneSubConditions.push(`REPLACE(REPLACE(phone, ' ', ''), '-', '') LIKE $${params.length}`);
+      }
+
+      conditions.push(`(${phoneSubConditions.join(" OR ")})`);
     }
 
     const where = conditions.join(" OR ");

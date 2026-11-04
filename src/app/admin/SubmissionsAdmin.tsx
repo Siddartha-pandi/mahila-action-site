@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
   Download,
@@ -17,6 +17,7 @@ import {
   RefreshCw,
   UserMinus,
   Printer,
+  XCircle,
 } from "lucide-react";
 import {
   getSubmissions,
@@ -124,6 +125,9 @@ export function SubmissionsAdmin() {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
         );
+        if (!isSilent) {
+          toast.success("Submissions refreshed from server");
+        }
       }
       setOffline(false);
     } catch (err) {
@@ -179,8 +183,10 @@ export function SubmissionsAdmin() {
     const res = await updateSubmissionStatusRemote(item, status);
     if (!res.ok) return toast.error(res.error || "Could not update the status — please try again.");
 
-    setSubmissions(prev => prev.map(s => (s.id === item.id && s.type === item.type ? { ...s, status } : s)));
-    if (selectedItem?.id === item.id && selectedItem?.type === item.type) {
+    updateSubmissionStatus(item.id, status);
+
+    setSubmissions(prev => prev.map(s => (String(s.id) === String(item.id) ? { ...s, status } : s)));
+    if (String(selectedItem?.id) === String(item.id)) {
       setSelectedItem(prev => (prev ? { ...prev, status } : null));
     }
     toast.success(`Status updated to ${status}`);
@@ -206,12 +212,39 @@ export function SubmissionsAdmin() {
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
 
-    setSubmissions(prev => prev.filter(s => !(s.id === item.id && s.type === item.type)));
-    if (selectedItem?.id === item.id && selectedItem?.type === item.type) setSelectedItem(null);
+    setSubmissions(prev => prev.filter(s => String(s.id) !== String(item.id)));
+    if (String(selectedItem?.id) === String(item.id)) setSelectedItem(null);
     toast.success("Submission moved to Recycle Bin");
   }
 
-  const list = Array.isArray(submissions) ? submissions : [];
+  const list = useMemo(() => {
+    const raw = Array.isArray(submissions) ? submissions : [];
+    const seenEventResIds = new Set<string>();
+    const seenKeys = new Set<string>();
+
+    const priority: Record<string, number> = {
+      volunteer: 1,
+      vendor: 1,
+      reservation: 2,
+    };
+
+    const sorted = [...raw].sort((a, b) => (priority[a.type] ?? 0) - (priority[b.type] ?? 0));
+    const result: SubmissionItem[] = [];
+
+    for (const item of sorted) {
+      if (!item || !item.id) continue;
+      const isEventRes = item.type === "volunteer" || item.type === "reservation" || item.type === "vendor";
+      if (isEventRes) {
+        if (seenEventResIds.has(String(item.id))) continue;
+        seenEventResIds.add(String(item.id));
+      }
+      const key = `${item.type}_${item.id}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      result.push(item);
+    }
+    return result;
+  }, [submissions]);
 
   // Filter calculations — bucketed by intent, not by raw stored type.
   const volunteerList = list.filter(i => categoryOf(i) === "volunteer");
@@ -365,6 +398,7 @@ export function SubmissionsAdmin() {
     }
 
     let deletedCount = 0;
+    const deletedIdSet = new Set<string>();
     for (const item of validItems) {
       addToTrash({
         id: String(item.id),
@@ -375,12 +409,14 @@ export function SubmissionsAdmin() {
       });
 
       const res = await deleteSubmissionRemote(item);
-      if (res.ok) deletedCount++;
+      if (res.ok) {
+        deletedCount++;
+        deletedIdSet.add(String(item.id));
+      }
     }
 
-    const deletedKeySet = new Set(validItems.map(i => `${i.type}::${i.id}`));
-    setSubmissions(prev => prev.filter(s => !deletedKeySet.has(`${s.type}::${s.id}`)));
-    if (selectedItem && deletedKeySet.has(`${selectedItem.type}::${selectedItem.id}`)) {
+    setSubmissions(prev => prev.filter(s => !deletedIdSet.has(String(s.id))));
+    if (selectedItem && deletedIdSet.has(String(selectedItem.id))) {
       setSelectedItem(null);
     }
     toast.success(`Moved ${deletedCount} submission(s) to Recycle Bin`);
@@ -487,7 +523,17 @@ export function SubmissionsAdmin() {
     perm_volunteer_deactivate: "Deactivate Request",
   };
 
-  const getStatusBadge = (status: SubmissionItem["status"]) => {
+  const getStatusBadge = (status: SubmissionItem["status"], category?: SubmissionCategory) => {
+    if (category === "perm_volunteer_request" || category === "perm_volunteer_deactivate") {
+      switch (status) {
+        case "New":
+          return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"><Clock size={12} /> Pending</span>;
+        case "Contacted":
+          return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-200"><XCircle size={12} /> Rejected</span>;
+        case "Completed":
+          return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200"><CheckCircle size={12} /> Approved</span>;
+      }
+    }
     switch (status) {
       case "New":
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"><Clock size={12} /> New</span>;
@@ -758,7 +804,7 @@ export function SubmissionsAdmin() {
                 {permDeactivateList.length}
               </span>
               {permDeactivateList.filter(v => v.status === "New").length > 0 && (
-                <span className="inline-flex items-center justify-center size-4 rounded-full bg-rose-600 text-white text-[10px] font-bold" title="Pending review">
+                <span className={`inline-flex items-center justify-center size-4 rounded-full text-[10px] font-bold ${filterType === "perm_volunteer_deactivate" ? "bg-white text-rose-700" : "bg-rose-600 text-white"}`} title="Pending review">
                   {permDeactivateList.filter(v => v.status === "New").length}
                 </span>
               )}
@@ -970,7 +1016,7 @@ export function SubmissionsAdmin() {
                         {showStatusColumn && (
                           <td className="py-3.5 px-4">
                             {isStatusEligible(categoryOf(item)) ? (
-                              getStatusBadge(item.status)
+                              getStatusBadge(item.status, categoryOf(item))
                             ) : (
                               <span className="text-[#1e1e1e]/25 text-[12px] font-mono">—</span>
                             )}
@@ -1068,9 +1114,19 @@ export function SubmissionsAdmin() {
                       ⏳ Pending — no decision made yet.
                     </p>
                   )}
+                  {selectedItem.status !== "New" && (
+                    <button
+                      onClick={() => handleStatusChange(selectedItem, "New")}
+                      className="mt-2 text-[11px] text-gray-500 hover:text-gray-800 underline block cursor-pointer"
+                    >
+                      Reset to Pending (New)
+                    </button>
+                  )}
                   {selectedItem.data?.message && (
                     <div className="mt-3">
-                      <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Applicant's Note</span>
+                      <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">
+                        {categoryOf(selectedItem) === "perm_volunteer_deactivate" ? "Deactivation Reason / Note" : "Applicant's Note"}
+                      </span>
                       <div className="p-3 bg-gray-50 rounded-lg text-[13px] text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">
                         {selectedItem.data.message}
                       </div>
@@ -1124,7 +1180,9 @@ export function SubmissionsAdmin() {
                   <p className="text-[#1e1e1e] font-medium">{selectedItem.data.subject}</p>
                 </div>
               )}
-              {selectedItem.data.message && (
+              {selectedItem.data.message &&
+                categoryOf(selectedItem) !== "perm_volunteer_request" &&
+                categoryOf(selectedItem) !== "perm_volunteer_deactivate" && (
                 <div>
                   <span className="text-[11px] font-semibold text-[#1e1e1e]/50 uppercase block mb-1">Message</span>
                   <div className="p-3 bg-gray-50 rounded-lg text-[#1e1e1e]/80 whitespace-pre-wrap border border-gray-200/60 leading-relaxed">

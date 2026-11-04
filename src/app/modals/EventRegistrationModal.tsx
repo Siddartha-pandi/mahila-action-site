@@ -509,7 +509,7 @@ export function EventRegistrationModal({
                             <p className="font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold">
                               {Number(event.bookedSeats) > 0
                                 ? `${event.availableSeats ?? Math.max(0, event.totalSeats - (event.bookedSeats ?? 0))} of ${event.totalSeats} seats available — reserve yours now!`
-                                : `${event.totalSeats} seats total — reserve yours now!`}
+                                : `${event.availableSeats ?? event.totalSeats} seats available — reserve yours now!`}
                             </p>
                           </div>
                           {Number(event.bookedSeats) > 0 && (

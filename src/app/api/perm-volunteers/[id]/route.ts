@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 const ALLOWED_STATUSES = ["New", "Contacted", "Completed"];
 
@@ -13,7 +13,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const { id } = await params;
-    const res = await queryDb("SELECT * FROM perm_volunteer_requests WHERE id = $1", [id]);
+    const numId = Number(id);
+    if (!Number.isInteger(numId) || numId <= 0) {
+      return NextResponse.json({ error: "Permanent volunteer request not found" }, { status: 404 });
+    }
+
+    const res = await queryDb("SELECT * FROM perm_volunteer_requests WHERE id = $1", [numId]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Permanent volunteer request not found" }, { status: 404 });
     }
@@ -32,6 +37,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const { id } = await params;
+    const numId = Number(id);
+    if (!Number.isInteger(numId) || numId <= 0) {
+      return NextResponse.json({ error: "Invalid request ID" }, { status: 400 });
+    }
+
     const { status, request_type, name, email, phone, message } = (await req.json()) || {};
 
     if (status !== undefined && !ALLOWED_STATUSES.includes(status)) {
@@ -65,11 +75,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (email !== undefined) {
       updates.push(`email = $${idx++}`);
-      values.push(String(email).trim());
+      values.push(String(email).trim().toLowerCase());
     }
     if (phone !== undefined) {
       updates.push(`phone = $${idx++}`);
-      values.push(String(phone).trim());
+      values.push(phone ? normalizePhone(phone) : null);
     }
     if (message !== undefined) {
       updates.push(`message = $${idx++}`);
@@ -80,8 +90,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "No fields to update." }, { status: 400 });
     }
 
-    values.push(id);
+    values.push(numId);
     const res = await queryDb(`UPDATE perm_volunteer_requests SET ${updates.join(", ")} WHERE id = $${idx} RETURNING *`, values);
+    if (res.rows.length === 0) {
+      return NextResponse.json({ error: "Permanent volunteer request not found" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true, request: res.rows[0] });
   } catch (err: any) {
     console.error("PATCH /api/perm-volunteers/[id] error:", err);
@@ -101,8 +114,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
-    await queryDb("DELETE FROM perm_volunteer_requests WHERE id = $1", [id]);
-    return NextResponse.json({ ok: true, id });
+    const numId = Number(id);
+    if (!Number.isInteger(numId) || numId <= 0) {
+      return NextResponse.json({ error: "Invalid request ID" }, { status: 400 });
+    }
+
+    const res = await queryDb("DELETE FROM perm_volunteer_requests WHERE id = $1 RETURNING id", [numId]);
+    if (res.rows.length === 0) {
+      return NextResponse.json({ error: "Permanent volunteer request not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, id: numId });
   } catch (err: any) {
     console.error("DELETE /api/perm-volunteers/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

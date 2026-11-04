@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
 import { sendWelcomeEmail } from "@/lib/email";
-import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 
 function toProfile(row: any) {
   return { name: row.name, email: row.email, phone: row.phone, skills: row.skills || "" };
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const normalizedPhone = String(phone).trim();
+    const normalizedPhone = normalizePhone(phone);
 
     const existingRes = await queryDb(
       "SELECT email, phone FROM users WHERE email = $1 OR phone = $2",

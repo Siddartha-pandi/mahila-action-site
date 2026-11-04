@@ -6,6 +6,7 @@ import {
   validateAmount,
   validateEmail,
   validateName,
+  normalizePhone,
   validatePhone,
   validatePanNumber,
   validateAddress,
@@ -92,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (phone !== undefined) {
       updates.push(`phone = $${idx++}`);
-      values.push(String(phone).trim());
+      values.push(phone ? normalizePhone(phone) : null);
     }
     if (donation_type !== undefined) {
       updates.push(`donation_type = $${idx++}`);
