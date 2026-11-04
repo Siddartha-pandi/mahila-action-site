@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 import { sendVendorConfirmationEmail, sendVendorAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
       },
     ];
 
+    const cleanPhone = normalizePhone(body.phone);
     const insertRes = await queryDb(
       `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
        VALUES ($1, $2, $3, $4, 1, 'vendor', $5) RETURNING id`,
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
         body.event_name,
         body.contact_name,
         body.email,
-        body.phone,
+        cleanPhone,
         JSON.stringify(vendorMeta),
       ]
     );
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       contactName: body.contact_name,
       businessName: body.business_name,
       email: body.email,
-      phone: body.phone,
+      phone: cleanPhone,
       offering: body.offering,
       website: body.website,
     }).catch((err) => console.error("sendVendorAlertToAdmin failed:", err));

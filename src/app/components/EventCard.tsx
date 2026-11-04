@@ -102,7 +102,7 @@ export function EventCard({
       )}
 
       <div className="absolute top-4 sm:top-6 left-4 sm:left-6 flex items-center justify-between gap-2 w-[calc(100%-32px)] sm:w-[calc(100%-48px)] flex-wrap">
-        <span className={`${inter()} border border-[#f4efe7] text-[#f4efe7] text-[11px] sm:text-[12px] font-semibold px-3 sm:px-4 py-1 sm:py-1.5 rounded-full`}>
+        <span className={`${inter()} border border-[#0000001e] text-[#464040ff] text-[11px] sm:text-[12px] font-semibold px-3 sm:px-4 py-1 sm:py-1.5 rounded-full`}>
           {categoryName || "Community Event"}
         </span>
         {open && !onTogglePublish ? (

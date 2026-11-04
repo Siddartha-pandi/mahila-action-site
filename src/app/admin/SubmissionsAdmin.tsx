@@ -125,6 +125,9 @@ export function SubmissionsAdmin() {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
         );
+        if (!isSilent) {
+          toast.success("Submissions refreshed from server");
+        }
       }
       setOffline(false);
     } catch (err) {

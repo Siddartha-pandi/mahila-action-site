@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 import { sendVolunteerConfirmationEmail, sendVolunteerAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
@@ -111,7 +111,11 @@ export async function POST(req: NextRequest) {
       // ─────────────────────────────────────────────────────────────────────
 
       const seatsToSave = Math.max(1, Number(body.seats) || 1);
-      const companionsToSave = Array.isArray(body.companions) ? body.companions : [];
+      const cleanPhone = normalizePhone(body.phone);
+      const normalizedCompanions = companions.map((c: any) => ({
+        ...c,
+        phone: c?.phone ? normalizePhone(c.phone) : "",
+      }));
       const insertRes = await queryDb(
         `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
@@ -119,10 +123,10 @@ export async function POST(req: NextRequest) {
           evt,
           body.name.trim(),
           String(body.email).trim(),
-          String(body.phone).trim(),
+          cleanPhone,
           seatsToSave,
           commitment,
-          JSON.stringify(companionsToSave),
+          JSON.stringify(normalizedCompanions),
         ]
       );
       if (!firstId && insertRes.rows[0]?.id) firstId = String(insertRes.rows[0].id);
@@ -140,7 +144,7 @@ export async function POST(req: NextRequest) {
     sendVolunteerAlertToAdmin({
       name: body.name,
       email: body.email,
-      phone: body.phone,
+      phone: normalizePhone(body.phone),
       events: selectedEvents,
       skills: body.skills,
     }).catch((err) => console.error("sendVolunteerAlertToAdmin failed:", err));

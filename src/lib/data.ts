@@ -440,9 +440,9 @@ export const DEFAULT_TIMELINE: TimelineEntry[] = (timelineJson as any[])?.length
     ];
 
 export const DEFAULT_CONTACT: ContactInfo = {
-  email: contactJson.email || "contact@mahilaction.org",
+  email: contactJson.email || "mahilaaction.vsk@gmail.com",
   emailNote: contactJson.emailNote || "We reply within 24 hours",
-  phone: contactJson.phone || "+91 123454321",
+  phone: contactJson.phone || "+91 70955 48387",
   phoneNote: contactJson.phoneNote || "Mon – Sat, 9 AM – 6 PM IST",
   address: contactJson.address || "Visakapatnam, Andhra Pradesh",
   addressNote: contactJson.addressNote || "India – 500 001",

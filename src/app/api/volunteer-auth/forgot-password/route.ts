@@ -43,7 +43,14 @@ export async function POST(req: NextRequest) {
     const resetLink = `${origin}/?modal=volunteer&kind=reset&id=${rawToken}`;
 
     try {
-      await sendPasswordResetEmail(user.email, resetLink);
+      const result = await sendPasswordResetEmail(user.email, resetLink);
+      if (!result.ok && !result.simulated) {
+        console.error("Failed to send password reset email:", result.error);
+        return NextResponse.json(
+          { error: "We couldn't send the reset email just now. Please try again in a few minutes." },
+          { status: 502 }
+        );
+      }
     } catch (err) {
       console.error("Failed to send password reset email:", err);
       return NextResponse.json(

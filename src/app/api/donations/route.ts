@@ -7,6 +7,7 @@ import {
   validateAmount,
   validateEmail,
   validateName,
+  normalizePhone,
   validatePhone,
   validatePanNumber,
   validateAddress,
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
       }
     }
     const cleanNotes = body.notes ? String(body.notes).trim() : null;
+    const cleanPhone = body.phone ? normalizePhone(body.phone) : null;
     const donationStatus = body.status ? String(body.status).trim() : isOffline ? "Completed" : "New";
     const customDate = body.created_at || body.date ? new Date(body.created_at || body.date) : new Date();
 
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
         Number(body.amount),
         body.name || null,
         body.email || null,
-        body.phone || null,
+        cleanPhone,
         donationType === "monthly" ? "monthly" : "one-time",
         body.anonymous ? 1 : 0,
         body.event_name || null,
@@ -142,7 +144,7 @@ export async function POST(req: NextRequest) {
     sendDonationAlertToAdmin({
       name: body.name,
       email: body.email,
-      phone: body.phone,
+      phone: cleanPhone || undefined,
       amount: Number(body.amount),
       donationType: body.donation_type === "monthly" ? "monthly" : "one-time",
       campaign: body.campaign_name,

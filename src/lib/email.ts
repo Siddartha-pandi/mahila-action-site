@@ -3,11 +3,11 @@ import nodemailer from "nodemailer";
 let warnedNoSmtp = false;
 
 function getSiteUrl(): string {
-  return (
+  const url =
     process.env.FRONTEND_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:3000"
-  );
+    "http://localhost:3000";
+  return url.replace(/\/+$/, "");
 }
 
 export function getAdminNotificationEmail(): string {
@@ -19,15 +19,34 @@ export function getAdminNotificationEmail(): string {
   );
 }
 
-export function getTransporter() {
+export function getSupportEmail(): string {
+  return (
+    process.env.SUPPORT_EMAIL ||
+    process.env.ADMIN_NOTIFICATION_EMAIL ||
+    process.env.SMTP_USER ||
+    "mahilaaction.vsk@gmail.com"
+  );
+}
+
+type MailTransporter = ReturnType<typeof nodemailer.createTransport>;
+
+let cachedTransporter: MailTransporter | null = null;
+let lastTransporterKey = "";
+
+export function getTransporter(): MailTransporter | null {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
 
   // Google App passwords typically contain spaces (e.g. "rzpc gqmj shar ktck").
   // Removing whitespace ensures compatibility across SMTP servers.
   const cleanPass = SMTP_PASS.replace(/\s+/g, "");
+  const currentKey = `${SMTP_HOST}:${SMTP_PORT}:${SMTP_USER}:${cleanPass}:${process.env.NODE_ENV}`;
 
-  return nodemailer.createTransport({
+  if (cachedTransporter && lastTransporterKey === currentKey) {
+    return cachedTransporter;
+  }
+
+  cachedTransporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: Number(SMTP_PORT) || 587,
     secure: Number(SMTP_PORT) === 465,
@@ -38,7 +57,13 @@ export function getTransporter() {
     tls: {
       rejectUnauthorized: process.env.NODE_ENV === "production",
     },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
   });
+
+  lastTransporterKey = currentKey;
+  return cachedTransporter;
 }
 
 /** Names, subjects and campaign titles come from user input — never drop them into HTML raw. */
@@ -106,7 +131,7 @@ function renderEmailHtml(opts: {
           <p style="margin: 0 0 6px;">Visakhapatnam, Andhra Pradesh, India</p>
           <p style="margin: 0 0 8px;">
             <a href="${siteUrl}" style="color: #993925; text-decoration: none; font-weight: 500;">Visit Website</a> &bull;
-            <a href="mailto:contact@mahilaction.org" style="color: #993925; text-decoration: none; font-weight: 500;">contact@mahilaction.org</a>
+            <a href="mailto:${esc(getSupportEmail())}" style="color: #993925; text-decoration: none; font-weight: 500;">${esc(getSupportEmail())}</a>
           </p>
           <p style="margin: 0; font-size: 11px; color: #a49690;">
             ${esc(opts.footerNote || "You received this email regarding your activity or account with Mahila Action.")}
@@ -132,8 +157,9 @@ async function deliver(opts: {
   html: string;
   consoleSummary: string;
 }): Promise<{ ok: boolean; simulated?: boolean; messageId?: string; error?: string }> {
-  if (!opts.to) {
-    return { ok: false, error: "Recipient address missing" };
+  const cleanTo = String(opts.to || "").trim();
+  if (!cleanTo || !cleanTo.includes("@")) {
+    return { ok: false, error: "Recipient address is missing or invalid" };
   }
 
   const t = getTransporter();
@@ -145,26 +171,29 @@ async function deliver(opts: {
       );
       warnedNoSmtp = true;
     }
-    console.log(`\n📧 [SIMULATED EMAIL]\nTo: ${opts.to}\nSubject: ${opts.subject}\n${opts.consoleSummary}\n`);
+    console.log(`\n📧 [SIMULATED EMAIL]\nTo: ${cleanTo}\nSubject: ${opts.subject}\n${opts.consoleSummary}\n`);
     return { ok: true, simulated: true };
   }
 
   try {
-    const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_USER || "mahilaaction.vsk@gmail.com";
+    const rawFrom = process.env.EMAIL_FROM?.trim();
+    const fallbackUser = (process.env.SMTP_USER || "mahilaaction.vsk@gmail.com").trim();
+    const fromAddress = rawFrom || `Mahila Action <${fallbackUser}>`;
+
     const info = await t.sendMail({
       from: fromAddress,
-      to: opts.to,
+      to: cleanTo,
       subject: opts.subject,
       text: opts.text + "\n\n— Mahila Action\nVisakhapatnam, Andhra Pradesh, India",
       html: opts.html,
     });
 
-    console.log(`\n✅ [EMAIL SENT] Message ID: ${info.messageId} | To: ${opts.to} | Subject: "${opts.subject}"\n`);
+    console.log(`\n✅ [EMAIL SENT] Message ID: ${info.messageId} | To: ${cleanTo} | Subject: "${opts.subject}"\n`);
     return { ok: true, messageId: info.messageId };
   } catch (err: any) {
-    console.error(`\n❌ [EMAIL SEND ERROR] Failed to deliver to ${opts.to}: ${err.message}`);
+    console.error(`\n❌ [EMAIL SEND ERROR] Failed to deliver to ${cleanTo}: ${err.message}`);
     // Print fallback summary so critical links (e.g. password reset) are accessible during debugging
-    console.log(`\n📧 [FALLBACK CONSOLE SUMMARY FOR: ${opts.to}]\nSubject: ${opts.subject}\n${opts.consoleSummary}\n`);
+    console.log(`\n📧 [FALLBACK CONSOLE SUMMARY FOR: ${cleanTo}]\nSubject: ${opts.subject}\n${opts.consoleSummary}\n`);
     return { ok: false, error: err.message };
   }
 }
@@ -181,7 +210,7 @@ export async function sendWelcomeEmail(to: string, name: string) {
     <p style="font-size: 13px; color: #706460; margin-top: 20px;">If you didn't create this account, please reply to this email to let us know.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: "Welcome to Mahila Action",
     text:
@@ -219,7 +248,7 @@ export async function sendMemberWelcomeEmail(to: string, name: string, role: str
     ${credsBlock}
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: "You've been added to Mahila Action",
     text:
@@ -243,7 +272,7 @@ export async function sendPasswordResetEmail(to: string, resetLink: string) {
     <p>Click the button below to choose a new password. This link is secure and will expire in <strong>30 minutes</strong>:</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: "Reset your Mahila Action password",
     text:
@@ -266,11 +295,11 @@ export async function sendPasswordChangedEmail(to: string) {
     <p>Your Mahila Action account password has been changed successfully.</p>
     <p>If you made this change, no further action is required.</p>
     <p style="color: #c53030; font-weight: 500; margin-top: 20px;">
-      If you did NOT make this change, please contact us immediately at <a href="mailto:contact@mahilaction.org" style="color: #993925;">contact@mahilaction.org</a> so we can secure your account.
+      If you did NOT make this change, please contact us immediately at <a href="mailto:${esc(getSupportEmail())}" style="color: #993925;">${esc(getSupportEmail())}</a> so we can secure your account.
     </p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: "Your Mahila Action password was changed",
     text:
@@ -296,7 +325,7 @@ export async function sendContactAcknowledgementEmail(to: string, name: string, 
     <p>In the meantime, feel free to explore our ongoing community initiatives and stories on our website.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: "We've received your message — Mahila Action",
     text:
@@ -333,7 +362,7 @@ export async function sendContactAlertToAdmin(details: {
     </div>
   `;
 
-  await deliver({
+  return await deliver({
     to: adminEmail,
     subject: `New Contact Enquiry: ${details.name} — ${details.subject || "General"}`,
     text:
@@ -410,7 +439,7 @@ export async function sendDonationReceiptEmail(
     <p>Your contribution directly empowers grassroots women leaders, expands girl-child educational centers, and funds livelihood cooperatives across Andhra Pradesh and Telangana.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: `Donation Receipt (${receiptNum}) — Thank you for your support of ${formatted}`,
     text:
@@ -435,7 +464,7 @@ export async function sendDonationReceiptEmail(
 export async function sendDonationAlertToAdmin(details: {
   name?: string | null;
   email?: string | null;
-  phone: string;
+  phone?: string | null;
   amount: number;
   donationType: string;
   campaign?: string | null;
@@ -449,6 +478,7 @@ export async function sendDonationAlertToAdmin(details: {
 }) {
   const adminEmail = getAdminNotificationEmail();
   const formatted = `₹${Number(details.amount).toLocaleString("en-IN")}`;
+  const phoneDisplay = details.phone ? esc(details.phone) : "Not provided";
   const bodyHtml = `
     <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">New Donation Received: ${formatted}</h2>
     <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -456,7 +486,7 @@ export async function sendDonationAlertToAdmin(details: {
       <tr><td style="padding: 6px 0; font-weight: 600;">Amount:</td><td><strong style="color: #993925; font-size: 16px;">${formatted}</strong></td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Donor:</td><td>${details.anonymous ? "Anonymous" : esc(details.name || "Supporter")}</td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Email:</td><td>${details.email ? `<a href="mailto:${esc(details.email)}">${esc(details.email)}</a>` : "Not provided"}</td></tr>
-      <tr><td style="padding: 6px 0; font-weight: 600;">Phone:</td><td>${esc(details.phone)}</td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600;">Phone:</td><td>${phoneDisplay}</td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Payment Mode:</td><td><span style="background: #eaf3e6; color: #2e6024; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 12px;">${esc((details.paymentMethod || "UPI").toUpperCase())}</span></td></tr>
       ${details.transactionId ? `<tr><td style="padding: 6px 0; font-weight: 600;">UTR / Ref ID:</td><td><strong>${esc(details.transactionId)}</strong></td></tr>` : ""}
       ${details.panNumber ? `<tr><td style="padding: 6px 0; font-weight: 600;">PAN:</td><td><strong>${esc(details.panNumber)}</strong></td></tr>` : ""}
@@ -466,7 +496,7 @@ export async function sendDonationAlertToAdmin(details: {
     </table>
   `;
 
-  await deliver({
+  return await deliver({
     to: adminEmail,
     subject: `New Donation Alert: ${formatted} from ${details.anonymous ? "Anonymous" : details.name || "Supporter"} (${details.paymentMethod?.toUpperCase() || "UPI"})`,
     text:
@@ -475,7 +505,7 @@ export async function sendDonationAlertToAdmin(details: {
       `Amount: ${formatted}\n` +
       `Donor: ${details.anonymous ? "Anonymous" : details.name || "Supporter"}\n` +
       `Email: ${details.email || "Not provided"}\n` +
-      `Phone: ${details.phone}\n` +
+      `Phone: ${details.phone || "Not provided"}\n` +
       `Payment Method: ${details.paymentMethod || "UPI"}\n` +
       (details.transactionId ? `UTR / Transaction Ref: ${details.transactionId}\n` : "") +
       (details.panNumber ? `PAN: ${details.panNumber}\n` : "") +
@@ -509,7 +539,7 @@ export async function sendReservationConfirmationEmail(
     <p>We look forward to seeing you there. We will reach out with final timing and check-in details as the event approaches.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: `Confirmed: ${eventTitle} — Mahila Action`,
     text:
@@ -531,10 +561,35 @@ export async function sendReservationAlertToAdmin(details: {
   phone: string;
   seats: number;
   isVolunteer: boolean;
-  companions?: any[];
+  companions?: any;
 }) {
   const adminEmail = getAdminNotificationEmail();
-  const companionCount = Array.isArray(details.companions) ? details.companions.length : 0;
+  let companionsList: any[] = [];
+  if (Array.isArray(details.companions)) {
+    companionsList = details.companions;
+  } else if (typeof details.companions === "string" && details.companions.trim()) {
+    try {
+      const parsed = JSON.parse(details.companions);
+      if (Array.isArray(parsed)) companionsList = parsed;
+    } catch {}
+  }
+  const companionCount = companionsList.length;
+
+  const companionRowHtml = companionCount > 0
+    ? `<tr>
+        <td style="padding: 6px 0; font-weight: 600; vertical-align: top;">Companions:</td>
+        <td>
+          <ul style="margin: 0; padding-left: 18px;">
+            ${companionsList.map((c: any, i: number) => `<li>${esc(c.name || `Guest ${i + 1}`)}${c.phone ? ` (${esc(c.phone)})` : ""}</li>`).join("")}
+          </ul>
+        </td>
+      </tr>`
+    : "";
+
+  const companionText = companionCount > 0
+    ? `\nCompanions:\n` + companionsList.map((c: any, i: number) => ` - ${c.name || `Guest ${i + 1}`}${c.phone ? ` (${c.phone})` : ""}`).join("\n")
+    : "";
+
   const bodyHtml = `
     <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">New Event Registration</h2>
     <table role="presentation" style="width: 100%; border-collapse: collapse;">
@@ -544,10 +599,11 @@ export async function sendReservationAlertToAdmin(details: {
       <tr><td style="padding: 6px 0; font-weight: 600;">Email:</td><td><a href="mailto:${esc(details.email)}">${esc(details.email)}</a></td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Phone:</td><td>${esc(details.phone)}</td></tr>
       <tr><td style="padding: 6px 0; font-weight: 600;">Seats:</td><td>${details.seats} ${companionCount > 0 ? `(${companionCount} companion${companionCount > 1 ? "s" : ""})` : ""}</td></tr>
+      ${companionRowHtml}
     </table>
   `;
 
-  await deliver({
+  return await deliver({
     to: adminEmail,
     subject: `New Event Signup: ${details.name} for ${details.eventName}`,
     text:
@@ -557,7 +613,8 @@ export async function sendReservationAlertToAdmin(details: {
       `Name: ${details.name}\n` +
       `Email: ${details.email}\n` +
       `Phone: ${details.phone}\n` +
-      `Seats: ${details.seats}`,
+      `Seats: ${details.seats}` +
+      companionText,
     html: renderEmailHtml({
       title: "Event Registration Alert",
       bodyHtml,
@@ -578,7 +635,7 @@ export async function sendVolunteerConfirmationEmail(to: string, name: string, e
     <p>Our volunteer coordination team will contact you with orientation and schedule details ahead of the events.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: "Volunteer Registration Confirmed — Mahila Action",
     text:
@@ -615,7 +672,7 @@ export async function sendVolunteerAlertToAdmin(details: {
     <ul>${list.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>
   `;
 
-  await deliver({
+  return await deliver({
     to: adminEmail,
     subject: `New Volunteer Signup: ${details.name}`,
     text:
@@ -649,7 +706,7 @@ export async function sendVendorConfirmationEmail(
     <p>Our event committee will review your proposal and offerings. We will be in touch shortly regarding booth allocation and details.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: `Vendor Application Received: ${eventTitle} — Mahila Action`,
     text:
@@ -695,7 +752,7 @@ export async function sendVendorAlertToAdmin(details: {
     }
   `;
 
-  await deliver({
+  return await deliver({
     to: adminEmail,
     subject: `Vendor Application: ${details.businessName} for ${details.eventName}`,
     text:
@@ -735,7 +792,7 @@ export async function sendPermVolunteerAcknowledgementEmail(
     <p>Our community coordinators will review your submission and reach out within 1-2 business days.</p>
   `;
 
-  await deliver({
+  return await deliver({
     to,
     subject: `Permanent Volunteer ${isActivate ? "Application" : "Deactivation Request"} Received — Mahila Action`,
     text:
@@ -780,7 +837,7 @@ export async function sendPermVolunteerAlertToAdmin(details: {
     }
   `;
 
-  await deliver({
+  return await deliver({
     to: adminEmail,
     subject: `Permanent Volunteer Request: ${details.name} (${details.requestType})`,
     text:
