@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
   if (id === "superadmin_env") {
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
     return NextResponse.json({
       id: "superadmin_env",
       name: "Lead Super Admin",
@@ -49,11 +49,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const { role, kind, sub_role, status, name, email, phone, skills, permissions } = body || {};
 
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
     const isSuperadmin =
       auth.admin?.role === "superadmin" ||
       auth.admin?.sub === "superadmin_env" ||
-      auth.admin?.email.toLowerCase().trim() === envSuperadminEmail;
+      Boolean(envSuperadminEmail && auth.admin?.email.toLowerCase().trim() === envSuperadminEmail);
 
     if (id === "superadmin_env") {
       return NextResponse.json({ error: "The system Super Admin account cannot be modified." }, { status: 403 });

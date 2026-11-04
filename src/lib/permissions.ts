@@ -11,7 +11,8 @@ export type AdminModule =
   | "timeline"
   | "contact"
   | "roles"
-  | "trash";
+  | "trash"
+  | "media";
 
 export type PermissionAction = "view" | "edit" | "delete";
 
@@ -59,6 +60,7 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
   contact: "Contact Information",
   roles: "User & Role Management",
   trash: "Recycle Bin",
+  media: "Media Library & Google Drive Storage",
 };
 
 // ── Built-in Role Definitions ──────────────────────────────────────────────
@@ -77,6 +79,7 @@ const FULL_PERMISSIONS: PermissionMatrix = {
   contact: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
   trash: { view: true, edit: true, delete: true },
+  media: { view: true, edit: true, delete: true },
 };
 
 const ADMIN_PERMISSIONS: PermissionMatrix = {
@@ -93,6 +96,7 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
   contact: { view: true, edit: true, delete: true },
   roles: { view: true, edit: true, delete: true },
   trash: { view: true, edit: true, delete: true },
+  media: { view: true, edit: true, delete: true },
 };
 
 const STAFF_PERMISSIONS: PermissionMatrix = {
@@ -109,6 +113,7 @@ const STAFF_PERMISSIONS: PermissionMatrix = {
   contact: { view: true, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
   trash: { view: false, edit: false, delete: false },
+  media: { view: true, edit: true, delete: false },
 };
 
 const USER_PERMISSIONS: PermissionMatrix = {
@@ -125,6 +130,7 @@ const USER_PERMISSIONS: PermissionMatrix = {
   contact: { view: false, edit: false, delete: false },
   roles: { view: false, edit: false, delete: false },
   trash: { view: false, edit: false, delete: false },
+  media: { view: false, edit: false, delete: false },
 };
 
 export const DEFAULT_ROLES: AdminRole[] = [
@@ -163,13 +169,13 @@ const envSuperAdminEmail =
     (process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL ||
       process.env.SUPERADMIN_EMAIL ||
       process.env.EMAIL_FROM)) ||
-  "mahilaaction.vsk@gmail.com";
+  "";
 
 export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
     id: "usr_superadmin",
     name: "Lead Super Admin",
-    email: "mahilaaction.vsk@gmail.com",
+    email: envSuperAdminEmail || "superadmin",
     roleId: "superadmin",
     status: "Active",
     createdAt: new Date().toISOString(),
@@ -232,8 +238,7 @@ export function getStoredAdminUsers(): AdminUser[] {
       let superAdminCount = 0;
       const sanitized = parsed.map((user) => {
         const isSuper =
-          user.email?.toLowerCase().trim() === superEmail ||
-          user.email?.toLowerCase().trim() === "mahilaaction.vsk@gmail.com" ||
+          (Boolean(superEmail) && user.email?.toLowerCase().trim() === superEmail) ||
           user.roleId === "superadmin";
 
         if (isSuper) {
@@ -372,11 +377,9 @@ export function setCurrentAdminSession(email: string) {
   try {
     const normalizedEmail = email.toLowerCase().trim();
     const isSuper =
-      normalizedEmail === envSuperAdminEmail.toLowerCase().trim() ||
-      normalizedEmail === "mahilaaction.vsk@gmail.com" ||
+      Boolean(envSuperAdminEmail && normalizedEmail === envSuperAdminEmail.toLowerCase().trim()) ||
       normalizedEmail === "superadmin" ||
-      normalizedEmail === "super admin" ||
-      normalizedEmail === "superadmin@organization.org";
+      normalizedEmail === "super admin";
 
     const users = getStoredAdminUsers();
     let match = users.find(u => u.email.toLowerCase() === normalizedEmail || (isSuper && u.roleId === "superadmin"));
@@ -384,7 +387,7 @@ export function setCurrentAdminSession(email: string) {
     if (isSuper) {
       match = saveAdminUser({
         id: match?.id || "usr_superadmin",
-        email: "mahilaaction.vsk@gmail.com",
+        email: envSuperAdminEmail || normalizedEmail || "superadmin",
         name: "Lead Super Admin",
         roleId: "superadmin",
         status: "Active",
@@ -448,6 +451,9 @@ export function hasPermission(
       if (userPerms && module === "donations" && !userPerms[module]) {
         return Boolean(userPerms.submissions?.[action]);
       }
+      if (userPerms && module === "media" && !userPerms[module]) {
+        return Boolean(userPerms.events?.[action]);
+      }
     } catch {}
   }
 
@@ -460,6 +466,9 @@ export function hasPermission(
     }
     if (module === "trash") {
       return Boolean(role.permissions?.events?.[action] || role.permissions?.submissions?.[action]);
+    }
+    if (module === "media") {
+      return Boolean(role.permissions?.events?.[action]);
     }
     return false;
   }

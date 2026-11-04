@@ -7,7 +7,6 @@ import _imgImpact1 from "@/imports/Concept2Home/207f7c7263e14103baf5c0de63b15703
 import _imgImpact2 from "@/imports/Concept2Home/aa46b6c282e301c3380b3a4d31e5ab88cc44c53a.png";
 import _imgImpact3 from "@/imports/Concept2Home/f28b554308160cb557d229aae64de1b275d2a425.png";
 import _imgImpact4 from "@/imports/Concept2Home/de694d5098550aee3d3b0432e1a2a521925c2237.png";
-import _imgEvent from "@/imports/Concept2Home/39242dfa2d4add5f76889c42da60d903f880be6f.png";
 import _imgStory1 from "@/imports/Concept2Home/788d28db62c65b5f55d746c307e794795661454c.png";
 import _imgStory2 from "@/imports/Concept2Home/b52b755f8d429ab1b616fa86054c8530f2afc2a1.png";
 import _imgStory3 from "@/imports/Concept2Home/d4c160441601d59ba0b0f336d73394c0932d78d5.png";
@@ -33,7 +32,7 @@ export const imgImpact1 = toSrc(_imgImpact1);
 export const imgImpact2 = toSrc(_imgImpact2);
 export const imgImpact3 = toSrc(_imgImpact3);
 export const imgImpact4 = toSrc(_imgImpact4);
-export const imgEvent = toSrc(_imgEvent);
+export const imgEvent = "";
 export const imgStory1 = toSrc(_imgStory1);
 export const imgStory2 = toSrc(_imgStory2);
 export const imgStory3 = toSrc(_imgStory3);

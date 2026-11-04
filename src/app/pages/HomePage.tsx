@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import { ArrowRight, Users, BookOpen, Briefcase, Heart } from "lucide-react";
 import { upcomingOrOpenEvents, isEventOpen, findCategory, type EventItem } from "@/lib/data";
 import { SafeImage } from "../components/SafeImage";
-import { imgImpact1, imgImpact2, imgImpact3, imgImpact4, imgEvent, imgHeroCard, imgHeroMain, imgHeroSide, heroSvg, statsSvg } from "../constants/images";
+import { imgImpact1, imgImpact2, imgImpact3, imgImpact4, imgHeroCard, imgHeroMain, imgHeroSide, heroSvg, statsSvg } from "../constants/images";
 import { useContent } from "../context/ContentContext";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
@@ -287,7 +287,12 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {impactCards.map((card) => (
               <div key={card.title} className="group relative rounded-2xl overflow-hidden cursor-pointer h-[340px]">
-                <img loading="lazy" decoding="async" src={card.img} alt={card.title} className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <SafeImage
+                  src={card.img}
+                  alt={card.title}
+                  className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  containerClassName="absolute inset-0 size-full flex flex-col items-center justify-center bg-[#2c1d19] text-[#f4efe7]/60 select-none"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/30 to-transparent" />
                 <div className="absolute top-4 left-4 bg-[#b66e5f] text-white p-3 rounded-2xl">{card.icon}</div>
                 <div className="absolute bottom-0 left-0 right-0 p-5">
@@ -379,14 +384,22 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
                 slides={stories.map((s) => (
                   <div key={s.id} className="rounded-2xl overflow-hidden group cursor-pointer flex flex-col h-full">
                     <div className="h-[220px] shrink-0 overflow-hidden rounded-t-2xl bg-[#a65a4a]/20 relative">
-                      <SafeImage
-                        src={s.img}
-                        alt={s.title}
-                        className="size-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/20 text-[#f4efe7]/80 gap-2 select-none"
-                        errorText="Image not available"
-                        iconSize={32}
-                      />
+                      {s.img ? (
+                        <SafeImage
+                          src={s.img}
+                          alt={s.title}
+                          className="size-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          fallbackContainer={
+                            <div className="size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
+                              <BookOpen size={32} className="opacity-75" />
+                            </div>
+                          }
+                        />
+                      ) : (
+                        <div className="size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
+                          <BookOpen size={32} className="opacity-75" />
+                        </div>
+                      )}
                     </div>
                     <div className="bg-[#a65a4a] p-6 rounded-b-2xl flex-1 flex flex-col">
                       <p className={`${inter()} text-[#f4efe7] text-[20px] font-semibold capitalize line-clamp-2`}>{s.title}</p>

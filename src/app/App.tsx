@@ -33,6 +33,8 @@ import { EventsPage } from "./pages/EventsPage";
 import { DonatePage } from "./pages/DonatePage";
 import { ContactPage } from "./pages/ContactPage";
 import { AccountPage } from "./pages/AccountPage";
+import { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
+import { TermsOfServicePage } from "./pages/TermsOfServicePage";
 
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
 
@@ -142,6 +144,8 @@ export default function App() {
           {page === "donate" && <DonatePage />}
           {page === "contact" && <ContactPage />}
           {page === "account" && <AccountPage setPage={setPage} />}
+          {page === "privacy" && <PrivacyPolicyPage setPage={setPage} />}
+          {page === "terms" && <TermsOfServicePage setPage={setPage} />}
           <Footer setPage={setPage} />
           <GlobalModals />
         </div>

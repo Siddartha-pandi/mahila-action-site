@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const result = await queryDb(
       "SELECT id, name, email, phone, role, kind, skills, permissions, status, created_at FROM users ORDER BY created_at DESC"
     );
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
     const virtualSuperadmin = {
       id: "superadmin_env",
       name: "Lead Super Admin",
@@ -58,11 +58,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, email, phone, role, kind, status, password, skills, permissions } = body || {};
 
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
     const isSuperadmin =
       auth.admin?.role === "superadmin" ||
       auth.admin?.sub === "superadmin_env" ||
-      auth.admin?.email.toLowerCase().trim() === envSuperadminEmail;
+      Boolean(envSuperadminEmail && auth.admin?.email.toLowerCase().trim() === envSuperadminEmail);
 
     if (role === "superadmin" && !isSuperadmin) {
       return NextResponse.json({ error: "Only a Super Admin can create Super Admin accounts." }, { status: 403 });

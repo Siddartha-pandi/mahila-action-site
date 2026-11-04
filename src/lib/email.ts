@@ -15,7 +15,7 @@ export function getAdminNotificationEmail(): string {
     process.env.ADMIN_NOTIFICATION_EMAIL ||
     process.env.SUPERADMIN_EMAIL ||
     process.env.SMTP_USER ||
-    "mahilaaction.vsk@gmail.com"
+    ""
   );
 }
 
@@ -24,7 +24,7 @@ export function getSupportEmail(): string {
     process.env.SUPPORT_EMAIL ||
     process.env.ADMIN_NOTIFICATION_EMAIL ||
     process.env.SMTP_USER ||
-    "mahilaaction.vsk@gmail.com"
+    ""
   );
 }
 
@@ -177,8 +177,8 @@ async function deliver(opts: {
 
   try {
     const rawFrom = process.env.EMAIL_FROM?.trim();
-    const fallbackUser = (process.env.SMTP_USER || "mahilaaction.vsk@gmail.com").trim();
-    const fromAddress = rawFrom || `Mahila Action <${fallbackUser}>`;
+    const fallbackUser = (process.env.SMTP_USER || "").trim();
+    const fromAddress = rawFrom || (fallbackUser ? `Mahila Action <${fallbackUser}>` : `Mahila Action`);
 
     const info = await t.sendMail({
       from: fromAddress,

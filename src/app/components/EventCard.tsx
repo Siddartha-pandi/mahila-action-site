@@ -45,14 +45,25 @@ export function EventCard({
         onReserve ? "cursor-pointer hover:shadow-xl hover:ring-2 hover:ring-[#a65a4a]/40" : ""
       } ${event.published === false ? "ring-3 ring-amber-400/80" : ""}`}
     >
-      <SafeImage
-        src={event.image}
-        alt={event.title}
-        className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
-        containerClassName="absolute inset-0 size-full flex flex-col items-center justify-center bg-[#2c1d19] text-[#f4efe7]/60 gap-2 select-none"
-        errorText="Image not available"
-        iconSize={40}
-      />
+      {/* Card Background: Uploaded event photo or branded terracotta card backdrop */}
+      {event.image ? (
+        <SafeImage
+          src={event.image}
+          alt={event.title}
+          className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
+          fallbackContainer={
+            <div className="absolute inset-0 size-full bg-gradient-to-br from-[#4a241b] via-[#2d1813] to-[#1a110e] flex items-center justify-center overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#b8614f]/25 via-transparent to-transparent" />
+              <Calendar className="absolute -bottom-6 -right-6 size-48 text-white/[0.04] pointer-events-none rotate-12" />
+            </div>
+          }
+        />
+      ) : (
+        <div className="absolute inset-0 size-full bg-gradient-to-br from-[#4a241b] via-[#2d1813] to-[#1a110e] flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#b8614f]/25 via-transparent to-transparent" />
+          <Calendar className="absolute -bottom-6 -right-6 size-48 text-white/[0.04] pointer-events-none rotate-12" />
+        </div>
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent transition-opacity group-hover:opacity-90" />
 
       {/* Admin Publish / Unpublish Card Controls */}

@@ -13,13 +13,15 @@
     "predev:turbo": "node src/scripts/clean-cache.js",
     "dev:turbo": "next dev --turbo",
     "prebuild": "node src/scripts/clean-cache.js",
-    "build": "next build",
+    "build": "next build --webpack",
     "prebuild:webpack": "node src/scripts/clean-cache.js",
     "build:webpack": "next build --webpack",
     "prestart": "node src/scripts/clean-cache.js",
     "start": "next start",
     "seed:pg": "npx tsx src/scripts/seed-postgres.ts",
-    "seed:pg:wait": "npx tsx src/scripts/seed-postgres-wait.ts"
+    "seed:pg:wait": "npx tsx src/scripts/seed-postgres-wait.ts",
+    "setup:drive": "npx tsx src/scripts/setup-google-drive.ts",
+    "sync:media": "npx tsx src/scripts/sync-media-drive.ts"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -66,6 +68,7 @@
     "embla-carousel-react": "8.6.0",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
+    "googleapis": "^189.0.0",
     "input-otp": "1.5.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "1.61.0",
@@ -73,6 +76,7 @@
     "motion": "14.6.0",
     "nanoid": "^6.0.2",
     "next": "^16.4.2",
+    "next-auth": "^5.0.0-beta.32",
     "next-themes": "0.4.6",
     "nodemailer": "^10.2.1",
     "pg": "^8.23.1",

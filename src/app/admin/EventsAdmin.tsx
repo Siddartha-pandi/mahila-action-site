@@ -267,7 +267,12 @@ function EventDetailRegistrationsView({
       <div className="bg-white p-5 rounded-2xl border border-[#a65a4a]/15 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-start gap-4">
           {active.image ? (
-            <img src={active.image} alt="" className="size-16 rounded-xl object-cover border border-[#a65a4a]/20 shrink-0" />
+            <img
+              src={active.image}
+              alt=""
+              className="size-16 rounded-xl object-cover border border-[#a65a4a]/20 shrink-0"
+              onError={(e) => (e.currentTarget.style.display = "none")}
+            />
           ) : (
             <div className="size-16 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
               <Calendar size={24} />
@@ -736,7 +741,12 @@ export function EventsOverviewTable({
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-2.5">
                       {ev.image ? (
-                        <img src={ev.image} alt="" className="size-9 rounded-lg object-cover border border-[#a65a4a]/20 shrink-0" />
+                        <img
+                          src={ev.image}
+                          alt=""
+                          className="size-9 rounded-lg object-cover border border-[#a65a4a]/20 shrink-0"
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                        />
                       ) : (
                         <div className="size-9 rounded-lg bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
                           <Calendar size={17} />
@@ -1662,7 +1672,7 @@ export function EventsAdmin({
                 <label className={labelBase}>Description</label>
                 <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={3} className={`${inputBase} resize-y`} />
               </div>
-              <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} />
+              <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} title={active.title} />
               <div>
                 <label className={labelBase}>Category (shown as the badge on the event image)</label>
                 <select

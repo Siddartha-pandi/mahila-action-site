@@ -16,10 +16,12 @@ export function ImageField({
   label,
   value = "",
   onChange,
+  title,
 }: {
   label: string;
   value?: string;
   onChange: (v: string) => void;
+  title?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -34,11 +36,11 @@ export function ImageField({
     if (!file.type.startsWith("image/")) return;
     setUploading(true);
     try {
-      const url = await uploadMediaToDb(file);
+      const url = await uploadMediaToDb(file, file.name, title);
       if (url.startsWith("data:")) {
         toast.warning("Image could not be saved to media table (fallback saved locally).");
       } else {
-        toast.success("Image uploaded to media table!");
+        toast.success("Image saved to media library!");
       }
       onChange(url);
     } catch (err: any) {
@@ -161,11 +163,11 @@ export function ImageField({
             setCropSrc(null);
             setUploading(true);
             try {
-              const url = await uploadMediaToDb(cropped, "cropped-image.png");
+              const url = await uploadMediaToDb(cropped, `${title ? title + "-cropped" : "cropped"}.png`, title);
               if (url.startsWith("data:")) {
                 toast.warning("Cropped image could not be saved to media table (fallback saved locally).");
               } else {
-                toast.success("Cropped image saved to media table!");
+                toast.success("Cropped image saved to media library!");
               }
               onChange(url);
             } catch (err: any) {
@@ -185,10 +187,12 @@ export function GalleryField({
   label,
   value,
   onChange,
+  title,
 }: {
   label: string;
   value: string[];
   onChange: (v: string[]) => void;
+  title?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [urlDraft, setUrlDraft] = useState("");
@@ -204,12 +208,16 @@ export function GalleryField({
     if (!imageFiles.length) return;
     setUploading(true);
     try {
-      const uploaded = await Promise.all(imageFiles.map((f) => uploadMediaToDb(f)));
+      const uploaded = await Promise.all(
+        imageFiles.map((f, idx) =>
+          uploadMediaToDb(f, f.name, title ? `${title}-${idx + 1}` : f.name)
+        )
+      );
       const hasFallback = uploaded.some((u) => u.startsWith("data:"));
       if (hasFallback) {
         toast.warning("Some images could not be saved to media table (saved locally).");
       } else {
-        toast.success(`${uploaded.length} image${uploaded.length > 1 ? "s" : ""} saved to media table!`);
+        toast.success(`${uploaded.length} image${uploaded.length > 1 ? "s" : ""} saved to media library!`);
       }
       onChange([...value, ...uploaded]);
     } catch (err: any) {

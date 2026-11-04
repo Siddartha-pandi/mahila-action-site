@@ -50,7 +50,8 @@ export function isDbMediaUrl(url: string): boolean {
  */
 export async function uploadMediaToDb(
   dataUrlOrFile: string | File,
-  filename?: string
+  filename?: string,
+  title?: string
 ): Promise<string> {
   let dataUrl = "";
   let targetFilename = filename || "image";
@@ -66,10 +67,13 @@ export async function uploadMediaToDb(
     dataUrl = await fileToDataUrl(dataUrlOrFile);
   }
 
+  const effectiveTitle = title || targetFilename.replace(/\.[^/.]+$/, "");
+
   try {
-    const res = await api.post<{ ok: boolean; url: string; error?: string }>("/api/media", {
+    const res = await api.post<{ ok: boolean; url: string; duplicate?: boolean; filename?: string; error?: string }>("/api/media", {
       dataUrl,
       filename: targetFilename,
+      title: effectiveTitle,
     });
 
     if (res.ok && res.data?.url) {

@@ -1,4 +1,7 @@
+import crypto from "node:crypto";
 import { queryDb } from "./db";
+import { isGoogleDriveConfigured, uploadFileToDrive } from "./googleDrive";
+import { formatMediaFilename } from "./mediaShared";
 
 /**
  * Ensures an image URL is saved to the PostgreSQL media table if it is a base64 Data URL.
@@ -34,15 +37,82 @@ export async function ensureMediaUrl(
   }
 
   const ext = mimeType.split("/")[1]?.replace("+xml", "") || "png";
-  const filename = defaultFilename.includes(".") ? defaultFilename : `${defaultFilename}.${ext}`;
   const byteSize = buffer.length;
+  const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+
+  // 1. DUPLICATE CHECK: Reuse existing image if exact duplicate already in media table
+  try {
+    const existing = await queryDb(
+      `SELECT id FROM media
+       WHERE metadata->>'checksum' = $1
+          OR (byte_size = $2 AND data = $3)
+       ORDER BY id DESC LIMIT 1`,
+      [checksum, byteSize, buffer]
+    );
+    if (existing.rows.length > 0 && existing.rows[0]?.id) {
+      return `/api/media/${existing.rows[0].id}`;
+    }
+  } catch (checkErr) {
+    console.warn("ensureMediaUrl duplicate check error:", checkErr);
+  }
+
+  // 2. Reserve next sequence ID
+  let nextId: number;
+  try {
+    const seqRes = await queryDb("SELECT nextval(pg_get_serial_sequence('media', 'id')) as next_id");
+    nextId = Number(seqRes.rows[0]?.next_id);
+  } catch {
+    const maxRes = await queryDb("SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM media");
+    nextId = Number(maxRes.rows[0]?.next_id);
+  }
+
+  const rawTitle = defaultFilename.replace(/\.[^/.]+$/, "");
+  const formattedFilename = formatMediaFilename(rawTitle, nextId, ext);
 
   try {
+    if (isGoogleDriveConfigured()) {
+      try {
+        const driveResult = await uploadFileToDrive({
+          buffer,
+          filename: formattedFilename,
+          mimeType,
+        });
+
+        const res = await queryDb(
+          `INSERT INTO media (id, filename, mime_type, byte_size, drive_file_id, url, thumbnail_url, media_type, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'image', $8)
+           RETURNING id`,
+          [
+            nextId,
+            formattedFilename,
+            mimeType,
+            byteSize,
+            driveResult.id,
+            driveResult.directUrl,
+            driveResult.thumbnailUrl,
+            JSON.stringify({
+              driveFileId: driveResult.id,
+              checksum,
+              title: rawTitle,
+              source: "ensureMediaUrl",
+            }),
+          ]
+        );
+
+        const row = res.rows?.[0];
+        if (row?.id) {
+          return `/api/media/${row.id}`;
+        }
+      } catch (driveErr) {
+        console.warn("ensureMediaUrl: Drive upload failed, falling back to database bytea storage:", driveErr);
+      }
+    }
+
     const res = await queryDb(
-      `INSERT INTO media (filename, mime_type, byte_size, data)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO media (id, filename, mime_type, byte_size, data, media_type, metadata)
+       VALUES ($1, $2, $3, $4, $5, 'image', $6)
        RETURNING id`,
-      [filename, mimeType, byteSize, buffer]
+      [nextId, formattedFilename, mimeType, byteSize, buffer, JSON.stringify({ checksum, title: rawTitle, source: "db_fallback" })]
     );
 
     const row = res.rows?.[0];

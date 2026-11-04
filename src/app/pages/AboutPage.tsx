@@ -102,14 +102,24 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
               {active && (
                 <div className="flex flex-col lg:flex-row gap-6 sm:gap-8 items-center">
                   <div className="relative w-full lg:w-[520px] h-[220px] sm:h-[300px] md:h-[380px] rounded-2xl overflow-hidden shrink-0 bg-[#a65a4a]/10 border border-[#a65a4a]/20">
-                    <SafeImage
-                      src={active.img}
-                      alt={active.title}
-                      className="absolute inset-0 size-full object-cover"
-                      containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-2 select-none"
-                      errorText="Image not available"
-                      iconSize={40}
-                    />
+                    {active.img ? (
+                      <SafeImage
+                        src={active.img}
+                        alt={active.title}
+                        className="absolute inset-0 size-full object-cover"
+                        fallbackContainer={
+                          <div className="size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#a65a4a]/15 to-[#a65a4a]/5 text-[#a65a4a] gap-2 select-none p-6 text-center">
+                            <span className={`${fraunces()} text-5xl sm:text-6xl font-bold opacity-30`}>{active.year}</span>
+                            <p className={`${inter()} text-[13px] font-semibold opacity-60 uppercase tracking-wider`}>Milestone Archive</p>
+                          </div>
+                        }
+                      />
+                    ) : (
+                      <div className="size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#a65a4a]/15 to-[#a65a4a]/5 text-[#a65a4a] gap-2 select-none p-6 text-center">
+                        <span className={`${fraunces()} text-5xl sm:text-6xl font-bold opacity-30`}>{active.year}</span>
+                        <p className={`${inter()} text-[13px] font-semibold opacity-60 uppercase tracking-wider`}>Milestone Archive</p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className={`${inter()} text-[13px] sm:text-[14px] text-[#1e1e1e]/60 mb-1`}>{active.year}</p>

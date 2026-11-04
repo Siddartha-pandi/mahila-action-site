@@ -2,7 +2,7 @@ import { api } from "./api";
 
 // ── Admin authentication ────────────────
 
-export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
+export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; email?: string; error?: string }> {
   if (!email?.trim() || !password) {
     return { ok: false, error: "Enter your admin email and password." };
   }
@@ -23,7 +23,7 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
       window.dispatchEvent(new Event("mahila_admin_auth_changed"));
       window.dispatchEvent(new Event("storage"));
     }
-    return { ok: true };
+    return { ok: true, email: res.data.email };
   }
 
   if (res.status === 0) {

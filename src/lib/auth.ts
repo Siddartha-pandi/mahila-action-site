@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import { queryDb } from "./db";
 import { AdminModule, PermissionAction, MODULE_LABELS, hasPermission } from "./permissions";
+import { auth as authJsSession } from "@/auth";
 
 const COOKIE_NAME = "mahila_admin";
 const JWT_SECRET = process.env.JWT_SECRET || "default_jwt_secret_dev_key";
@@ -21,6 +22,18 @@ export interface AdminAuthResult {
 }
 
 export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPayload | null> {
+  // Check Auth.js session first
+  try {
+    const authSession = await authJsSession();
+    if (authSession?.user?.email) {
+      return {
+        sub: (authSession.user as any).id || authSession.user.email,
+        email: authSession.user.email,
+        role: (authSession.user as any).role || "admin",
+      };
+    }
+  } catch {}
+
   const candidates: string[] = [];
 
   try {
@@ -66,11 +79,11 @@ export async function verifyAdminPermission(
     return { authorized: false, status: 401, error: "Not authenticated" };
   }
 
-  const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
+  const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
   const isSuperadmin =
     admin.role === "superadmin" ||
     admin.sub === "superadmin_env" ||
-    admin.email.toLowerCase().trim() === envSuperadminEmail;
+    Boolean(envSuperadminEmail && admin.email.toLowerCase().trim() === envSuperadminEmail);
 
   if (isSuperadmin) {
     return { authorized: true, admin: { ...admin, role: "superadmin" } };
@@ -106,11 +119,17 @@ export async function verifyAdminPermission(
 
 export function createAdminCookieHeader(payload: AdminPayload): string {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "12h" });
-  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
+  const isProduction =
+    process.env.NODE_ENV === "production" &&
+    String(process.env.COOKIE_SECURE).toLowerCase() === "true" &&
+    !process.env.FRONTEND_URL?.includes("localhost");
   return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }
 
 export function createClearAdminCookieHeader(): string {
-  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
+  const isProduction =
+    process.env.NODE_ENV === "production" &&
+    String(process.env.COOKIE_SECURE).toLowerCase() === "true" &&
+    !process.env.FRONTEND_URL?.includes("localhost");
   return `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }

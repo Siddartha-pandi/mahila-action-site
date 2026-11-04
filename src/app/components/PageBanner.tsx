@@ -24,6 +24,7 @@ export function PageBanner({
             src={img}
             alt=""
             className="absolute inset-0 size-full object-cover"
+            onError={(e) => (e.currentTarget.style.display = "none")}
           />
           <div className="absolute inset-0 bg-black/45" />
         </>

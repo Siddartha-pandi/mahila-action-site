@@ -218,12 +218,12 @@ export function BlogPostsAdmin({
             <textarea value={active.excerpt} onChange={(e) => update({ excerpt: e.target.value })} rows={2} className={`${inputBase} resize-y`} />
           </div>
           <TagsField label="Tags" value={active.tags ?? []} onChange={(v) => update({ tags: v })} />
-          <ImageField label="Cover Image" value={active.coverImage} onChange={(v) => update({ coverImage: v })} />
+          <ImageField label="Cover Image" value={active.coverImage} onChange={(v) => update({ coverImage: v })} title={active.title} />
           <div>
             <label className={labelBase}>Full {section === "impact" ? "Page" : "Blog"} Content</label>
             <BlogContentEditor key={active.id} value={active.content} onChange={(html) => update({ content: html })} />
           </div>
-          <GalleryField label="Gallery Images (optional — add as many as you like)" value={active.gallery} onChange={(v) => update({ gallery: v })} />
+          <GalleryField label="Gallery Images (optional — add as many as you like)" value={active.gallery} onChange={(v) => update({ gallery: v })} title={active.title} />
           {section === "event" && (
             <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/45 leading-relaxed">
               On the Events Blog reader, visitors can page between posts using Previous / Next, right below the gallery

@@ -60,7 +60,7 @@ export function scrollToTop(behavior: ScrollBehavior = "instant") {
 }
 
 // ── Page type and URL mapping ─────────────────────────────────────────────
-export type Page = "home" | "about" | "stories" | "eventsBlog" | "donate" | "contact" | "account" | "admin";
+export type Page = "home" | "about" | "stories" | "eventsBlog" | "donate" | "contact" | "account" | "admin" | "privacy" | "terms";
 
 export const PAGE_TO_PATH: Record<Page, string> = {
   home: "/home",
@@ -71,6 +71,8 @@ export const PAGE_TO_PATH: Record<Page, string> = {
   contact: "/contact",
   account: "/account",
   admin: "/admin",
+  privacy: "/privacy",
+  terms: "/terms",
 };
 
 export function pathToPage(pathname: string): Page {
@@ -88,6 +90,8 @@ export function pathToPage(pathname: string): Page {
   if (first === "contact") return "contact";
   if (first === "account") return "account";
   if (first === "admin") return "admin";
+  if (first === "privacy" || first === "privacypolicy") return "privacy";
+  if (first === "terms" || first === "tos" || first === "termsofservice") return "terms";
 
   const entry = (Object.entries(PAGE_TO_PATH) as [Page, string][]).find(([, path]) => path === normalized);
   return entry ? entry[0] : "home";

@@ -136,14 +136,28 @@ CREATE INDEX IF NOT EXISTS events_date_cat_idx ON events (event_date, category_i
 CREATE INDEX IF NOT EXISTS donations_status_created_idx ON donations (status, created_at);
 CREATE INDEX IF NOT EXISTS event_reservations_status_created_idx ON event_reservations (status, created_at);
 
--- 11. Media & Images Table (binary BYTEA storage)
+-- 11. Media Table (Google Drive primary storage, PostgreSQL metadata)
 CREATE TABLE IF NOT EXISTS media (
   id SERIAL PRIMARY KEY,
   filename TEXT NOT NULL,
   mime_type TEXT NOT NULL,
-  byte_size INTEGER NOT NULL,
-  data BYTEA NOT NULL,
+  byte_size BIGINT NOT NULL DEFAULT 0,
+  drive_file_id TEXT,
+  url TEXT,
+  thumbnail_url TEXT,
+  media_type TEXT DEFAULT 'image',
+  metadata JSONB DEFAULT '{}'::jsonb,
+  data BYTEA,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS media_created_at_idx ON media (created_at DESC);
+CREATE INDEX IF NOT EXISTS media_drive_file_id_idx ON media (drive_file_id);
+CREATE INDEX IF NOT EXISTS media_media_type_idx ON media (media_type);
+
+-- 12. Persistent Site Settings (Stores permanent OAuth refresh tokens & configurations)
+CREATE TABLE IF NOT EXISTS site_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

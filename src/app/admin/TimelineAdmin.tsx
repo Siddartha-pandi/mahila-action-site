@@ -159,7 +159,7 @@ export function TimelineAdmin({
             <label className={labelBase}>Milestone Title</label>
             <input value={active.title} onChange={(e) => update({ title: e.target.value })} className={inputBase} />
           </div>
-          <ImageField label="Milestone Photo" value={active.image} onChange={(v) => update({ image: v })} />
+          <ImageField label="Milestone Photo" value={active.image} onChange={(v) => update({ image: v })} title={active.title} />
           <div>
             <label className={labelBase}>Description</label>
             <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={4} className={`${inputBase} resize-y`} />

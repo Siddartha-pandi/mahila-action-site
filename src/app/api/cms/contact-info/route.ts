@@ -7,7 +7,7 @@ import path from "path";
 const CONTACT_JSON_PATH = path.join(process.cwd(), "src", "data", "contact.json");
 
 const DEFAULT_CONTACT_DATA = {
-  email: "contact@mahilaction.org",
+  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "",
   emailNote: "We reply within 24 hours",
   phone: "+91 70955 48387",
   phoneNote: "Mon – Sat, 9 AM – 6 PM IST",
