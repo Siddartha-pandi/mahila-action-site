@@ -119,10 +119,7 @@ export async function verifyAdminPermission(
 
 export function createAdminCookieHeader(payload: AdminPayload): string {
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "12h" });
-  const isProduction =
-    process.env.NODE_ENV === "production" &&
-    String(process.env.COOKIE_SECURE).toLowerCase() === "true" &&
-    !process.env.FRONTEND_URL?.includes("localhost");
+  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
   return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }
 

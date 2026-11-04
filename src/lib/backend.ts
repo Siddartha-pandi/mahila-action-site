@@ -23,7 +23,7 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
       window.dispatchEvent(new Event("mahila_admin_auth_changed"));
       window.dispatchEvent(new Event("storage"));
     }
-    return { ok: true, email: res.data.email };
+    return { ok: true };
   }
 
   if (res.status === 0) {

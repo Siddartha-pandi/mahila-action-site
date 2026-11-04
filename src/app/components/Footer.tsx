@@ -17,7 +17,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   const { openModal } = useModal();
   const siteData = useSiteData();
   const contact = siteData?.contact;
-  const email = contact?.email || "";
+  const email = contact?.email || "contact@mahilaction.org";
   const phone = contact?.phone || "+91 70955 48387";
   const userProfile = useUserProfile();
 
