@@ -34,6 +34,7 @@ import {
   Trash2,
   HeartHandshake,
   Eye,
+  Image as ImageIcon,
 } from "lucide-react";
 import { type Page } from "../components/shared/styleHelpers";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
