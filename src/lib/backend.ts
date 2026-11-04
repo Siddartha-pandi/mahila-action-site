@@ -248,31 +248,140 @@ export async function loadSubmissions(): Promise<SubmissionItem[]> {
   return deduped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+export const KNOWN_SUBMISSION_TYPES: Set<SubmissionItem["type"]> = new Set([
+  "contact",
+  "volunteer",
+  "reservation",
+  "vendor",
+  "donation",
+  "member",
+  "perm_volunteer_request",
+  "perm_volunteer_deactivate",
+]);
+
+export function isKnownSubmissionType(type?: string): type is SubmissionItem["type"] {
+  return typeof type === "string" && KNOWN_SUBMISSION_TYPES.has(type as SubmissionItem["type"]);
+}
+
+/**
+ * Robustly infers or normalizes a submission's type when the raw stored type
+ * is missing, uppercase, legacy (e.g. "attendee"), or corrupted.
+ */
+export function inferSubmissionType(item?: Partial<SubmissionItem> | null): SubmissionItem["type"] | null {
+  if (!item) return null;
+
+  const rawType = String(item.type || "").trim().toLowerCase();
+  if (isKnownSubmissionType(rawType)) {
+    return rawType;
+  }
+
+  // Handle common legacy aliases
+  if (rawType === "attendee" || rawType === "booking" || rawType === "rsvp") {
+    return "reservation";
+  }
+  if (rawType === "donor") {
+    return "donation";
+  }
+  if (rawType === "user") {
+    return "member";
+  }
+  if (rawType === "perm_volunteer" || rawType === "perm-volunteer") {
+    return item.data?.request_type === "deactivate" ? "perm_volunteer_deactivate" : "perm_volunteer_request";
+  }
+
+  // Infer from ID prefix (e.g. donation_123, volunteer_456, etc.)
+  const idStr = String(item.id || "").toLowerCase();
+  if (idStr.startsWith("donation_")) return "donation";
+  if (idStr.startsWith("vendor_")) return "vendor";
+  if (idStr.startsWith("reservation_")) return "reservation";
+  if (idStr.startsWith("volunteer_")) return "volunteer";
+  if (idStr.startsWith("contact_")) return "contact";
+  if (idStr.startsWith("member_")) return "member";
+  if (idStr.startsWith("perm_volunteer_")) {
+    return item.data?.request_type === "deactivate" ? "perm_volunteer_deactivate" : "perm_volunteer_request";
+  }
+
+  // Infer from data attributes
+  const d = item.data || {};
+  if (d.receipt_number || d.amount != null || d.pan_number || d.donation_type) {
+    return "donation";
+  }
+  if (d.business_name || d.offering || d.needs_space != null) {
+    return "vendor";
+  }
+  if (d.seats != null || d.companions != null) {
+    return "reservation";
+  }
+  if (Array.isArray(d.selected_events) && d.selected_events.length > 0) {
+    return "volunteer";
+  }
+  if (d.skills != null && d.skills !== "") {
+    return "volunteer";
+  }
+  if (d.request_type === "deactivate") {
+    return "perm_volunteer_deactivate";
+  }
+  if (d.request_type === "request") {
+    return "perm_volunteer_request";
+  }
+  if (d.subject != null || (d.message != null && !d.skills)) {
+    return "contact";
+  }
+
+  return null;
+}
+
 /** Which API path owns a given submission, for status updates and deletes. */
-function submissionPath(type: SubmissionItem["type"]) {
-  if (type === "perm_volunteer_deactivate") {
+export function submissionPath(type?: string): string | undefined {
+  if (!type) return undefined;
+  const cleanType = type.trim().toLowerCase();
+  if (cleanType === "perm_volunteer_deactivate" || cleanType === "perm_volunteer_request") {
     return "/api/perm-volunteers";
   }
-  return SUBMISSION_SOURCES.find((s) => s.type === type)?.path;
+  if (cleanType === "attendee") {
+    return "/api/reservations";
+  }
+  if (cleanType === "donor") {
+    return "/api/donations";
+  }
+  return SUBMISSION_SOURCES.find((s) => s.type === cleanType)?.path;
 }
 
 export async function updateSubmissionStatusRemote(
   item: SubmissionItem,
   status: SubmissionItem["status"]
 ): Promise<{ ok: boolean; error?: string }> {
-  const path = submissionPath(item.type);
-  if (!path) return { ok: false, error: "Unknown submission type." };
+  const resolvedType = inferSubmissionType(item) || item.type;
+  const path = submissionPath(resolvedType);
+  if (!path) {
+    // If it's an offline/orphan submission without a server table, update local storage and succeed
+    updateSubmissionStatus(item.id, status);
+    return { ok: true };
+  }
   const res = await api.patch(`${path}/${encodeURIComponent(item.id)}`, { status });
+  if (res.ok) {
+    updateSubmissionStatus(item.id, status);
+  }
   return { ok: res.ok, error: res.error };
 }
 
 export async function deleteSubmissionRemote(item: SubmissionItem): Promise<{ ok: boolean; error?: string }> {
-  if (item.type === "member") {
+  const resolvedType = inferSubmissionType(item) || item.type;
+  if (resolvedType === "member" || item.type === "member") {
     return { ok: false, error: "Member accounts can't be deleted here — that would remove their sign-in." };
   }
-  const path = submissionPath(item.type);
-  if (!path) return { ok: false, error: "Unknown submission type." };
+  const path = submissionPath(resolvedType);
+  if (!path) {
+    // Unknown or local-only submission with no server table — delete locally so the admin can remove it
+    deleteSubmission(item.id);
+    return { ok: true };
+  }
   const res = await api.del(`${path}/${encodeURIComponent(item.id)}`);
+  deleteSubmission(item.id);
+  // If the server returns 404 (already deleted or was only local), treat as successful deletion
+  if (!res.ok && res.status === 404) {
+    return { ok: true };
+  }
   return { ok: res.ok, error: res.error };
 }
 
@@ -292,18 +401,34 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
     if (!raw) return [];
     const items = JSON.parse(raw);
     if (!Array.isArray(items)) return [];
-    let valid: SubmissionItem[] = items.filter((item: any) => item && typeof item === "object" && item.id && item.type);
+    let valid: SubmissionItem[] = items.filter((item: any) => item && typeof item === "object" && item.id);
 
     // Clear the seeded demo rows out of browsers that already stored them.
     const withoutMocks = valid.filter(item => !SEEDED_MOCK_IDS.includes(item.id));
-    if (withoutMocks.length !== valid.length) {
-      valid = withoutMocks;
-      localStorage.setItem(SUBMISSION_KEY, JSON.stringify(valid));
+    let changed = withoutMocks.length !== valid.length;
+    valid = withoutMocks;
+
+    // ── Self-healing: normalize and sanitize submission types ──
+    const healed: SubmissionItem[] = [];
+    for (const item of valid) {
+      const inferred = inferSubmissionType(item);
+      if (inferred) {
+        if (item.type !== inferred) {
+          item.type = inferred;
+          changed = true;
+        }
+        healed.push(item);
+      } else if (isKnownSubmissionType(item.type)) {
+        healed.push(item);
+      } else {
+        // Drop unidentifiable corrupt item from local storage
+        changed = true;
+      }
     }
+    valid = healed;
 
     // ── Migration: remove legacy "Permanent Community Volunteer Membership" entries ──
     const LEGACY_TITLE = "Permanent Community Volunteer Membership";
-    let changed = false;
     valid = valid.filter(item => {
       if (item.type !== "volunteer") return true;
       const events: string[] = Array.isArray(item.data?.selected_events) ? item.data.selected_events : [];
@@ -319,6 +444,7 @@ export function getSubmissions(type?: SubmissionItem["type"]): SubmissionItem[] 
       }
       return true;
     });
+
     if (changed) {
       localStorage.setItem(SUBMISSION_KEY, JSON.stringify(valid));
     }
@@ -589,8 +715,11 @@ export function saveLocalSubmission(type: SubmissionItem["type"], data: any) {
 
 export function updateSubmissionStatus(id: string, status: SubmissionItem["status"]) {
   try {
-    const items = getSubmissions();
-    const updated = items.map(item => item.id === id ? { ...item, status } : item);
+    const raw = localStorage.getItem(SUBMISSION_KEY);
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (!Array.isArray(items)) return;
+    const updated = items.map((item: any) => String(item?.id) === String(id) ? { ...item, status } : item);
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
     notifySubmissionsChanged();
   } catch (err) {
@@ -600,8 +729,11 @@ export function updateSubmissionStatus(id: string, status: SubmissionItem["statu
 
 export function deleteSubmission(id: string) {
   try {
-    const items = getSubmissions();
-    const updated = items.filter(item => item.id !== id);
+    const raw = localStorage.getItem(SUBMISSION_KEY);
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (!Array.isArray(items)) return;
+    const updated = items.filter((item: any) => String(item?.id) !== String(id));
     localStorage.setItem(SUBMISSION_KEY, JSON.stringify(updated));
     notifySubmissionsChanged();
   } catch (err) {

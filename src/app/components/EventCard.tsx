@@ -121,12 +121,17 @@ export function EventCard({
             }
 
             return (
-              <span className={`${inter()} bg-[#ebc2c2] border-2 border-[#8f6969] text-[#dc0f0f] text-[10px] font-medium px-3 sm:px-4 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap`}>
+              <span
+                title={total > 0 ? `${available} of ${total} seats available` : "Registration open"}
+                className={`${inter()} bg-[#ebc2c2] border-2 border-[#8f6969] text-[#dc0f0f] text-[10px] font-medium px-3 sm:px-4 py-1 rounded-full flex items-center gap-1.5 whitespace-nowrap`}
+              >
                 <span className="relative flex size-1.5">
                   <span className="absolute inline-flex size-full rounded-full bg-red-500 animate-ping" />
                   <span className="relative inline-flex size-1.5 rounded-full bg-red-500" />
                 </span>
-                {total > 0 ? (booked > 0 ? `${available} Seats Left — Open` : `${total} Seats — Open`) : "Open"}
+                {total > 0
+                  ? `${available} Available ${available === 1 ? "Seat" : "Seats"} — Open`
+                  : "Open"}
               </span>
             );
           })()

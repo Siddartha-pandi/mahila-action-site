@@ -201,6 +201,8 @@ export const DEFAULT_EVENTS: EventItem[] = [
     eventDate: daysFromNow(21),
     location: "Hyderabad",
     totalSeats: 45,
+    bookedSeats: 0,
+    availableSeats: 45,
     maxVolunteers: 0,
     windows: [
       { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14) },
@@ -626,20 +628,35 @@ export async function loadSiteData(): Promise<SiteData> {
       const freshDeletedIds = getDeletedEventIds();
       events = eventRows
         .filter((r: any) => !isDeletedEventId(r.id, freshDeletedIds))
-        .map((r: any) => ({
-          id: String(r.id),
-          title: r.title,
-          description: r.description || "",
-          image: mediaUrl(r.image),
-          eventDate: r.event_date || r.eventDate || "",
-          location: r.location || "",
-          totalSeats: Number(r.total_seats ?? r.totalSeats ?? 0),
-          maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
-          windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
-          categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
-          published: r.published !== false && r.published !== 0 && r.published !== "false",
-          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-        }));
+        .map((r: any) => {
+          const totalSeats = Number(r.total_seats ?? r.totalSeats ?? 0);
+          const bookedSeats = Number(r.booked_seats ?? r.bookedSeats ?? 0);
+          const availableSeats =
+            r.available_seats !== undefined
+              ? Number(r.available_seats)
+              : r.availableSeats !== undefined
+              ? Number(r.availableSeats)
+              : totalSeats > 0
+              ? Math.max(0, totalSeats - bookedSeats)
+              : 0;
+          return {
+            id: String(r.id),
+            title: r.title,
+            description: r.description || "",
+            image: mediaUrl(r.image),
+            eventDate: r.event_date || r.eventDate || "",
+            location: r.location || "",
+            totalSeats,
+            bookedSeats,
+            availableSeats,
+            attendeeCount: Number(r.attendee_count ?? r.attendeeCount ?? 0),
+            maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
+            windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
+            categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
+            published: r.published !== false && r.published !== 0 && r.published !== "false",
+            createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+          };
+        });
     }
 
     if (Array.isArray(catRows) && catRows.length > 0) {

@@ -445,8 +445,8 @@ export function DonationsAdmin() {
     });
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error("Could not delete donation record.");
-    setSubmissions((prev) => prev.filter((s) => s.id !== item.id));
-    if (selectedDonation?.id === item.id) setSelectedDonation(null);
+    setSubmissions((prev) => prev.filter((s) => String(s.id) !== String(item.id)));
+    if (String(selectedDonation?.id) === String(item.id)) setSelectedDonation(null);
     toast.success("Donation moved to Recycle Bin");
   };
 
