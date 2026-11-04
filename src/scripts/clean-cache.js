@@ -27,5 +27,10 @@ for (const target of targets) {
   }
 }
 
+// Ensure .next/types directory structure exists on Windows to prevent sandbox mkdir EPERM
+try {
+  fs.mkdirSync(path.join(rootDir, ".next", "types", "app", "api"), { recursive: true });
+} catch {}
+
 console.log("✨ Cache clean complete! Starting application...\n");
 

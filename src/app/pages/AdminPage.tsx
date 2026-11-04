@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { type Page } from "../components/shared/styleHelpers";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
+import { MediaAdmin } from "@/app/admin/MediaAdmin";
 import { DonationsAdmin } from "@/app/admin/DonationsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
 import { EventsAdmin } from "@/app/admin/EventsAdmin";
@@ -56,6 +57,7 @@ import { AdminSidebar } from "@/app/admin/AdminSidebar";
 const CUSTOM_TABS = [
   { id: "submissions", label: "Form Submissions & Applications", icon: Inbox },
   { id: "donations", label: "Donations & Contributions", icon: HeartHandshake },
+  { id: "media", label: "Media Library", icon: ImageIcon },
   { id: "events", label: "Upcoming Events", icon: Calendar },
   { id: "stories", label: "Community Stories", icon: BookOpen },
   { id: "impactStories", label: "Our Impact Pages", icon: Sparkles },
@@ -462,6 +464,9 @@ export function AdminPage({
               )}
               {activeSection === "donations" && (
                 <DonationsAdmin />
+              )}
+              {activeSection === "media" && (
+                <MediaAdmin />
               )}
               {activeSection === "contentTypeBuilder" && (
                 <ContentTypeBuilderAdmin />

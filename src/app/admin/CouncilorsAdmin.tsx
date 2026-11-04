@@ -68,7 +68,7 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
             <label className={labelBase}>Role / Title</label>
             <input value={active.role} onChange={(e) => update({ role: e.target.value })} className={inputBase} />
           </div>
-          <ImageField label="Profile Photo" value={active.image} onChange={(v) => update({ image: v })} />
+          <ImageField label="Profile Photo" value={active.image} onChange={(v) => update({ image: v })} title={active.name} />
           <div>
             <label className={labelBase}>Bio / Story</label>
             <textarea value={active.bio} onChange={(e) => update({ bio: e.target.value })} rows={4} className={`${inputBase} resize-y`} />

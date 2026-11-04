@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
-import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
+import { LIMITS, firstError, normalizePhone, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
 const ALLOWED_STATUSES = ["New", "Contacted", "Completed"];
 
@@ -66,7 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (phone !== undefined) {
       updates.push(`phone = $${idx++}`);
-      values.push(String(phone).trim());
+      values.push(phone ? normalizePhone(phone) : null);
     }
     if (subject !== undefined) {
       updates.push(`subject = $${idx++}`);

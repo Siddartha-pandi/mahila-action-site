@@ -62,18 +62,19 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     const lowerId = identifier.toLowerCase();
     const lowerPass = password.toLowerCase().trim();
 
+    const envSuperEmail = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL) || "";
     const isAdminAttempt =
       lowerId.includes("admin") || lowerId.includes("super") ||
-      lowerId === "mahilaaction.vsk@gmail.com" ||
+      (envSuperEmail && lowerId === envSuperEmail.toLowerCase()) ||
       lowerId === "superadmin" || lowerId === "super admin" ||
       lowerPass === "admin123" || lowerPass === "superadmin" || lowerPass === "admin";
 
     if (isAdminAttempt) {
       const adminRes = await signInAdmin(identifier, password);
       if (adminRes.ok) {
-        let canonicalEmail = identifier;
+        let canonicalEmail = adminRes.email || identifier;
         if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-          canonicalEmail = "mahilaaction.vsk@gmail.com";
+          canonicalEmail = adminRes.email || envSuperEmail || "superadmin";
         }
         setCurrentAdminSession(canonicalEmail);
         try {
@@ -99,9 +100,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     const fallbackAdmin = await signInAdmin(identifier, password);
     setAuthBusy(false);
     if (fallbackAdmin.ok) {
-      let canonicalEmail = identifier;
+      let canonicalEmail = fallbackAdmin.email || identifier;
       if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-        canonicalEmail = "mahilaaction.vsk@gmail.com";
+        canonicalEmail = fallbackAdmin.email || envSuperEmail || "superadmin";
       }
       setCurrentAdminSession(canonicalEmail);
       try {

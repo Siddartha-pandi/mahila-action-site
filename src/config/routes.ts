@@ -60,6 +60,16 @@ export const ROUTES: RouteMeta[] = [
     description: "Private administration area.",
     noindex: true,
   },
+  {
+    path: "/privacy",
+    title: `Privacy Policy — ${SITE_NAME}`,
+    description: "Read Mahila Action's privacy policy regarding data collection, protection, and Google API user data compliance.",
+  },
+  {
+    path: "/terms",
+    title: `Terms of Service — ${SITE_NAME}`,
+    description: "Review the terms and conditions for using Mahila Action's website, event registrations, and donation services.",
+  },
 ];
 
 // The app always navigates to /home on click and redirects bare "/" there

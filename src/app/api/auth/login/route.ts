@@ -14,17 +14,16 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "mahilaaction.vsk@gmail.com").toLowerCase().trim();
-    const envSuperadminPassword = (process.env.SUPERADMIN_PASSWORD || "1980Jan23").trim();
+    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
+    const envSuperadminPassword = (process.env.SUPERADMIN_PASSWORD || "").trim();
 
     // 1. Direct Environment-Variable Superadmin Check (Zero Database Storage Required)
     const isSuperadminInput =
-      normalizedEmail === envSuperadminEmail ||
-      normalizedEmail === "mahilaaction.vsk@gmail.com" ||
+      Boolean(envSuperadminEmail && normalizedEmail === envSuperadminEmail) ||
       normalizedEmail === "superadmin" ||
       normalizedEmail === "super admin";
 
-    if (isSuperadminInput) {
+    if (isSuperadminInput && envSuperadminPassword) {
       const inputPass = String(password).trim();
       let isValidSuperadmin = inputPass === envSuperadminPassword;
 
@@ -35,12 +34,12 @@ export async function POST(req: NextRequest) {
       }
 
       if (isValidSuperadmin) {
-        const adminPayload = { sub: "superadmin_env", email: envSuperadminEmail, role: "superadmin" };
+        const adminPayload = { sub: "superadmin_env", email: envSuperadminEmail || "superadmin", role: "superadmin" };
         const cookieHeader = createAdminCookieHeader(adminPayload);
         const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
 
         return NextResponse.json(
-          { ok: true, email: envSuperadminEmail, jwt: token },
+          { ok: true, email: envSuperadminEmail || "superadmin", jwt: token },
           { headers: { "Set-Cookie": cookieHeader } }
         );
       } else {

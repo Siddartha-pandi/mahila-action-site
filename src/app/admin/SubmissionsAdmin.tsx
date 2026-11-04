@@ -125,6 +125,9 @@ export function SubmissionsAdmin() {
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
         );
+        if (!isSilent) {
+          toast.success("Submissions refreshed from server");
+        }
       }
       setOffline(false);
     } catch (err) {
@@ -182,8 +185,8 @@ export function SubmissionsAdmin() {
 
     updateSubmissionStatus(item.id, status);
 
-    setSubmissions(prev => prev.map(s => (s.id === item.id && s.type === item.type ? { ...s, status } : s)));
-    if (selectedItem?.id === item.id && selectedItem?.type === item.type) {
+    setSubmissions(prev => prev.map(s => (String(s.id) === String(item.id) ? { ...s, status } : s)));
+    if (String(selectedItem?.id) === String(item.id)) {
       setSelectedItem(prev => (prev ? { ...prev, status } : null));
     }
     toast.success(`Status updated to ${status}`);
@@ -209,8 +212,8 @@ export function SubmissionsAdmin() {
     const res = await deleteSubmissionRemote(item);
     if (!res.ok) return toast.error(res.error || "Could not delete the submission — please try again.");
 
-    setSubmissions(prev => prev.filter(s => !(s.id === item.id && s.type === item.type)));
-    if (selectedItem?.id === item.id && selectedItem?.type === item.type) setSelectedItem(null);
+    setSubmissions(prev => prev.filter(s => String(s.id) !== String(item.id)));
+    if (String(selectedItem?.id) === String(item.id)) setSelectedItem(null);
     toast.success("Submission moved to Recycle Bin");
   }
 
@@ -395,6 +398,7 @@ export function SubmissionsAdmin() {
     }
 
     let deletedCount = 0;
+    const deletedIdSet = new Set<string>();
     for (const item of validItems) {
       addToTrash({
         id: String(item.id),
@@ -405,12 +409,14 @@ export function SubmissionsAdmin() {
       });
 
       const res = await deleteSubmissionRemote(item);
-      if (res.ok) deletedCount++;
+      if (res.ok) {
+        deletedCount++;
+        deletedIdSet.add(String(item.id));
+      }
     }
 
-    const deletedKeySet = new Set(validItems.map(i => `${i.type}::${i.id}`));
-    setSubmissions(prev => prev.filter(s => !deletedKeySet.has(`${s.type}::${s.id}`)));
-    if (selectedItem && deletedKeySet.has(`${selectedItem.type}::${selectedItem.id}`)) {
+    setSubmissions(prev => prev.filter(s => !deletedIdSet.has(String(s.id))));
+    if (selectedItem && deletedIdSet.has(String(selectedItem.id))) {
       setSelectedItem(null);
     }
     toast.success(`Moved ${deletedCount} submission(s) to Recycle Bin`);

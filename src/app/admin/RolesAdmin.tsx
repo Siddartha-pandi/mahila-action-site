@@ -451,6 +451,7 @@ export function RolesAdmin({
                   contact: { view: true, edit: false, delete: false },
                   roles: { view: false, edit: false, delete: false },
                   trash: { view: false, edit: false, delete: false },
+                  media: { view: false, edit: false, delete: false },
                 },
               });
               setShowRoleModal(true);

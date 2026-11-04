@@ -18,7 +18,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   const siteData = useSiteData();
   const contact = siteData?.contact;
   const email = contact?.email || "contact@mahilaction.org";
-  const phone = contact?.phone || "+91 123454321";
+  const phone = contact?.phone || "+91 70955 48387";
   const userProfile = useUserProfile();
 
   function nav(p: Page) {
@@ -254,8 +254,23 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
           </div>
         </div>
 
-        <div className={`${inter()} text-[#f4efe7]/50 text-[12px] text-center mt-12 pt-8 border-t border-[#f4efe7]/20 flex flex-col items-center gap-2`}>
+        <div className={`${inter()} text-[#f4efe7]/60 text-[12px] mt-12 pt-8 border-t border-[#f4efe7]/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left`}>
           <span>© {new Date().getFullYear()} Mahila Action. All rights reserved. Empowering women since 1995.</span>
+          <div className="flex items-center gap-4 text-[12px]">
+            <button
+              onClick={() => nav("privacy")}
+              className="hover:text-[#f4efe7] underline cursor-pointer transition-colors"
+            >
+              Privacy Policy
+            </button>
+            <span className="text-[#f4efe7]/40">•</span>
+            <button
+              onClick={() => nav("terms")}
+              className="hover:text-[#f4efe7] underline cursor-pointer transition-colors"
+            >
+              Terms of Service
+            </button>
+          </div>
         </div>
       </div>
     </footer>

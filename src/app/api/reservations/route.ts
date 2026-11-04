@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
-import { firstError, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
+import { firstError, normalizePhone, validateEmail, validateName, validatePhone, validateSeats, validateText } from "@/lib/validation";
 import { sendReservationConfirmationEmail, sendReservationAlertToAdmin } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
@@ -113,6 +113,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const cleanPhone = normalizePhone(body.phone);
+    const normalizedCompanions = companions.map((c: any) => ({
+      ...c,
+      phone: c?.phone ? normalizePhone(c.phone) : "",
+    }));
+
     const insertRes = await queryDb(
       `INSERT INTO event_reservations (event_id, event_name, name, email, phone, seats, volunteer_commitment, companions)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
@@ -121,10 +127,10 @@ export async function POST(req: NextRequest) {
         body.event_name,
         body.name,
         body.email,
-        body.phone,
+        cleanPhone,
         requestedSeats,
         body.volunteer_commitment || null,
-        JSON.stringify(body.companions || []),
+        JSON.stringify(normalizedCompanions),
       ]
     );
     const id = insertRes.rows[0]?.id;
@@ -149,10 +155,10 @@ export async function POST(req: NextRequest) {
       eventName: body.event_name,
       name: body.name,
       email: body.email,
-      phone: body.phone,
+      phone: cleanPhone,
       seats: Number(body.seats) || 1,
       isVolunteer: !!body.volunteer_commitment,
-      companions: body.companions,
+      companions: normalizedCompanions,
     }).catch((err) => console.error("sendReservationAlertToAdmin failed:", err));
 
     return NextResponse.json({ ok: true, id }, { status: 201 });

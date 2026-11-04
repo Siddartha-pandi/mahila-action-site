@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getAdminFromRequest } from "@/lib/auth";
 import { sendContactAcknowledgementEmail, sendContactAlertToAdmin } from "@/lib/email";
-import { LIMITS, firstError, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
+import { LIMITS, firstError, normalizePhone, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,13 +20,14 @@ export async function POST(req: NextRequest) {
     }
 
     // contact_submissions.id is SERIAL — let the sequence assign it.
+    const cleanPhone = body.phone ? normalizePhone(body.phone) : null;
     const insertRes = await queryDb(
       `INSERT INTO contact_submissions (name, email, phone, subject, message)
        VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [
         body.name,
         body.email,
-        body.phone || null,
+        cleanPhone,
         body.subject || null,
         body.message,
       ]
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     sendContactAlertToAdmin({
       name: body.name,
       email: body.email,
-      phone: body.phone,
+      phone: cleanPhone || undefined,
       subject: body.subject,
       message: body.message,
     }).catch((err) => console.error("sendContactAlertToAdmin failed:", err));

@@ -5,6 +5,8 @@ import { ImageOff, Loader2 } from "lucide-react";
 
 export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src?: string;
+  fallbackSrc?: string;
+  fallbackContainer?: React.ReactNode;
   alt: string;
   className?: string;
   containerClassName?: string;
@@ -15,6 +17,8 @@ export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement
 
 export function SafeImage({
   src,
+  fallbackSrc,
+  fallbackContainer,
   alt,
   className = "size-full object-cover",
   containerClassName = "size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-2 select-none",
@@ -25,19 +29,24 @@ export function SafeImage({
   onError,
   ...props
 }: SafeImageProps) {
-  const [isLoading, setIsLoading] = React.useState(Boolean(src));
+  const initialSrc = src || fallbackSrc;
+  const [currentSrc, setCurrentSrc] = React.useState<string | undefined>(initialSrc);
+  const [triedFallback, setTriedFallback] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(Boolean(initialSrc));
   const [hasError, setHasError] = React.useState(false);
   const imgRef = React.useRef<HTMLImageElement>(null);
 
   React.useEffect(() => {
+    const nextSrc = src || fallbackSrc;
+    setCurrentSrc(nextSrc);
+    setTriedFallback(false);
     setHasError(false);
 
-    if (!src) {
+    if (!nextSrc) {
       setIsLoading(false);
       return;
     }
 
-    // If already loaded from browser cache, dismiss loading immediately
     if (imgRef.current?.complete) {
       if (imgRef.current.naturalWidth > 0) {
         setIsLoading(false);
@@ -48,13 +57,28 @@ export function SafeImage({
     } else {
       setIsLoading(true);
     }
-  }, [src]);
+  }, [src, fallbackSrc]);
 
-  if (!src || hasError) {
+  function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
+    if (fallbackSrc && !triedFallback && currentSrc !== fallbackSrc) {
+      setTriedFallback(true);
+      setCurrentSrc(fallbackSrc);
+      setIsLoading(true);
+      return;
+    }
+
+    setIsLoading(false);
+    setHasError(true);
+    onError?.(e);
+  }
+
+  if (!currentSrc || hasError) {
+    if (fallbackContainer) {
+      return <>{fallbackContainer}</>;
+    }
     return (
       <div className={containerClassName} role="img" aria-label={`${alt || "Image"} (not available)`}>
         <ImageOff size={iconSize} className="opacity-75" />
-        {/* {errorText ? <span className="text-xs font-medium tracking-wide">{errorText}</span> : null} */}
       </div>
     );
   }
@@ -75,18 +99,14 @@ export function SafeImage({
       )}
       <img
         ref={imgRef}
-        src={src}
+        src={currentSrc}
         alt={alt}
         className={`${className} transition-opacity duration-300 ${isLoading ? "opacity-0" : "opacity-100"}`}
         onLoad={(e) => {
           setIsLoading(false);
           onLoad?.(e);
         }}
-        onError={(e) => {
-          setIsLoading(false);
-          setHasError(true);
-          onError?.(e);
-        }}
+        onError={handleImageError}
         {...props}
       />
     </>

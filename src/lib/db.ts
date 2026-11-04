@@ -114,13 +114,17 @@ async function removeSuperadminRows(dbPool: any): Promise<void> {
   const superadminEmail = (
     process.env.SUPERADMIN_EMAIL ||
     process.env.EMAIL_FROM ||
-    "mahilaaction.vsk@gmail.com"
+    ""
   ).toLowerCase().trim();
 
-  await dbPool.query(
-    `DELETE FROM users WHERE role = 'superadmin' OR LOWER(email) = LOWER($1)`,
-    [superadminEmail]
-  );
+  if (superadminEmail) {
+    await dbPool.query(
+      `DELETE FROM users WHERE role = 'superadmin' OR LOWER(email) = LOWER($1)`,
+      [superadminEmail]
+    );
+  } else {
+    await dbPool.query(`DELETE FROM users WHERE role = 'superadmin'`);
+  }
 }
 
 /** Builds a `($1, $2, ...), ($n, ...)` placeholder list for a multi-row insert. */
@@ -354,6 +358,15 @@ export async function initDb(): Promise<void> {
         "DROP TABLE IF EXISTS timeline CASCADE",
         "DROP TABLE IF EXISTS cms_councilors CASCADE",
         "DROP TABLE IF EXISTS cms_timeline CASCADE",
+        "ALTER TABLE media ALTER COLUMN data DROP NOT NULL",
+        "ALTER TABLE media ALTER COLUMN byte_size TYPE BIGINT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS drive_file_id TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS url TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS thumbnail_url TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT 'image'",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb",
+        "CREATE INDEX IF NOT EXISTS media_drive_file_id_idx ON media (drive_file_id)",
+        "CREATE INDEX IF NOT EXISTS media_media_type_idx ON media (media_type)",
       ];
 
       try {

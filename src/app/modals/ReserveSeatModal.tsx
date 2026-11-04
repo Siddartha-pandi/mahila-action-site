@@ -156,7 +156,7 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
           <div className="flex items-center gap-2">
             <span className="relative flex size-2"><span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex size-2 rounded-full bg-red-500" /></span>
             <p className={`font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold`}>
-              {event.bookedSeats ? `${event.availableSeats ?? Math.max(0, event.totalSeats - event.bookedSeats)} of ${event.totalSeats} seats available` : `${event.totalSeats} seats total`} — reserve yours now!
+              {Number(event.bookedSeats) > 0 ? `${event.availableSeats ?? Math.max(0, event.totalSeats - event.bookedSeats)} of ${event.totalSeats} seats available` : `${event.availableSeats ?? event.totalSeats} seats available`} — reserve yours now!
             </p>
           </div>
           {Number(event.bookedSeats) > 0 && (
