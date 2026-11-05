@@ -28,6 +28,8 @@ export interface EventItem {
   bookedSeats?: number;
   availableSeats?: number;
   maxVolunteers: number; // 0 = unlimited; admin-set cap on volunteer sign-ups
+  volunteerCount?: number;
+  remainingVolunteers?: number;
   windows: RegWindow[];
   categoryId: string | null; // e.g. "Women & Leadership" — shares the same categories as Stories
   published?: boolean; // true = visible to public, false = unpublished draft
@@ -651,6 +653,13 @@ export async function loadSiteData(): Promise<SiteData> {
             availableSeats,
             attendeeCount: Number(r.attendee_count ?? r.attendeeCount ?? 0),
             maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
+            volunteerCount: Number(r.volunteer_count ?? r.volunteerCount ?? 0),
+            remainingVolunteers:
+              r.remaining_volunteers !== undefined
+                ? Number(r.remaining_volunteers)
+                : Number(r.max_volunteers ?? r.maxVolunteers ?? 0) > 0
+                ? Math.max(0, Number(r.max_volunteers ?? r.maxVolunteers ?? 0) - Number(r.volunteer_count ?? r.volunteerCount ?? 0))
+                : 0,
             windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
             categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
             published: r.published !== false && r.published !== 0 && r.published !== "false",
@@ -767,6 +776,15 @@ export async function saveEvent(ev: EventItem): Promise<{ ok: boolean; id?: stri
     const assignedId = res.data?.id != null ? String(res.data.id) : undefined;
     if (res.data?.image) {
       itemToSave.image = res.data.image;
+    }
+    if (res.data?.maxVolunteers !== undefined) {
+      itemToSave.maxVolunteers = Number(res.data.maxVolunteers);
+    }
+    if (res.data?.volunteerCount !== undefined) {
+      itemToSave.volunteerCount = Number(res.data.volunteerCount);
+    }
+    if (res.data?.remainingVolunteers !== undefined) {
+      itemToSave.remainingVolunteers = Number(res.data.remainingVolunteers);
     }
     if (assignedId && assignedId !== String(ev.id)) {
       itemToSave.id = assignedId;

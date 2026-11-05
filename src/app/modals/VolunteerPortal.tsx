@@ -184,7 +184,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
     const adminRes = await signInAdmin(identifier, loginPass);
     if (adminRes.ok) {
-      setCurrentAdminSession(identifier);
+      setCurrentAdminSession(adminRes.email || identifier, adminRes.role);
       try {
         localStorage.setItem("mahila_admin_active_tab", "submissions");
       } catch {}

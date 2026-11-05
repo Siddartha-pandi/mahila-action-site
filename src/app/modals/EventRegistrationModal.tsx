@@ -404,24 +404,7 @@ export function EventRegistrationModal({
                           {SKILL_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <label className={reserveLabelClass}>Which category suits you well?</label>
-                        <div className="flex flex-col gap-2 mt-2">
-                          {([
-                            { val: "event_only" as const, label: "I want to volunteer for this event only" },
-                            { val: "ongoing" as const, label: "I can be a forever volunteer for future events too" },
-                          ]).map(opt => (
-                            <button
-                              key={opt.val}
-                              type="button"
-                              onClick={() => setCommitment(opt.val)}
-                              className={`text-left px-4 py-3 rounded-xl border text-[13px] font-medium transition-colors cursor-pointer font-['Inter',sans-serif] ${commitment === opt.val ? "bg-[#a65a4a]/10 border-[#a65a4a] text-[#a65a4a]" : "border-[#1e1e1e]/15 text-[#1e1e1e]/70 hover:border-[#a65a4a]/40"}`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+
                       <div>
                         <label className={reserveLabelClass}>Volunteers Joining (including you)</label>
                         <select value={volunteerParty.count} onChange={e => volunteerParty.setCountAndRows(e.target.value)} className={`${reserveInputClass} cursor-pointer`}>

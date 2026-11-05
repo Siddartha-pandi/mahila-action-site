@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, Calendar, MapPin, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Calendar, MapPin, CheckCircle, Users } from "lucide-react";
 import { toast } from "sonner";
 import { saveReservation, saveVendor } from "@/lib/backend";
 import { isWindowOpen, upcomingOrOpenEvents, type EventItem, type RegKind } from "@/lib/data";
@@ -21,26 +21,24 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
   const [name, setName] = useProfileField(profile?.name);
   const [email, setEmail] = useProfileField(profile?.email);
   const [phone, setPhone] = useProfileField(profile?.phone);
-  const [commitment, setCommitment] = useState<"event_only" | "ongoing">("event_only");
-  const [seats, setSeats] = useState("1");
-  const [companions, setCompanions] = useState<{ name: string; phone: string }[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [volInfo, setVolInfo] = useState<{ count: number; maxVolunteers: number }>(() => ({
+    count: Number(event.volunteerCount ?? 0),
+    maxVolunteers: Number(event.maxVolunteers ?? 0),
+  }));
 
-  function handleSeatsChange(v: string) {
-    setSeats(v);
-    const n = Math.max(0, Number(v) - 1);
-    setCompanions(prev => {
-      const next = [...prev];
-      while (next.length < n) next.push({ name: "", phone: "" });
-      while (next.length > n) next.pop();
-      return next;
-    });
-  }
-
-  function updateCompanion(i: number, patch: Partial<{ name: string; phone: string }>) {
-    setCompanions(prev => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
-  }
+  useEffect(() => {
+    if (!event.title) return;
+    fetch(`/api/event-volunteer-count?title=${encodeURIComponent(event.title)}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d && typeof d.count === "number") {
+          setVolInfo({ count: d.count, maxVolunteers: d.maxVolunteers ?? Number(event.maxVolunteers ?? 0) });
+        }
+      })
+      .catch(() => {});
+  }, [event.title, event.maxVolunteers]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,22 +46,26 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
     const invalid = firstError(
       validateName(name),
       validateEmail(email),
-      validatePhone(phone),
-      validateSeats(Number(seats)),
-      ...companions.flatMap((c, i) => [
-        validateName(c.name, `name for additional volunteer ${i + 1}`),
-        validatePhone(c.phone, `phone number for additional volunteer ${i + 1}`),
-      ])
+      validatePhone(phone)
     );
     if (invalid) return toast.error(invalid);
     setSubmitting(true);
     try {
       const res = await saveReservation({
-        name, email, phone, seats: Number(seats), event_name: event.title,
+        name,
+        email,
+        phone,
+        seats: 1,
+        event_name: event.title,
         event_id: event.id,
-        volunteer_commitment: commitment, companions,
+        volunteer_commitment: "event_only",
+        companions: [],
       });
       if (!res.ok) return toast.error(res.error || "Something went wrong submitting your registration — please try again.");
+      setVolInfo(prev => ({ ...prev, count: prev.count + 1 }));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("mahila_sitedata_changed"));
+      }
       setSubmitted(true);
     } finally {
       setSubmitting(false);
@@ -77,10 +79,11 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
           <CheckCircle size={32} className="text-[#587735]" />
         </div>
         <h4 className={`font-['Fraunces',serif] text-[#1e1e1e] text-[26px]`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>
-          Seat Reserved!
+          Registration Confirmed!
         </h4>
         <p className={`font-['Inter',sans-serif] text-[#1e1e1e]/70 text-[15px] leading-relaxed`}>
-          Thank you, <strong className="text-[#a65a4a]">{name}</strong>! Your {seats} seat{Number(seats) > 1 ? "s have" : " has"} been reserved as {commitment === "ongoing" ? "an ongoing volunteer" : "a volunteer for this event only"}. </p>
+          Thank you, <strong className="text-[#a65a4a]">{name}</strong>! You have been registered as a volunteer for <strong className="text-[#a65a4a]">{event.title}</strong>.
+        </p>
         <button onClick={onClose} className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[16px] font-semibold py-3.5 rounded-full mt-2 hover:bg-[#993925] transition-colors cursor-pointer`}>
           Done
         </button>
@@ -90,6 +93,39 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {(() => {
+        const cap = volInfo.maxVolunteers > 0 ? volInfo.maxVolunteers : Number(event.maxVolunteers ?? 0);
+        const count = volInfo.count;
+        if (cap > 0) {
+          const remaining = Math.max(0, cap - count);
+          if (remaining === 0) {
+            return (
+              <div className="bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-3 text-[13px] text-rose-800 flex items-center gap-2">
+                <span className="font-semibold">⚠️ All {cap} volunteer spots filled for this event ({count}/{cap} registered).</span>
+              </div>
+            );
+          }
+          return (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-3 text-[13px] text-emerald-900 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Users size={15} className="text-emerald-700 shrink-0" />
+                <span>
+                  <strong>{remaining}</strong> volunteer spot{remaining === 1 ? "" : "s"} remaining needed ({count} of {cap} registered)
+                </span>
+              </span>
+            </div>
+          );
+        }
+        if (count > 0) {
+          return (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 text-[12px] text-emerald-900 flex items-center gap-2">
+              <Users size={14} className="text-emerald-700 shrink-0" />
+              <span>{count} volunteer{count === 1 ? "" : "s"} already registered. More volunteers welcome!</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className={reserveLabelClass}>Full Name *</label>
@@ -105,67 +141,8 @@ export function VolunteerReserveForm({ event, onClose }: { event: EventItem; onC
         <input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com" type="email" className={reserveInputClass} />
       </div>
 
-      <div>
-        <label className={reserveLabelClass}>Which category suits you well?</label>
-        <div className="flex flex-col gap-2 mt-2">
-          {([
-            { val: "event_only" as const, label: "I want to volunteer for this event only" },
-            { val: "ongoing" as const, label: "I can be a forever volunteer for future events too" },
-          ]).map(opt => (
-            <button
-              key={opt.val}
-              type="button"
-              onClick={() => setCommitment(opt.val)}
-              className={`text-left px-4 py-3 rounded-xl border text-[13px] font-medium transition-colors cursor-pointer font-['Inter',sans-serif] ${commitment === opt.val ? "bg-[#a65a4a]/10 border-[#a65a4a] text-[#a65a4a]" : "border-[#1e1e1e]/15 text-[#1e1e1e]/70 hover:border-[#a65a4a]/40"}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className={reserveLabelClass}>Number of Seats</label>
-        <select value={seats} onChange={e => handleSeatsChange(e.target.value)} className={`${reserveInputClass} cursor-pointer`}>
-          {["1", "2", "3", "4", "5"].map(n => <option key={n} value={n}>{n} seat{Number(n) > 1 ? "s" : ""}</option>)}
-        </select>
-      </div>
-
-      {companions.length > 0 && (
-        <div className="bg-[#a65a4a]/8 border border-[#a65a4a]/25 rounded-xl p-4 flex flex-col gap-4">
-          <p className="font-['Inter',sans-serif] text-[#a65a4a] text-[12px] leading-relaxed">
-            You're registering {companions.length} additional volunteer{companions.length > 1 ? "s" : ""}. As the person registering, you'll be their <strong>guardian</strong> for this event — please provide their details below.
-          </p>
-          {companions.map((c, i) => (
-            <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className={reserveLabelClass}>Volunteer {i + 2} Name *</label>
-                <input value={c.name} onChange={e => updateCompanion(i, { name: e.target.value })} placeholder="Full name" className={reserveInputClass} />
-              </div>
-              <div>
-                <label className={reserveLabelClass}>Volunteer {i + 2} Phone *</label>
-                <input value={c.phone} onChange={e => updateCompanion(i, { phone: e.target.value })} placeholder="+91 XXXXX XXXXX" className={reserveInputClass} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {event.totalSeats > 0 && (
-        <div className="bg-[#a65a4a]/10 border border-[#a65a4a]/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="relative flex size-2"><span className="animate-ping absolute inline-flex size-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex size-2 rounded-full bg-red-500" /></span>
-            <p className={`font-['Inter',sans-serif] text-[#a65a4a] text-[12px] font-semibold`}>
-              {Number(event.bookedSeats) > 0 ? `${event.availableSeats ?? Math.max(0, event.totalSeats - event.bookedSeats)} of ${event.totalSeats} seats available` : `${event.availableSeats ?? event.totalSeats} seats available`} — reserve yours now!
-            </p>
-          </div>
-          {Number(event.bookedSeats) > 0 && (
-            <span className="text-[11px] text-[#a65a4a]/80 font-medium">({event.bookedSeats} booked)</span>
-          )}
-        </div>
-      )}
-      <button type="submit" disabled={submitting} className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}>
-        {submitting ? "Confirming..." : "Confirm Reservation"}
+      <button type="submit" disabled={submitting || (volInfo.maxVolunteers > 0 && volInfo.count >= volInfo.maxVolunteers)} className={`font-['Inter',sans-serif] w-full bg-[#a65a4a] text-[#f4efe7] text-[17px] font-semibold py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}>
+        {submitting ? "Confirming..." : "Confirm Volunteer Registration"}
       </button>
     </form>
   );

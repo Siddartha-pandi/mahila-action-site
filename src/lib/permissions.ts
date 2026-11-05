@@ -239,6 +239,7 @@ export function getStoredAdminUsers(): AdminUser[] {
       const sanitized = parsed.map((user) => {
         const isSuper =
           (Boolean(superEmail) && user.email?.toLowerCase().trim() === superEmail) ||
+
           user.roleId === "superadmin";
 
         if (isSuper) {
@@ -274,20 +275,35 @@ export function saveStoredAdminUsers(users: AdminUser[]) {
 
 export function saveAdminUser(user: Partial<AdminUser> & { email: string }): AdminUser {
   const users = getStoredAdminUsers();
-  const existingIndex = users.findIndex(u => u.id === user.id || u.email.toLowerCase() === user.email.toLowerCase());
+  const lowerEmail = user.email.toLowerCase().trim();
+  const isSuper =
+    user.roleId === "superadmin" ||
+    (Boolean(envSuperAdminEmail) && lowerEmail === envSuperAdminEmail.toLowerCase().trim());
+
+
+  if (isSuper) {
+    users.forEach(u => {
+      if (u.email.toLowerCase().trim() !== lowerEmail && u.roleId === "superadmin") {
+        u.roleId = "admin";
+      }
+    });
+  }
+
+  const existingIndex = users.findIndex(u => u.id === user.id || u.email.toLowerCase().trim() === lowerEmail);
 
   if (existingIndex >= 0) {
     const updated: AdminUser = {
       ...users[existingIndex],
       ...user,
+      roleId: isSuper ? "superadmin" : (user.roleId || users[existingIndex].roleId || "user"),
     };
     users[existingIndex] = updated;
     saveStoredAdminUsers(users);
     return updated;
   } else {
-    // Only one superadmin allowed in system
-    const hasSuperAdmin = users.some(u => u.roleId === "superadmin");
-    const roleId = (!hasSuperAdmin && user.roleId === "superadmin") ? "superadmin" : (user.roleId === "superadmin" ? "user" : (user.roleId || "user"));
+
+
+    const roleId = isSuper ? "superadmin" : (user.roleId || "user");
 
     const newUser: AdminUser = {
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -366,6 +382,16 @@ export function getCurrentAdminSession(): AdminUser {
         const users = getStoredAdminUsers();
         const active = users.find(u => u.email.toLowerCase() === parsed.email.toLowerCase());
         if (active && active.status === "Active") return active;
+        const superEmail = envSuperAdminEmail.toLowerCase().trim();
+        if (Boolean(superEmail) && parsed.email.toLowerCase() === superEmail) {
+          return {
+            id: "usr_superadmin",
+            name: "Lead Super Admin",
+            email: parsed.email,
+            roleId: "superadmin",
+            status: "Active",
+          };
+        }
       }
     }
   } catch {}
@@ -373,11 +399,13 @@ export function getCurrentAdminSession(): AdminUser {
   return UNAUTHENTICATED_ADMIN_USER;
 }
 
-export function setCurrentAdminSession(email: string) {
+export function setCurrentAdminSession(email: string, explicitRole?: string) {
   try {
     const normalizedEmail = email.toLowerCase().trim();
     const isSuper =
+      explicitRole === "superadmin" ||
       Boolean(envSuperAdminEmail && normalizedEmail === envSuperAdminEmail.toLowerCase().trim()) ||
+
       normalizedEmail === "superadmin" ||
       normalizedEmail === "super admin";
 
@@ -392,8 +420,17 @@ export function setCurrentAdminSession(email: string) {
         roleId: "superadmin",
         status: "Active",
       });
+    } else if (explicitRole) {
+      match = saveAdminUser({
+        id: match?.id,
+        email: normalizedEmail,
+        name: match?.name || normalizedEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+        roleId: explicitRole,
+        status: "Active",
+      });
     } else if (!match) {
       // If user does not exist, check if a superadmin exists. If so, assign staff ("user") role.
+  
       const hasSuperAdmin = users.some(u => u.roleId === "superadmin");
       const roleId = !hasSuperAdmin ? "superadmin" : (normalizedEmail.includes("admin") ? "admin" : "user");
 

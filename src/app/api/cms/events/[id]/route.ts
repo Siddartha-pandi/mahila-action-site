@@ -22,7 +22,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           FROM event_reservations r
           WHERE (r.event_id = e.id OR LOWER(r.event_name) = LOWER(e.title))
             AND (r.volunteer_commitment IS NULL OR r.volunteer_commitment = '' OR r.volunteer_commitment = 'none' OR r.volunteer_commitment = 'attendee')
-        ), 0)::int AS attendee_count
+        ), 0)::int AS attendee_count,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM event_reservations r
+          WHERE (r.event_id = e.id OR LOWER(r.event_name) = LOWER(e.title))
+            AND (r.volunteer_commitment IS NOT NULL AND r.volunteer_commitment != '' AND r.volunteer_commitment != 'none' AND r.volunteer_commitment != 'attendee' AND r.volunteer_commitment != 'vendor')
+        ), 0)::int AS volunteer_count
        FROM events e
        WHERE e.id = $1`,
       [id],
@@ -35,6 +41,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const totalSeats = Number(r.total_seats ?? r.totalSeats ?? 0);
     const bookedSeats = Number(r.booked_seats ?? 0);
     const availableSeats = totalSeats > 0 ? Math.max(0, totalSeats - bookedSeats) : 0;
+    const maxVolunteers = Number(r.max_volunteers ?? r.maxVolunteers ?? 0);
+    const volunteerCount = Number(r.volunteer_count ?? r.volunteerCount ?? 0);
+    const remainingVolunteers = maxVolunteers > 0 ? Math.max(0, maxVolunteers - volunteerCount) : 0;
     return NextResponse.json({
       ...r,
       id: String(r.id),
@@ -43,7 +52,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       bookedSeats,
       availableSeats,
       attendeeCount: Number(r.attendee_count ?? 0),
-      maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
+      maxVolunteers,
+      volunteerCount,
+      remainingVolunteers,
       categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
       published: r.published !== false && r.published !== 0 && r.published !== "false",
       createdAt: r.created_at || r.createdAt || "",

@@ -113,13 +113,29 @@ export function ImageField({
           </div>
         )}
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={safeVal.startsWith("data:") ? "" : safeVal}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={safeVal.startsWith("data:") ? "(uploaded image)" : "Paste image URL (/api/media/…) or upload file"}
-            className={inputBase}
-          />
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={safeVal.startsWith("data:") ? "" : safeVal}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={safeVal.startsWith("data:") ? "(uploaded image)" : "Paste image URL (/api/media/…) or upload file"}
+              className={`${inputBase} ${safeVal ? "pr-8" : ""}`}
+            />
+            {safeVal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-[#1e1e1e]/40 hover:text-[#a65a4a] cursor-pointer"
+                title="Remove image"
+                aria-label="Remove image"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -142,14 +158,27 @@ export function ImageField({
               type="button"
               onClick={openCrop}
               disabled={resolvingCrop || uploading}
-              className="absolute -top-1.5 -right-1.5 size-6 bg-[#a65a4a] text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#993925] disabled:opacity-60"
+              className="absolute -top-1.5 -left-1.5 size-6 bg-white text-[#a65a4a] border border-[#a65a4a]/40 rounded-full flex items-center justify-center cursor-pointer hover:bg-[#a65a4a] hover:text-white shadow-xs disabled:opacity-60 transition-colors"
               title="Crop image"
+              aria-label="Crop image"
             >
               {resolvingCrop || uploading ? (
                 <svg className="animate-spin size-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
               ) : (
                 <Crop size={12} />
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                if (fileRef.current) fileRef.current.value = "";
+              }}
+              className="absolute -top-1.5 -right-1.5 size-6 bg-[#a65a4a] text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#993925] shadow-xs transition-colors"
+              title="Remove image"
+              aria-label="Remove image"
+            >
+              <X size={12} />
             </button>
           </div>
         )}

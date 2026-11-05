@@ -22,7 +22,13 @@ export async function GET(req: NextRequest) {
           FROM event_reservations r
           WHERE (r.event_id = e.id OR LOWER(r.event_name) = LOWER(e.title))
             AND (r.volunteer_commitment IS NULL OR r.volunteer_commitment = '' OR r.volunteer_commitment = 'none' OR r.volunteer_commitment = 'attendee')
-        ), 0)::int AS attendee_count
+        ), 0)::int AS attendee_count,
+        COALESCE((
+          SELECT COUNT(*)
+          FROM event_reservations r
+          WHERE (r.event_id = e.id OR LOWER(r.event_name) = LOWER(e.title))
+            AND (r.volunteer_commitment IS NOT NULL AND r.volunteer_commitment != '' AND r.volunteer_commitment != 'none' AND r.volunteer_commitment != 'attendee' AND r.volunteer_commitment != 'vendor')
+        ), 0)::int AS volunteer_count
        FROM events e
        ORDER BY e.event_date ASC`,
       [],
@@ -33,6 +39,9 @@ export async function GET(req: NextRequest) {
         const totalSeats = Number(r.total_seats ?? r.totalSeats ?? 0);
         const bookedSeats = Number(r.booked_seats ?? 0);
         const availableSeats = totalSeats > 0 ? Math.max(0, totalSeats - bookedSeats) : 0;
+        const maxVolunteers = Number(r.max_volunteers ?? r.maxVolunteers ?? 0);
+        const volunteerCount = Number(r.volunteer_count ?? r.volunteerCount ?? 0);
+        const remainingVolunteers = maxVolunteers > 0 ? Math.max(0, maxVolunteers - volunteerCount) : 0;
         return {
           ...r,
           id: String(r.id),
@@ -41,7 +50,9 @@ export async function GET(req: NextRequest) {
           bookedSeats,
           availableSeats,
           attendeeCount: Number(r.attendee_count ?? 0),
-          maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
+          maxVolunteers,
+          volunteerCount,
+          remainingVolunteers,
           categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
           published: r.published !== false && r.published !== 0 && r.published !== "false",
           createdAt: r.created_at || r.createdAt || "",
@@ -233,25 +244,28 @@ export async function POST(req: NextRequest) {
       finalId = res.rows[0]?.id;
     }
 
-    // Query latest booked seats for this event
+    // Query latest booked seats and volunteer counts for this event
     let bookedSeats = 0;
     let attendeeCount = 0;
+    let volunteerCount = 0;
     if (finalId) {
       const statsRes = await queryDb(
         `SELECT
-          COALESCE(SUM(seats), 0)::int AS booked_seats,
-          COALESCE(COUNT(*), 0)::int AS attendee_count
+          COALESCE(SUM(CASE WHEN (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee') THEN seats ELSE 0 END), 0)::int AS booked_seats,
+          COALESCE(SUM(CASE WHEN (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee') THEN 1 ELSE 0 END), 0)::int AS attendee_count,
+          COALESCE(SUM(CASE WHEN (volunteer_commitment IS NOT NULL AND volunteer_commitment != '' AND volunteer_commitment != 'none' AND volunteer_commitment != 'attendee' AND volunteer_commitment != 'vendor') THEN 1 ELSE 0 END), 0)::int AS volunteer_count
          FROM event_reservations
-         WHERE (event_id = $1 OR LOWER(event_name) = LOWER($2))
-           AND (volunteer_commitment IS NULL OR volunteer_commitment = '' OR volunteer_commitment = 'none' OR volunteer_commitment = 'attendee')`,
+         WHERE (event_id = $1 OR LOWER(event_name) = LOWER($2))`,
         [Number(finalId) || 0, title]
       ).catch(() => ({ rows: [] }));
       if (statsRes.rows && statsRes.rows[0]) {
         bookedSeats = Number(statsRes.rows[0].booked_seats || 0);
         attendeeCount = Number(statsRes.rows[0].attendee_count || 0);
+        volunteerCount = Number(statsRes.rows[0].volunteer_count || 0);
       }
     }
     const availableSeats = totalSeats > 0 ? Math.max(0, totalSeats - bookedSeats) : 0;
+    const remainingVolunteers = maxVolunteers > 0 ? Math.max(0, maxVolunteers - volunteerCount) : 0;
 
     return NextResponse.json({
       ok: true,
@@ -260,6 +274,9 @@ export async function POST(req: NextRequest) {
       bookedSeats,
       availableSeats,
       attendeeCount,
+      maxVolunteers,
+      volunteerCount,
+      remainingVolunteers,
     });
   } catch (err: any) {
     console.error("POST /api/cms/events error:", err);

@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, MapPin, Globe, EyeOff } from "lucide-react";
+import { Calendar, MapPin, Globe, EyeOff, Users } from "lucide-react";
 import { isEventOpen, type EventItem } from "@/lib/data";
 import { SafeImage } from "./SafeImage";
 import { inter } from "./shared/styleHelpers";
@@ -45,14 +45,22 @@ export function EventCard({
         onReserve ? "cursor-pointer hover:shadow-xl hover:ring-2 hover:ring-[#a65a4a]/40" : ""
       } ${event.published === false ? "ring-3 ring-amber-400/80" : ""}`}
     >
-      <SafeImage
-        src={event.image}
-        alt={event.title}
-        className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
-        containerClassName="absolute inset-0 size-full flex flex-col items-center justify-center bg-[#2c1d19] text-[#f4efe7]/60 gap-2 select-none"
-        errorText="Image not available"
-        iconSize={40}
-      />
+      {event.image ? (
+        <SafeImage
+          src={event.image}
+          alt={event.title}
+          className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
+          fallbackContainer={
+            <div className="absolute inset-0 size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none pb-10">
+              <Calendar size={44} className="opacity-75" />
+            </div>
+          }
+        />
+      ) : (
+        <div className="absolute inset-0 size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none pb-10">
+          <Calendar size={44} className="opacity-75" />
+        </div>
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent transition-opacity group-hover:opacity-90" />
 
       {/* Admin Publish / Unpublish Card Controls */}
@@ -102,9 +110,34 @@ export function EventCard({
       )}
 
       <div className="absolute top-4 sm:top-6 left-4 sm:left-6 flex items-center justify-between gap-2 w-[calc(100%-32px)] sm:w-[calc(100%-48px)] flex-wrap">
-        <span className={`${inter()} border border-[#0000001e] text-[#464040ff] text-[11px] sm:text-[12px] font-semibold px-3 sm:px-4 py-1 sm:py-1.5 rounded-full`}>
-          {categoryName || "Community Event"}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`${inter()} border border-[#0000001e] text-[#464040ff] text-[11px] sm:text-[12px] font-semibold px-3 sm:px-4 py-1 sm:py-1.5 rounded-full`}>
+            {categoryName || "Community Event"}
+          </span>
+          {Number(event.maxVolunteers) > 0 && (
+            (() => {
+              const reg = Number(event.volunteerCount ?? 0);
+              const cap = Number(event.maxVolunteers);
+              const remaining = Math.max(0, cap - reg);
+              const isFull = remaining === 0;
+              return (
+                <span
+                  title={isFull ? "Volunteer spots full" : `${remaining} of ${cap} volunteer spots remaining`}
+                  className={`${inter()} ${
+                    isFull
+                      ? "bg-rose-950/80 border border-rose-400/50 text-rose-200"
+                      : "bg-emerald-950/80 border border-emerald-400/50 text-emerald-200"
+                  } text-[10px] sm:text-[11px] font-semibold px-2.5 sm:px-3 py-1 rounded-full flex items-center gap-1 whitespace-nowrap shadow-xs`}
+                >
+                  <Users size={11} className={isFull ? "text-rose-400" : "text-emerald-400"} />
+                  {isFull
+                    ? `Volunteers Full (${cap}/${cap})`
+                    : `${remaining} Volunteer${remaining === 1 ? "" : "s"} Needed`}
+                </span>
+              );
+            })()
+          )}
+        </div>
         {open && !onTogglePublish ? (
           (() => {
             const booked = Number(event.bookedSeats ?? 0);
@@ -152,6 +185,19 @@ export function EventCard({
             <span className={`${inter()} text-[#f4efe7]/90 text-[13px] sm:text-[14px] flex items-center gap-1.5 sm:gap-2`}>
               <MapPin size={15} /> {event.location}
             </span>
+          )}
+          {Number(event.maxVolunteers) > 0 && (
+            (() => {
+              const reg = Number(event.volunteerCount ?? 0);
+              const cap = Number(event.maxVolunteers);
+              const remaining = Math.max(0, cap - reg);
+              return (
+                <span className={`${inter()} text-[#f4efe7]/90 text-[13px] sm:text-[14px] flex items-center gap-1.5 sm:gap-2`}>
+                  <Users size={15} />
+                  {remaining > 0 ? `${remaining} Remaining Needed (${reg}/${cap})` : `Volunteers Full (${cap}/${cap})`}
+                </span>
+              );
+            })()
           )}
         </div>
       </div>

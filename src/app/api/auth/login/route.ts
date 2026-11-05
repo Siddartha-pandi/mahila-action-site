@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
 
         return NextResponse.json(
-          { ok: true, email: envSuperadminEmail || "superadmin", jwt: token },
+          { ok: true, email: envSuperadminEmail || "superadmin", role: "superadmin", jwt: token },
           { headers: { "Set-Cookie": cookieHeader } }
         );
       } else {
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
 
     return NextResponse.json(
-      { ok: true, email: user.email, jwt: token },
+      { ok: true, email: user.email, role: user.role, jwt: token },
       { headers: { "Set-Cookie": cookieHeader } }
     );
   } catch (err: any) {

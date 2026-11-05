@@ -76,7 +76,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
         if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
           canonicalEmail = adminRes.email || envSuperEmail || "superadmin";
         }
-        setCurrentAdminSession(canonicalEmail);
+        setCurrentAdminSession(canonicalEmail, adminRes.role);
         try {
           localStorage.setItem("mahila_admin_active_tab", "submissions");
         } catch {}
@@ -104,7 +104,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
         canonicalEmail = fallbackAdmin.email || envSuperEmail || "superadmin";
       }
-      setCurrentAdminSession(canonicalEmail);
+      setCurrentAdminSession(canonicalEmail, fallbackAdmin.role);
       try {
         localStorage.setItem("mahila_admin_active_tab", "submissions");
       } catch {}

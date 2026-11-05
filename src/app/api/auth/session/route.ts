@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
       loggedIn: true,
       authenticated: true,
       email: admin.email,
+      role: (admin as any).role || "admin",
       user: { email: admin.email, role: (admin as any).role || "admin" },
     });
   }

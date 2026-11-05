@@ -141,6 +141,9 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
   const availableSeats = Math.max(0, capacity - attendeeSeats);
   const percentUsed = capacity > 0 ? Math.min(100, Math.round((attendeeSeats / capacity) * 100)) : 0;
   const isFull = capacity > 0 && attendeeSeats >= capacity;
+  const maxVolunteers = Number(ev.maxVolunteers) || 0;
+  const availableVolunteers = maxVolunteers > 0 ? Math.max(0, maxVolunteers - volunteerCount) : null;
+  const isVolunteersFull = maxVolunteers > 0 && volunteerCount >= maxVolunteers;
 
   return {
     attendeeSeats,
@@ -153,6 +156,9 @@ function getEventStats(ev: EventItem, submissions: SubmissionItem[]) {
     availableSeats,
     percentUsed,
     isFull,
+    maxVolunteers,
+    availableVolunteers,
+    isVolunteersFull,
   };
 }
 
@@ -274,8 +280,8 @@ function EventDetailRegistrationsView({
               onError={(e) => (e.currentTarget.style.display = "none")}
             />
           ) : (
-            <div className="size-16 rounded-xl bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
-              <Calendar size={24} />
+            <div className="size-16 rounded-xl bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 flex items-center justify-center font-bold shrink-0">
+              <Calendar size={24} className="opacity-80" />
             </div>
           )}
           <div>
@@ -324,7 +330,14 @@ function EventDetailRegistrationsView({
           </div>
           <div className="bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl text-center">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">Volunteers</span>
-            <span className="text-[18px] font-bold text-emerald-900">{expStats.volunteerCount}</span>
+            <span className="text-[18px] font-bold text-emerald-900">
+              {expStats.volunteerCount}{expStats.maxVolunteers > 0 ? ` / ${expStats.maxVolunteers}` : ""}
+            </span>
+            <span className="text-[10px] text-emerald-700 block">
+              {expStats.maxVolunteers > 0
+                ? `${expStats.availableVolunteers} spot${expStats.availableVolunteers === 1 ? "" : "s"} left`
+                : "No limit set"}
+            </span>
           </div>
           <div className="bg-purple-50 border border-purple-200 px-3.5 py-2 rounded-xl text-center">
             <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">Vendors</span>
@@ -748,8 +761,8 @@ export function EventsOverviewTable({
                           onError={(e) => (e.currentTarget.style.display = "none")}
                         />
                       ) : (
-                        <div className="size-9 rounded-lg bg-[#a65a4a]/10 text-[#a65a4a] flex items-center justify-center font-bold shrink-0">
-                          <Calendar size={17} />
+                        <div className="size-9 rounded-lg bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 flex items-center justify-center font-bold shrink-0">
+                          <Calendar size={17} className="opacity-80" />
                         </div>
                       )}
                       <div>
@@ -819,14 +832,17 @@ export function EventsOverviewTable({
                       const cap = Number(ev.maxVolunteers ?? 0);
                       const count = stats.volunteerCount;
                       const isCapped = cap > 0;
+                      const remaining = isCapped ? Math.max(0, cap - count) : null;
                       const isFull = isCapped && count >= cap;
                       return (
                         <div>
                           <span className={`font-bold ${isFull ? "text-rose-700" : "text-emerald-700"}`}>
                             {count}{isCapped ? `/${cap}` : ""}
                           </span>
-                          {isFull && (
-                            <span className="text-[9px] font-semibold bg-rose-100 text-rose-700 px-1 py-0.2 rounded-full block mt-0.5">Full</span>
+                          {isCapped && (
+                            <span className={`text-[10px] block mt-0.5 ${isFull ? "text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded-full" : "text-emerald-700 font-medium"}`}>
+                              {isFull ? "Full" : `${remaining} needed`}
+                            </span>
                           )}
                         </div>
                       );
@@ -1196,6 +1212,9 @@ export function EventsAdmin({
         return next;
       });
 
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("mahila_sitedata_changed"));
+      }
       toast.success("Event saved successfully!");
     } else {
       toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
@@ -1648,7 +1667,7 @@ export function EventsAdmin({
                     <div>
                       <p className="font-semibold text-[13px] text-[#1e1e1e]">Member Registration Summary</p>
                       <p className="text-[12px] text-[#1e1e1e]/60">
-                        {activeStats.attendeeSeats} seats booked ({activeStats.attendeeCount} bookings) • <span className="text-emerald-700 font-semibold">{activeStats.availableSeats} available</span> • {activeStats.volunteerCount} volunteers • {activeStats.vendorCount} vendors
+                        {activeStats.attendeeSeats} seats booked ({activeStats.attendeeCount} bookings) • <span className="text-emerald-700 font-semibold">{activeStats.availableSeats} available</span> • <span className="font-semibold text-emerald-800">{activeStats.volunteerCount}{active.maxVolunteers > 0 ? `/${active.maxVolunteers}` : ""} volunteers{active.maxVolunteers > 0 && ` (${Math.max(0, active.maxVolunteers - activeStats.volunteerCount)} spots left)`}</span> • {activeStats.vendorCount} vendors
                       </p>
                     </div>
                     <button
@@ -1745,14 +1764,39 @@ export function EventsAdmin({
                   })()}
                 </div>
                 <div>
-                  <label className={labelBase}>Max Volunteers <span className="text-[#1e1e1e]/40 normal-case font-normal">(0 = unlimited)</span></label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelBase}>Max Volunteers <span className="text-[#1e1e1e]/40 normal-case font-normal">(0 = unlimited)</span></label>
+                    {(() => {
+                      const activeStats = getEventStats(active, submissions);
+                      const cap = Number(active.maxVolunteers || 0);
+                      if (cap > 0) {
+                        const avail = Math.max(0, cap - activeStats.volunteerCount);
+                        return (
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${avail <= 0 ? "text-rose-700 bg-rose-50 border-rose-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
+                            {activeStats.volunteerCount}/{cap} Registered ({avail} Spot{avail === 1 ? "" : "s"} Left)
+                          </span>
+                        );
+                      }
+                      if (activeStats.volunteerCount > 0) {
+                        return (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            {activeStats.volunteerCount} Registered (Unlimited)
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                   <input
                     type="number"
                     min={0}
-                    value={active.maxVolunteers ?? 0}
-                    onChange={(e) => update({ maxVolunteers: Number(e.target.value) })}
+                    value={active.maxVolunteers === 0 ? "" : (active.maxVolunteers ?? "")}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      update({ maxVolunteers: v === "" ? 0 : Math.max(0, parseInt(v, 10) || 0) });
+                    }}
                     className={inputBase}
-                    placeholder="0 = no limit"
+                    placeholder="0 = unlimited"
                   />
                 </div>
               </div>

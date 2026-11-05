@@ -2,13 +2,13 @@ import { api } from "./api";
 
 // ── Admin authentication ────────────────
 
-export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; email?: string; error?: string }> {
+export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; email?: string; role?: string; error?: string }> {
   if (!email?.trim() || !password) {
     return { ok: false, error: "Enter your admin email and password." };
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const res = await api.post<{ ok?: boolean; email?: string; jwt?: string; token?: string }>("/api/auth/login", {
+  const res = await api.post<{ ok?: boolean; email?: string; role?: string; jwt?: string; token?: string }>("/api/auth/login", {
     email: cleanEmail,
     password,
   });
@@ -23,7 +23,7 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
       window.dispatchEvent(new Event("mahila_admin_auth_changed"));
       window.dispatchEvent(new Event("storage"));
     }
-    return { ok: true };
+    return { ok: true, email: res.data?.email, role: res.data?.role };
   }
 
   if (res.status === 0) {
@@ -44,7 +44,7 @@ export async function signOutAdmin() {
   }
 }
 
-export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
+export function onAdminAuthChange(cb: (loggedIn: boolean, sessionUser?: { email: string; role: string }) => void): () => void {
   // Purge any stale legacy localStorage tokens from older builds
   if (typeof window !== "undefined") {
     try {
@@ -61,9 +61,10 @@ export function onAdminAuthChange(cb: (loggedIn: boolean) => void): () => void {
     }
 
     try {
-      const res = await api.get<{ loggedIn?: boolean }>("/api/auth/session");
+      const res = await api.get<{ loggedIn?: boolean; email?: string; role?: string; user?: { email: string; role: string } }>("/api/auth/session");
       if (res.ok && res.data?.loggedIn) {
-        cb(true);
+        const user = res.data.user || (res.data.email ? { email: res.data.email, role: res.data.role || "admin" } : undefined);
+        cb(true, user);
         return;
       }
     } catch {}

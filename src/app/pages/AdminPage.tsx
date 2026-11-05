@@ -161,7 +161,7 @@ export function AdminPage({
     let mounted = true;
     let fallbackTimer: NodeJS.Timeout | null = null;
 
-    const unsubscribe = onAdminAuthChange((isLoggedIn) => {
+    const unsubscribe = onAdminAuthChange((isLoggedIn, sessionUser) => {
       if (!mounted) return;
       if (fallbackTimer) {
         clearTimeout(fallbackTimer);
@@ -170,6 +170,9 @@ export function AdminPage({
       setLoggedIn(isLoggedIn);
       if (isLoggedIn) {
         setDraft({ ...existing });
+        if (sessionUser?.email) {
+          setCurrentAdminSession(sessionUser.email, sessionUser.role);
+        }
         setCurrentAdminUser(getCurrentAdminSession());
       } else {
         setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
@@ -244,8 +247,8 @@ export function AdminPage({
     setSigningIn(false);
     if (!result.ok) return toast.error(result.error || "Incorrect email or password");
 
-    const cleanEmail = email.trim().toLowerCase();
-    setCurrentAdminSession(cleanEmail);
+    const cleanEmail = (result.email || email).trim().toLowerCase();
+    setCurrentAdminSession(cleanEmail, result.role);
     const userSession = getCurrentAdminSession();
     setCurrentAdminUser(userSession);
     setLoggedIn(true);
