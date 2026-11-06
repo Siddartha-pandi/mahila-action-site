@@ -18,10 +18,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boole
       : {};
 
     const url = BASE_URL ? `${BASE_URL}${path}` : path;
+    const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+    const defaultHeaders: Record<string, string> = isFormData
+      ? {}
+      : { "Content-Type": "application/json" };
+
     const res = await fetch(url, {
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
+        ...defaultHeaders,
         ...authHeaders,
         ...(init?.headers || {}),
       },
@@ -46,8 +51,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<{ ok: boole
 
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
-  post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
-  put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
-  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
-  del: <T>(path: string, body?: unknown) => request<T>(path, { method: "DELETE", body: body ? JSON.stringify(body) : undefined }),
-};
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "POST",
+      body: typeof FormData !== "undefined" && body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    }),
+  postForm: <T>(path: string, formData: FormData) =>
+    request<T>(path, { method: "POST", body: formData }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "PUT",
+      body: typeof FormData !== "undefined" && body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "PATCH",
+      body: typeof FormData !== "undefined" && body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    }),
+  del: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: "DELETE",
+      body: typeof FormData !== "undefined" && body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    }),
+};

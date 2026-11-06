@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
-import { getPublicUrl, resolveStorageUrl, deleteFromStorage } from "@/lib/storage";
+import { getPublicUrl, resolveStorageUrl, deleteFromStorage, getStorageObject } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ export async function GET(
 
     const row = res.rows[0];
 
-    // 1. S3 Object Storage redirect
+    // 1. S3 Object Storage direct streaming or proxy
     if (row.object_key && row.bucket_name) {
       if (row.visibility === "private") {
         const { getAdminFromRequest } = await import("@/lib/auth");
@@ -46,11 +46,54 @@ export async function GET(
         }
       }
 
-      const s3Url =
-        row.visibility === "public"
-          ? getPublicUrl(row.object_key, row.bucket_name)
-          : await resolveStorageUrl(row.object_key, row.bucket_name, row.visibility || "public");
-      return NextResponse.redirect(s3Url, { status: 307 });
+      try {
+        const s3Obj = await getStorageObject(row.object_key, row.bucket_name);
+        if (s3Obj.Body) {
+          const mimeType = s3Obj.ContentType || row.mime_type || "application/octet-stream";
+          const etag = s3Obj.ETag || `"${row.id}"`;
+
+          // Handle 304 Not Modified if browser already has this version cached
+          const ifNoneMatch = req.headers.get("if-none-match");
+          if (ifNoneMatch && (ifNoneMatch === etag || ifNoneMatch === `"${etag}"` || ifNoneMatch === "*")) {
+            return new NextResponse(null, {
+              status: 304,
+              headers: {
+                ETag: etag,
+                "Cache-Control": "public, max-age=31536000, immutable",
+              },
+            });
+          }
+
+          const webStream = (s3Obj.Body as any).transformToWebStream
+            ? (s3Obj.Body as any).transformToWebStream()
+            : (s3Obj.Body as any);
+
+          const headers: Record<string, string> = {
+            "Content-Type": mimeType,
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "ETag": etag,
+          };
+          if (s3Obj.ContentLength) {
+            headers["Content-Length"] = s3Obj.ContentLength.toString();
+          }
+
+          return new NextResponse(webStream, {
+            status: 200,
+            headers,
+          });
+        }
+      } catch (s3Err: any) {
+        console.warn(`S3 stream fetch failed for key ${row.object_key}:`, s3Err?.message || s3Err);
+        // Fall back to legacy row.data if available or presigned redirect
+        if (!row.data) {
+          try {
+            const fallbackUrl = await resolveStorageUrl(row.object_key, row.bucket_name, row.visibility || "public");
+            return NextResponse.redirect(fallbackUrl, { status: 307 });
+          } catch {
+            return NextResponse.json({ error: "Storage object unavailable" }, { status: 502 });
+          }
+        }
+      }
     }
 
     const url = new URL(req.url);

@@ -13,6 +13,20 @@ export function fileToDataUrl(file: File): Promise<string> {
 }
 
 /**
+ * Converts a base64 Data URL to a native binary Blob.
+ */
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(",");
+  const mime = parts[0]?.match(/:(.*?);/)?.[1] || "image/png";
+  const binary = atob(parts[1] || "");
+  const u8arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    u8arr[i] = binary.charCodeAt(i);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+/**
  * Fetches a remote image URL and converts it to a data URL, so the crop modal
  * always works on same-origin data — this avoids the browser's canvas CORS
  * restriction that otherwise blocks cropping most externally-hosted images.
@@ -44,46 +58,66 @@ export function isDbMediaUrl(url: string): boolean {
 }
 
 /**
- * Uploads an image (File or base64 Data URL) to the PostgreSQL database media table.
- * Returns the permanent database media URL (e.g. `/api/media/42`).
- * If upload fails, gracefully falls back to the data URL so no user edits are lost.
+ * Uploads an image (File, Blob, or base64 Data URL) to S3 Cloud Storage & Media Table.
+ * Returns the permanent media URL (e.g. `/api/media/42`).
+ * If upload fails, gracefully falls back to data URL so user edits are not lost.
  */
 export async function uploadMediaToDb(
-  dataUrlOrFile: string | File,
+  dataUrlOrFile: string | File | Blob,
   filename?: string,
   title?: string
 ): Promise<string> {
-  let dataUrl = "";
-  let targetFilename = filename || "image";
+  // If already a hosted URL (not base64), return as-is
+  if (typeof dataUrlOrFile === "string" && !dataUrlOrFile.startsWith("data:")) {
+    return dataUrlOrFile;
+  }
+
+  let fileBlob: Blob;
+  let targetFilename = filename || "image.png";
 
   if (typeof dataUrlOrFile === "string") {
-    dataUrl = dataUrlOrFile;
-    // If already a URL (not a base64 data URL), keep it as is
-    if (!dataUrl.startsWith("data:")) {
-      return dataUrl;
+    try {
+      fileBlob = dataUrlToBlob(dataUrlOrFile);
+      if (!filename) {
+        const ext = fileBlob.type.split("/")[1] || "png";
+        targetFilename = `image-${Date.now()}.${ext}`;
+      }
+    } catch {
+      fileBlob = new Blob([], { type: "image/png" });
     }
-  } else {
+  } else if (dataUrlOrFile instanceof File) {
+    fileBlob = dataUrlOrFile;
     targetFilename = dataUrlOrFile.name || targetFilename;
-    dataUrl = await fileToDataUrl(dataUrlOrFile);
+  } else {
+    fileBlob = dataUrlOrFile;
   }
 
   const effectiveTitle = title || targetFilename.replace(/\.[^/.]+$/, "");
 
   try {
-    const res = await api.post<{ ok: boolean; url: string; duplicate?: boolean; filename?: string; error?: string }>("/api/media", {
-      dataUrl,
-      filename: targetFilename,
-      title: effectiveTitle,
-    });
+    const formData = new FormData();
+    formData.append("file", fileBlob, targetFilename);
+    formData.append("title", effectiveTitle);
+
+    const res = await api.post<{ ok: boolean; url: string; duplicate?: boolean; filename?: string; error?: string }>(
+      "/api/media",
+      formData
+    );
 
     if (res.ok && res.data?.url) {
       return res.data.url;
     }
 
-    console.warn("Media upload failed, using dataUrl fallback:", res.error);
-    return dataUrl;
+    console.warn("Media upload to S3 failed, using dataUrl fallback:", res.error);
+    if (typeof dataUrlOrFile === "string") {
+      return dataUrlOrFile;
+    }
+    return await fileToDataUrl(dataUrlOrFile as File);
   } catch (err: any) {
     console.error("uploadMediaToDb error:", err);
-    return dataUrl;
+    if (typeof dataUrlOrFile === "string") {
+      return dataUrlOrFile;
+    }
+    return await fileToDataUrl(dataUrlOrFile as File);
   }
 }

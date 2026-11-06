@@ -325,3 +325,17 @@ export async function checkStorageHealth(): Promise<{ ok: boolean; error?: strin
   }
 }
 
+/**
+ * Retrieves an object stream directly from Neon Object Storage (S3).
+ */
+export async function getStorageObject(objectKey: string, bucket?: string) {
+  const s3 = getS3Client();
+  const targetBucket = bucket || getPublicBucket();
+  const command = new GetObjectCommand({
+    Bucket: targetBucket,
+    Key: objectKey,
+  });
+  return s3.send(command);
+}
+
+

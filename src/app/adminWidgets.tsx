@@ -113,6 +113,27 @@ export function ImageField({
     const file = e.dataTransfer.files?.[0];
     if (file) {
       await processFile(file);
+      return;
+    }
+    const droppedText = (e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain") || "").trim();
+    if (droppedText && (droppedText.startsWith("http://") || droppedText.startsWith("https://") || droppedText.startsWith("/api/media/") || droppedText.startsWith("data:image/"))) {
+      onChange(droppedText);
+      toast.success("Image URL linked successfully!");
+    }
+  }
+
+  async function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          await processFile(file);
+          return;
+        }
+      }
     }
   }
 
@@ -196,8 +217,10 @@ export function ImageField({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          onPaste={handlePaste}
+          tabIndex={0}
           onClick={() => !uploading && fileRef.current?.click()}
-          className={`relative group rounded-xl border-2 border-dashed p-6 text-center transition-all cursor-pointer select-none ${
+          className={`relative group rounded-xl border-2 border-dashed p-6 text-center transition-all cursor-pointer select-none outline-none focus:ring-2 focus:ring-[#a65a4a]/30 ${
             isDragging
               ? "border-[#a65a4a] bg-[#F6ECE9] ring-4 ring-[#a65a4a]/20 scale-[1.01]"
               : "border-[#a65a4a]/30 hover:border-[#a65a4a] bg-[#faf7f3]/50 hover:bg-[#faf7f3]"
@@ -206,8 +229,8 @@ export function ImageField({
           {uploading ? (
             <div className="flex flex-col items-center justify-center py-2 gap-2 text-[#a65a4a]">
               <Loader2 size={28} className="animate-spin text-[#a65a4a]" />
-              <p className="text-[13px] font-semibold">Uploading to database...</p>
-              <span className="text-[11px] text-[#1e1e1e]/50">Computing hash & securing storage</span>
+              <p className="text-[13px] font-semibold">Uploading to S3 cloud storage...</p>
+              <span className="text-[11px] text-[#1e1e1e]/50">Computing checksum & securing storage</span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2">
@@ -258,7 +281,9 @@ export function ImageField({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`relative rounded-xl border p-3 bg-white transition-all overflow-hidden ${
+          onPaste={handlePaste}
+          tabIndex={0}
+          className={`relative rounded-xl border p-3 bg-white transition-all overflow-hidden outline-none focus:ring-2 focus:ring-[#a65a4a]/30 ${
             isDragging
               ? "border-[#a65a4a] ring-2 ring-[#a65a4a]/20 bg-[#F6ECE9]/40"
               : "border-[#a65a4a]/20 hover:border-[#a65a4a]/40 shadow-xs"
@@ -274,7 +299,7 @@ export function ImageField({
           {uploading && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/90 backdrop-blur-xs rounded-xl text-[#a65a4a] font-medium text-[13px] gap-2">
               <Loader2 size={24} className="animate-spin" />
-              <span>Uploading new image...</span>
+              <span>Uploading new image to S3...</span>
             </div>
           )}
 
@@ -294,8 +319,8 @@ export function ImageField({
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[#F6ECE9] text-[#A84E3D]">
                   <Check size={12} />
-                  {safeVal.startsWith("/api/media/")
-                    ? "Database Stored"
+                  {safeVal.startsWith("/api/media/") || safeVal.includes("storage.") || safeVal.includes(".neon.tech") || safeVal.includes(".s3.")
+                    ? "S3 Cloud Storage"
                     : safeVal.startsWith("data:")
                     ? "Local Preview"
                     : "Direct Link"}
@@ -475,9 +500,31 @@ export function GalleryField({
     e.stopPropagation();
     dragCounter.current = 0;
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files ?? []);
+    const files = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith("image/"));
     if (files.length) {
       await processFiles(files);
+      return;
+    }
+    const droppedText = (e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain") || "").trim();
+    if (droppedText && (droppedText.startsWith("http://") || droppedText.startsWith("https://") || droppedText.startsWith("/api/media/") || droppedText.startsWith("data:image/"))) {
+      onChange([...safeList, droppedText]);
+      toast.success("Image added to gallery!");
+    }
+  }
+
+  async function handlePaste(e: React.ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pastedFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) pastedFiles.push(file);
+      }
+    }
+    if (pastedFiles.length > 0) {
+      e.preventDefault();
+      await processFiles(pastedFiles);
     }
   }
 
@@ -560,7 +607,9 @@ export function GalleryField({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`relative rounded-xl border-2 transition-all p-3 ${
+        onPaste={handlePaste}
+        tabIndex={0}
+        className={`relative rounded-xl border-2 transition-all p-3 outline-none focus:ring-2 focus:ring-[#a65a4a]/30 ${
           isDragging
             ? "border-dashed border-[#a65a4a] bg-[#F6ECE9] ring-4 ring-[#a65a4a]/20"
             : safeList.length === 0
@@ -578,7 +627,7 @@ export function GalleryField({
         {uploading && (
           <div className="flex items-center gap-2.5 p-2.5 mb-3 rounded-lg bg-[#F6ECE9] text-[#A84E3D] text-[12px] font-medium animate-pulse">
             <Loader2 size={16} className="animate-spin shrink-0" />
-            <span>Uploading {uploadCount} image{uploadCount > 1 ? "s" : ""} to database...</span>
+            <span>Uploading {uploadCount} image{uploadCount > 1 ? "s" : ""} to S3 cloud storage...</span>
           </div>
         )}
 
