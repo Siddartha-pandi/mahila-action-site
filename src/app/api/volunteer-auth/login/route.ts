@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { queryDb } from "@/lib/db";
+import { createAdminCookieHeader, getJwtSecret } from "@/lib/auth";
 
 function toProfile(row: any) {
-  return { name: row.name, email: row.email, phone: row.phone, skills: row.skills || "" };
+  return {
+    id: String(row.id),
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    skills: row.skills || "",
+    role: row.role || "user",
+    permissions: row.permissions || null,
+    status: row.status || "Active",
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -35,15 +46,26 @@ export async function POST(req: NextRequest) {
       }
 
       if (isValidSuperadmin) {
-        return NextResponse.json({
-          ok: true,
-          profile: {
-            name: "Lead Super Admin",
-            email: envSuperadminEmail,
-            phone: "+91 XXXXXXXXXX",
-            skills: "Superadmin",
+        const adminPayload = { sub: "superadmin_env", email: envSuperadminEmail, role: "superadmin" };
+        const cookieHeader = createAdminCookieHeader(adminPayload);
+        const token = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
+
+        return NextResponse.json(
+          {
+            ok: true,
+            jwt: token,
+            profile: {
+              name: "Lead Super Admin",
+              email: envSuperadminEmail,
+              phone: "+91 XXXXXXXXXX",
+              skills: "Superadmin",
+              role: "superadmin",
+              permissions: null,
+              status: "Active",
+            },
           },
-        });
+          { headers: { "Set-Cookie": cookieHeader } }
+        );
       } else {
         return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });
       }
@@ -63,9 +85,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });
     }
 
-    return NextResponse.json({ ok: true, profile: toProfile(user) });
+    const userRole = user.role || "user";
+    const isActive = user.status === "Active" || !user.status;
+
+    let adminJwt: string | undefined;
+    let cookieHeader: string | undefined;
+
+    if (userRole !== "user" && isActive) {
+      const adminPayload = { sub: String(user.id), email: user.email, role: userRole };
+      cookieHeader = createAdminCookieHeader(adminPayload);
+      adminJwt = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
+    }
+
+    const res = NextResponse.json({
+      ok: true,
+      jwt: adminJwt,
+      profile: toProfile(user),
+    });
+
+    if (cookieHeader) {
+      res.headers.set("Set-Cookie", cookieHeader);
+    }
+
+    return res;
   } catch (err: any) {
     console.error("Volunteer login error:", err);
-    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

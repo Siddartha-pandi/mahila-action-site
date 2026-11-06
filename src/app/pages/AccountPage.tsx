@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router";
-import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send, FileText, ExternalLink } from "lucide-react";
+import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clock, MapPin, Star, Send, FileText, ExternalLink, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
+import { canAccessAdminPanel } from "@/lib/permissions";
 import {
   getSavedUserSession, saveUserSession, validateUserSession,
   getUserSubmissions, loadUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequestFromList,
@@ -348,6 +349,16 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                       <span className="bg-emerald-100 text-emerald-800 text-[11px] sm:text-[12px] font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1">
                         <CheckCircle size={13} /> Active Member
                       </span>
+                      {canAccessAdminPanel(profile) && (
+                        <button
+                          onClick={() => setPage("admin")}
+                          className="bg-[#1c1917] hover:bg-[#2c2725] text-amber-300 border border-amber-500/50 hover:border-amber-400 text-[11px] sm:text-[12px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                          title="Open Admin Panel"
+                        >
+                          <LayoutDashboard size={13} className="text-amber-400" />
+                          <span>Admin Panel</span>
+                        </button>
+                      )}
                     </div>
                     <p className="font-['Inter',sans-serif] text-[13px] sm:text-[14px] text-[#1e1e1e]/60 mt-1 break-all">
                       {profile.email} {profile.phone ? `· ${profile.phone}` : ""}

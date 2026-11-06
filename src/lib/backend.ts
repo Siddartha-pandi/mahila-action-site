@@ -1,3 +1,4 @@
+import { canAccessAdminPanel, setCurrentAdminSession } from "./permissions";
 import { api } from "./api";
 
 // ── Admin authentication ────────────────
@@ -61,7 +62,9 @@ export function onAdminAuthChange(cb: (loggedIn: boolean, sessionUser?: { email:
 
   const check = async () => {
     const token = typeof window !== "undefined" ? sessionStorage.getItem("admin_jwt") : null;
-    if (!token) {
+    const user = getSavedUserSession();
+
+    if (!token && (!user || !canAccessAdminPanel(user))) {
       cb(false);
       return;
     }
@@ -69,13 +72,29 @@ export function onAdminAuthChange(cb: (loggedIn: boolean, sessionUser?: { email:
     try {
       const res = await api.get<{ loggedIn?: boolean; email?: string; role?: string; user?: { email: string; role: string } }>("/api/auth/session");
       if (res.ok && res.data?.loggedIn) {
-        const user = res.data.user || (res.data.email ? { email: res.data.email, role: res.data.role || "admin" } : undefined);
-        cb(true, user);
+        const sessionAdmin = res.data.user || (res.data.email ? { email: res.data.email, role: res.data.role || "admin" } : undefined);
+        cb(true, sessionAdmin);
         return;
       }
     } catch {}
 
-    if (typeof window !== "undefined") {
+    // If user has admin permissions, attempt session exchange
+    if (user && canAccessAdminPanel(user) && user.email) {
+      try {
+        const sessRes = await api.post<{ ok: boolean; exists: boolean; jwt?: string; profile?: VolunteerAccountProfile }>(
+          "/api/volunteer-auth/session",
+          { email: user.email }
+        );
+        if (sessRes.ok && sessRes.data?.jwt) {
+          sessionStorage.setItem("admin_jwt", sessRes.data.jwt);
+          setCurrentAdminSession(user.email, user.role);
+          cb(true, { email: user.email, role: user.role || "admin" });
+          return;
+        }
+      } catch {}
+    }
+
+    if (typeof window !== "undefined" && !user) {
       try {
         sessionStorage.removeItem("admin_jwt");
       } catch {}
@@ -891,7 +910,16 @@ export async function saveContact(data: {
 
 // ── Volunteer accounts (real, persisted — distinct from admin auth) ────────
 
-export type VolunteerAccountProfile = { name: string; email: string; phone: string; skills: string };
+export type VolunteerAccountProfile = {
+  id?: string;
+  name: string;
+  email: string;
+  phone: string;
+  skills: string;
+  role?: string;
+  permissions?: any;
+  status?: string;
+};
 
 // Older builds cached volunteer accounts — including plaintext passwords — in
 // local storage so sign-in could work offline. Nothing reads them any more, so
@@ -963,11 +991,21 @@ export async function refreshUserProfile(): Promise<VolunteerAccountProfile | nu
   // A column that is null in the database becomes an empty string, so a missing
   // detail leaves its field blank instead of prefilling the old cached value.
   const merged: VolunteerAccountProfile = {
+    id: fresh.id ?? current.id,
     name: fresh.name ?? "",
     email: fresh.email ?? current.email,
     phone: fresh.phone ?? "",
     skills: fresh.skills ?? "",
+    role: fresh.role ?? current.role ?? "user",
+    permissions: fresh.permissions ?? current.permissions ?? null,
+    status: fresh.status ?? current.status ?? "Active",
   };
+
+  if ((res.data as any).jwt && typeof window !== "undefined") {
+    sessionStorage.setItem("admin_jwt", (res.data as any).jwt);
+    setCurrentAdminSession(merged.email, merged.role);
+    window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+  }
 
   if (JSON.stringify(merged) !== JSON.stringify(current)) {
     saveUserSession(merged);
@@ -1028,6 +1066,11 @@ export async function loginVolunteer(
   });
 
   if (res.ok && res.data?.profile) {
+    if ((res.data as any).jwt && typeof window !== "undefined") {
+      sessionStorage.setItem("admin_jwt", (res.data as any).jwt);
+      setCurrentAdminSession(res.data.profile.email, res.data.profile.role);
+      window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+    }
     return { ok: true, profile: res.data.profile };
   }
 

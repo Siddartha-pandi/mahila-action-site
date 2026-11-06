@@ -17,6 +17,7 @@ import {
   Newspaper,
 } from "lucide-react";
 import { getSavedUserSession, type VolunteerAccountProfile } from "@/lib/backend";
+import { canAccessAdminPanel } from "@/lib/permissions";
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination } from "../hooks/useAuthGuard";
@@ -37,6 +38,8 @@ export function Navigation({
     }
     return false;
   });
+
+  const hasAdminAccess = isAdmin || canAccessAdminPanel(userSession);
   const { openModal } = useModal();
 
   useEffect(() => {
@@ -146,56 +149,69 @@ export function Navigation({
             <span>Donate Now</span>
           </button>
 
-          {/* Admin Panel Return Button (Visible when logged into Admin) */}
-          {isAdmin && (
-            <button
-              onClick={() => nav("admin")}
-              className={`${inter()} bg-[#1c1917] hover:bg-[#2c2725] text-white border border-amber-500/40 text-[12px] sm:text-[13px] font-semibold px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-xs`}
-              title="Open Admin Center"
-            >
-              <LayoutDashboard size={14} className="text-amber-300 shrink-0" />
-              <span className="hidden lg:inline">Admin Center</span>
-              <span className="lg:hidden">Admin</span>
-            </button>
-          )}
-
-          {/* User Profile / Login */}
+          {/* User Profile & Admin Panel Access */}
           {!userSession ? (
-            <button
-              onClick={() => {
-                // Signing in deliberately from the header should land on the
-                // account page, not resume a gate the visitor walked away from.
-                clearIntendedDestination();
-                openModal("login");
-              }}
-              className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[12px] sm:text-[14px] font-semibold px-2.5 sm:px-5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap`}
-            >
-              <LogIn size={14} className="shrink-0" />
-              <span>Login</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => nav("account")}
-              className={`${inter()} border-2 border-[#a65a4a] text-[12px] sm:text-[14px] font-semibold px-2 sm:px-4 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
-                page === "account"
-                  ? "bg-[#a65a4a] text-[#f4efe7] hover:bg-[#993925]"
-                  : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/15 hover:text-[#993925]"
-              }`}
-              title="View My Account Profile"
-            >
-              <div
-                className={`size-5 sm:size-6 rounded-full font-bold text-[10px] sm:text-[12px] flex items-center justify-center shrink-0 transition-colors ${
-                  page === "account"
-                    ? "bg-[#f4efe7] text-[#a65a4a]"
-                    : "bg-[#a65a4a] text-[#f4efe7]"
-                }`}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  clearIntendedDestination();
+                  openModal("login");
+                }}
+                className={`${inter()} border-2 border-[#a65a4a] text-[#a65a4a] hover:bg-[#a65a4a] hover:text-[#f4efe7] text-[12px] sm:text-[14px] font-semibold px-2.5 sm:px-5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap`}
               >
-                {userSession.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="max-w-[48px] sm:max-w-[100px] lg:max-w-[140px] truncate">
-                {userSession.name.split(" ")[0]}
-              </span>
-            </button>
+                <LogIn size={14} className="shrink-0" />
+                <span>Login</span>
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => nav("admin")}
+                  className={`${inter()} bg-[#1c1917] hover:bg-[#2c2725] text-white border-2 border-amber-500/50 hover:border-amber-400 text-[12px] sm:text-[13px] font-semibold px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-xs`}
+                  title="Open Admin Panel"
+                >
+                  <LayoutDashboard size={14} className="text-amber-300 shrink-0" />
+                  <span>Admin Panel</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* User Profile Button with Avatar Picture */}
+              <button
+                onClick={() => nav("account")}
+                className={`${inter()} border-2 border-[#a65a4a] text-[12px] sm:text-[14px] font-semibold px-2 sm:px-4 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
+                  page === "account"
+                    ? "bg-[#a65a4a] text-[#f4efe7] hover:bg-[#993925]"
+                    : "bg-[#a65a4a]/10 text-[#a65a4a] hover:bg-[#a65a4a]/15 hover:text-[#993925]"
+                }`}
+                title="View My Account Profile"
+              >
+                <div
+                  className={`size-5 sm:size-6 rounded-full font-bold text-[10px] sm:text-[12px] flex items-center justify-center shrink-0 transition-colors ${
+                    page === "account"
+                      ? "bg-[#f4efe7] text-[#a65a4a]"
+                      : "bg-[#a65a4a] text-[#f4efe7]"
+                  }`}
+                >
+                  {userSession.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="max-w-[48px] sm:max-w-[100px] lg:max-w-[140px] truncate">
+                  {userSession.name.split(" ")[0]}
+                </span>
+              </button>
+
+              {/* Admin Panel Button — Positioned right next to the Profile Picture */}
+              {hasAdminAccess && (
+                <button
+                  onClick={() => nav("admin")}
+                  className={`${inter()} bg-[#1c1917] hover:bg-[#2c2725] text-[#f4efe7] border-2 border-amber-500/60 hover:border-amber-400 text-[12px] sm:text-[13px] font-semibold px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-xs hover:shadow-md`}
+                  title="Open Admin Panel"
+                >
+                  <LayoutDashboard size={14} className="text-amber-400 shrink-0" />
+                  <span className="hidden sm:inline">Admin Panel</span>
+                  <span className="sm:hidden">Admin</span>
+                </button>
+              )}
+            </div>
           )}
 
           {/* Mobile Menu Hamburger Toggle */}
@@ -251,22 +267,6 @@ export function Navigation({
             })}
 
             <div className="pt-4 mt-2 border-t border-[#a65a4a]/20 flex flex-col gap-2.5 sm:gap-3">
-              {/* Mobile Admin Panel Button */}
-              {isAdmin && (
-                <button
-                  onClick={() => nav("admin")}
-                  className={`${inter()} w-full bg-[#1c1917] border-2 border-amber-500/40 text-[#f4efe7] text-[14px] sm:text-[15px] font-semibold px-5 py-3 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-[#2c2725] transition-all shadow-sm`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <LayoutDashboard size={18} className="text-amber-300" />
-                    <span>Return to Admin Center</span>
-                  </div>
-                  <span className="text-[11px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-                    Admin
-                  </span>
-                </button>
-              )}
-
               {/* Mobile Donate Button */}
               <button
                 onClick={() => nav("donate")}
@@ -278,25 +278,61 @@ export function Navigation({
 
               {/* Mobile Auth Button */}
               {!userSession ? (
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    clearIntendedDestination();
-                    openModal("login");
-                  }}
-                  className={`${inter()} w-full border-2 border-[#a65a4a] text-[#a65a4a] text-[14px] sm:text-[15px] font-semibold px-6 py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-all`}
-                >
-                  <LogIn size={18} />
-                  <span>Sign In / Register</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      clearIntendedDestination();
+                      openModal("login");
+                    }}
+                    className={`${inter()} w-full border-2 border-[#a65a4a] text-[#a65a4a] text-[14px] sm:text-[15px] font-semibold px-6 py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-all`}
+                  >
+                    <LogIn size={18} />
+                    <span>Sign In / Register</span>
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => nav("admin")}
+                      className={`${inter()} w-full bg-[#1c1917] border-2 border-amber-500/50 text-[#f4efe7] text-[14px] sm:text-[15px] font-semibold px-5 py-3 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-[#2c2725] transition-all shadow-sm`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <LayoutDashboard size={18} className="text-amber-400" />
+                        <span>Open Admin Panel</span>
+                      </div>
+                      <span className="text-[11px] bg-amber-400/20 text-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+                        Admin Panel
+                      </span>
+                    </button>
+                  )}
+                </>
               ) : (
-                <button
-                  onClick={() => nav("account")}
-                  className={`${inter()} w-full bg-[#a65a4a]/10 border-2 border-[#a65a4a] text-[#a65a4a] text-[14px] sm:text-[15px] font-semibold px-6 py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-all`}
-                >
-                  <User size={18} />
-                  <span>{userSession.name} (My Account)</span>
-                </button>
+                <div className="flex flex-col gap-2.5">
+                  <button
+                    onClick={() => nav("account")}
+                    className={`${inter()} w-full bg-[#a65a4a]/10 border-2 border-[#a65a4a] text-[#a65a4a] text-[14px] sm:text-[15px] font-semibold px-6 py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer hover:bg-[#a65a4a] hover:text-[#f4efe7] transition-all`}
+                  >
+                    <div className="size-6 rounded-full bg-[#a65a4a] text-[#f4efe7] font-bold text-[12px] flex items-center justify-center shrink-0">
+                      {userSession.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{userSession.name} (My Account)</span>
+                  </button>
+
+                  {/* Mobile Admin Panel Button (Next to / right under profile) */}
+                  {hasAdminAccess && (
+                    <button
+                      onClick={() => nav("admin")}
+                      className={`${inter()} w-full bg-[#1c1917] border-2 border-amber-500/50 text-[#f4efe7] text-[14px] sm:text-[15px] font-semibold px-5 py-3 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-[#2c2725] transition-all shadow-sm`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <LayoutDashboard size={18} className="text-amber-400" />
+                        <span>Open Admin Panel</span>
+                      </div>
+                      <span className="text-[11px] bg-amber-400/20 text-amber-300 px-2.5 py-0.5 rounded-full font-bold">
+                        Admin Panel
+                      </span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>

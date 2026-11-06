@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { DEFAULTS, loadContent, type ContentMap } from "@/lib/content";
 import { DEFAULT_SITE_DATA, loadSiteData, type SiteData } from "@/lib/data";
+import { refreshUserProfile } from "@/lib/backend";
 import { Seo } from "./components/seo/Seo";
 import { getRouteMeta } from "@/config/routes";
 import { getPageJsonLd } from "@/lib/jsonld";
@@ -84,7 +85,10 @@ export default function App() {
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       channel = new BroadcastChannel("mahila_live_channel");
       channel.onmessage = (e) => {
-        if (
+        if (e.data === "user_permissions_changed") {
+          refreshUserProfile();
+          refreshData(true);
+        } else if (
           e.data === "sitedata_changed" ||
           e.data === "submissions_updated" ||
           e.data === "content_changed" ||

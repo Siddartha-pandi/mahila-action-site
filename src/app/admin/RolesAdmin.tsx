@@ -145,6 +145,17 @@ export function RolesAdmin({
       setShowUserModal(false);
       setEditingUser(null);
       fetchDbUsers();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("mahila_user_session_changed"));
+        window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+        try {
+          if ("BroadcastChannel" in window) {
+            const bc = new BroadcastChannel("mahila_live_channel");
+            bc.postMessage("user_permissions_changed");
+            bc.close();
+          }
+        } catch {}
+      }
     } catch (err: any) {
 
       toast.error(err.message || "Failed to save user account");

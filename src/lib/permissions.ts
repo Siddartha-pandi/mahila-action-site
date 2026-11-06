@@ -523,3 +523,46 @@ export function hasPermission(
   return Boolean(modulePerms[action]);
 }
 
+/**
+ * Evaluates whether a given user or role possesses administrative panel access rights.
+ * Returns true if the user's role is superadmin, admin, staff, or any custom role with active module permissions,
+ * or if the user has custom permission overrides enabled in Role Management.
+ */
+export function canAccessAdminPanel(
+  userOrRole?: { role?: string; roleId?: string; permissions?: any } | string | null
+): boolean {
+  if (!userOrRole) return false;
+  const role = typeof userOrRole === "string" ? userOrRole : (userOrRole.role || userOrRole.roleId || "");
+  const normRole = String(role || "").toLowerCase().trim();
+
+  if (normRole === "superadmin" || normRole === "admin" || normRole === "staff") {
+    return true;
+  }
+
+  // Check explicit custom permission overrides assigned directly to this user
+  if (typeof userOrRole === "object" && userOrRole !== null && userOrRole.permissions) {
+    try {
+      const perms = typeof userOrRole.permissions === "string"
+        ? JSON.parse(userOrRole.permissions)
+        : userOrRole.permissions;
+      if (perms && typeof perms === "object") {
+        const hasAny = Object.values(perms).some((m: any) => m && (m.view || m.edit || m.delete));
+        if (hasAny) return true;
+      }
+    } catch {}
+  }
+
+  if (!normRole || normRole === "user" || normRole === "guest") {
+    return false;
+  }
+
+  // Check custom created role permissions from Role Management
+  const roleObj = getRoleById(normRole);
+  if (roleObj && roleObj.permissions) {
+    return Object.values(roleObj.permissions).some((m: any) => m && (m.view || m.edit || m.delete));
+  }
+
+  return true;
+}
+
+
