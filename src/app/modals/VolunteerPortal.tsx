@@ -186,14 +186,16 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     if (adminRes.ok) {
       setCurrentAdminSession(adminRes.email || identifier, adminRes.role);
       try {
-        localStorage.setItem("mahila_admin_active_tab", "submissions");
+        localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+        sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+        sessionStorage.setItem("admin_just_logged_in", "1");
       } catch {}
       setAuthBusy(false);
       // An admin sign-in is not the visitor account a protected form wants, so
       // drop any pending destination rather than bouncing them into it.
       clearIntendedDestination();
       handleClose();
-      navigate("/admin");
+      navigate("/admin?tab=adminCenter");
       toast.success("Signed in to Admin Panel!");
       return;
     }

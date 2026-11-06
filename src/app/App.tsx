@@ -30,6 +30,7 @@ import { HomePage } from "./pages/HomePage";
 import { AboutPage } from "./pages/AboutPage";
 import { StoriesPage } from "./pages/StoriesPage";
 import { EventsPage } from "./pages/EventsPage";
+import { EventsBlogPage } from "./pages/EventsBlogPage";
 import { DonatePage } from "./pages/DonatePage";
 import { ContactPage } from "./pages/ContactPage";
 import { AccountPage } from "./pages/AccountPage";
@@ -48,23 +49,106 @@ export default function App() {
   const [siteData, setSiteData] = useState<SiteData>(DEFAULT_SITE_DATA);
 
   useEffect(() => {
-    function refreshData() {
-      loadContent().then(setContent);
-      loadSiteData().then(setSiteData);
+    let isMounted = true;
+    let syncInProgress = false;
+
+    async function refreshData(silent = true) {
+      if (syncInProgress) return;
+      syncInProgress = true;
+      try {
+        const [freshContent, freshSiteData] = await Promise.all([
+          loadContent(),
+          loadSiteData(),
+        ]);
+        if (!isMounted) return;
+        setContent((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(freshContent)) return prev;
+          return freshContent;
+        });
+        setSiteData((prev) => {
+          if (JSON.stringify(prev) === JSON.stringify(freshSiteData)) return prev;
+          return freshSiteData;
+        });
+      } catch (err) {
+        console.warn("Background data sync warning:", err);
+      } finally {
+        syncInProgress = false;
+      }
     }
-    refreshData();
-    // Only re-fetch CMS data when an admin explicitly saves a change.
-    // The broad "storage" listener was firing on every localStorage write
-    // (submissions polling, session saves, etc.) causing 7 DB requests per cycle.
-    window.addEventListener("mahila_sitedata_changed", refreshData);
+
+    // 1. Initial load
+    refreshData(false);
+
+    // 2. Cross-tab BroadcastChannel (<5ms instant sync across browser tabs)
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      channel = new BroadcastChannel("mahila_live_channel");
+      channel.onmessage = (e) => {
+        if (
+          e.data === "sitedata_changed" ||
+          e.data === "submissions_updated" ||
+          e.data === "content_changed" ||
+          e.data === "sync_all"
+        ) {
+          refreshData(true);
+        }
+      };
+    }
+
+    // 3. Custom event listeners
+    const handleSync = () => refreshData(true);
+    window.addEventListener("mahila_sitedata_changed", handleSync);
+    window.addEventListener("mahila_content_changed", handleSync);
+    window.addEventListener("mahila_submissions_changed", handleSync);
+
+    // 4. Instant sync on tab focus or visibility resume
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshData(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    // 5. Continuous background polling (every 15 seconds)
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshData(true);
+      }
+    }, 15000);
+
     return () => {
-      window.removeEventListener("mahila_sitedata_changed", refreshData);
+      isMounted = false;
+      if (channel) channel.close();
+      window.removeEventListener("mahila_sitedata_changed", handleSync);
+      window.removeEventListener("mahila_content_changed", handleSync);
+      window.removeEventListener("mahila_submissions_changed", handleSync);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      clearInterval(interval);
     };
   }, []);
 
+  // Track active path in sessionStorage so browser refresh always stays on the exact page
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (location.pathname && location.pathname !== "/" && location.pathname !== "") {
+      try {
+        sessionStorage.setItem("mahila_active_path", location.pathname + location.search);
+      } catch {}
+    }
+  }, [location.pathname, location.search]);
+
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "") {
-      navigate({ pathname: "/home", search: location.search }, { replace: true });
+      let targetPath = "/home";
+      try {
+        const saved = sessionStorage.getItem("mahila_active_path");
+        if (saved && saved !== "/" && saved !== "/home" && saved.startsWith("/")) {
+          targetPath = saved;
+        }
+      } catch {}
+      navigate(targetPath, { replace: true });
       return;
     }
 
@@ -140,7 +224,8 @@ export default function App() {
           {page === "home" && <HomePage setPage={setPage} />}
           {page === "about" && <AboutPage setPage={setPage} />}
           {page === "stories" && <StoriesPage setPage={setPage} />}
-          {page === "eventsBlog" && <EventsPage />}
+          {page === "events" && <EventsPage setPage={setPage} />}
+          {page === "eventsBlog" && <EventsBlogPage setPage={setPage} />}
           {page === "donate" && <DonatePage />}
           {page === "contact" && <ContactPage />}
           {page === "account" && <AccountPage setPage={setPage} />}

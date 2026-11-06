@@ -1,4 +1,5 @@
 export type AdminModule =
+  | "adminCenter"
   | "submissions"
   | "donations"
   | "events"
@@ -47,6 +48,7 @@ export interface AdminUser {
 
 
 export const MODULE_LABELS: Record<AdminModule, string> = {
+  adminCenter: "Admin Center",
   submissions: "Form Submissions & Applications",
   donations: "Donations & Campaign Contributions",
   events: "Upcoming Events",
@@ -60,12 +62,13 @@ export const MODULE_LABELS: Record<AdminModule, string> = {
   contact: "Contact Information",
   roles: "User & Role Management",
   trash: "Recycle Bin",
-  media: "Media Library & Google Drive Storage",
+  media: "Media Library",
 };
 
 // ── Built-in Role Definitions ──────────────────────────────────────────────
 
 const FULL_PERMISSIONS: PermissionMatrix = {
+  adminCenter: { view: true, edit: true, delete: true },
   submissions: { view: true, edit: true, delete: true },
   donations: { view: true, edit: true, delete: true },
   events: { view: true, edit: true, delete: true },
@@ -83,6 +86,7 @@ const FULL_PERMISSIONS: PermissionMatrix = {
 };
 
 const ADMIN_PERMISSIONS: PermissionMatrix = {
+  adminCenter: { view: true, edit: true, delete: true },
   submissions: { view: true, edit: true, delete: true },
   donations: { view: true, edit: true, delete: true },
   events: { view: true, edit: true, delete: true },
@@ -100,6 +104,7 @@ const ADMIN_PERMISSIONS: PermissionMatrix = {
 };
 
 const STAFF_PERMISSIONS: PermissionMatrix = {
+  adminCenter: { view: true, edit: false, delete: false },
   submissions: { view: true, edit: false, delete: false },
   donations: { view: true, edit: false, delete: false },
   events: { view: true, edit: false, delete: false },
@@ -117,6 +122,7 @@ const STAFF_PERMISSIONS: PermissionMatrix = {
 };
 
 const USER_PERMISSIONS: PermissionMatrix = {
+  adminCenter: { view: false, edit: false, delete: false },
   submissions: { view: false, edit: false, delete: false },
   donations: { view: false, edit: false, delete: false },
   events: { view: false, edit: false, delete: false },
@@ -471,6 +477,10 @@ export function hasPermission(
 
   let roleId = typeof roleIdOrUser === "string" ? roleIdOrUser : (roleIdOrUser.roleId || roleIdOrUser.role);
   if (roleId === "superadmin") return true;
+
+  if (module === "adminCenter") {
+    return roleId !== "user" && roleId !== "guest";
+  }
 
   // Check custom individual user permission override if provided on user object
   if (typeof roleIdOrUser === "object" && roleIdOrUser !== null && roleIdOrUser.permissions) {

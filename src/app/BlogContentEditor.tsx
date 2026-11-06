@@ -120,19 +120,29 @@ export function BlogContentEditor({
   const [insertMenuOpen, setInsertMenuOpen] = useState(false);
   const [cropTarget, setCropTarget] = useState<{ src: string; forImg: HTMLImageElement | null } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+      setIsDragging(true);
+    }
+  }
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.types.includes("Files")) {
-      if (!isDragging) setIsDragging(true);
-    }
+    e.dataTransfer.dropEffect = "copy";
   }
 
   function handleDragLeave(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
       setIsDragging(false);
     }
   }
@@ -140,16 +150,21 @@ export function BlogContentEditor({
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
+    dragCounter.current = 0;
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files ?? []).filter((f) => f.type.startsWith("image/"));
+    if (!files.length && e.dataTransfer.files.length > 0) {
+      toast.error("Please drop valid image files (PNG, JPG, WebP, etc.)");
+      return;
+    }
     if (files.length === 1) {
       const dataUrl = await fileToDataUrl(files[0]);
       setCropTarget({ src: dataUrl, forImg: null });
     } else if (files.length > 1) {
       try {
-        const urls = await Promise.all(files.map((file) => uploadMediaToDb(file)));
+        const urls = await Promise.all(files.map((file) => uploadMediaToDb(file, file.name)));
         urls.forEach((url) => insertImageHtml(url));
-        toast.success(`${urls.length} images uploaded!`);
+        toast.success(`${urls.length} images uploaded successfully!`);
       } catch (err: any) {
         toast.error(err?.message || "Failed to upload images");
       }
@@ -317,16 +332,20 @@ export function BlogContentEditor({
   return (
     <div
       ref={wrapperRef}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className="relative"
     >
       {isDragging && (
-        <div className="absolute inset-0 z-40 bg-[#faf7f3]/95 border-2 border-dashed border-[#a65a4a] rounded-lg flex flex-col items-center justify-center text-[#a65a4a] gap-2 pointer-events-none transition-all shadow-inner">
+        <div className="absolute inset-0 z-40 bg-[#F6ECE9]/95 backdrop-blur-xs border-2 border-dashed border-[#a65a4a] rounded-lg flex flex-col items-center justify-center text-[#a65a4a] gap-2 pointer-events-none transition-all shadow-inner animate-in fade-in">
           <UploadCloud size={32} className="animate-bounce" />
           <span className="font-['Inter',sans-serif] text-[14px] font-semibold">
             Drop image to insert into story
+          </span>
+          <span className="text-[12px] text-[#1e1e1e]/60">
+            Stored directly in database
           </span>
         </div>
       )}

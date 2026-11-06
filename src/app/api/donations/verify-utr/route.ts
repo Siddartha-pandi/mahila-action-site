@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { validateUtr } from "@/lib/utrValidation";
+import { generateReceiptToken } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
           transactionId: d.transaction_id,
           status: d.status || "Completed",
           createdAt: d.created_at,
-          receiptUrl: `/api/donations/${d.id}/receipt`,
+          receiptUrl: `/api/donations/${d.id}/receipt?token=${generateReceiptToken(d.id)}`,
         },
       });
     }

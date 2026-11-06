@@ -45,21 +45,12 @@
     "order_index": 4
   },
   {
-    "id": "tl_1793510566199_0uvg6n",
-    "year": "2025",
-    "title": "New Milestone",
-    "description": "",
-    "image": "",
-    "order": 5,
-    "order_index": 5
-  },
-  {
     "id": "6",
     "year": "2026",
     "title": "28 Years of Lasting Change",
     "description": "Operating across 200+ communities, our programmes have directly benefited over 10,000 women and their families.",
     "image": "",
-    "order": 6,
-    "order_index": 6
+    "order": 5,
+    "order_index": 5
   }
 ]

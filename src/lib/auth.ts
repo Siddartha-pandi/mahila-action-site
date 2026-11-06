@@ -1,12 +1,56 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
+import crypto from "node:crypto";
 import { queryDb } from "./db";
 import { AdminModule, PermissionAction, MODULE_LABELS, hasPermission } from "./permissions";
 import { auth as authJsSession } from "@/auth";
 
 const COOKIE_NAME = "mahila_admin";
-const JWT_SECRET = process.env.JWT_SECRET || "default_jwt_secret_dev_key";
+
+/**
+ * Retrieves the cryptographic secret used for JWT signing and verification.
+ * In production, an explicitly configured JWT_SECRET or AUTH_SECRET is mandatory.
+ */
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET || process.env.AUTH_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "CRITICAL SECURITY CONFIGURATION ERROR: JWT_SECRET or AUTH_SECRET environment variable is required in production."
+      );
+    }
+    return "dev_default_jwt_secret_change_in_production";
+  }
+  return secret;
+}
+
+/**
+ * Generates an HMAC-SHA256 receipt access token tied to a specific donation ID.
+ * Protects against Insecure Direct Object Reference (IDOR) attacks on tax receipts.
+ */
+export function generateReceiptToken(donationId: string | number): string {
+  const secret = getJwtSecret();
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`receipt_${donationId}`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+/**
+ * Timing-safe validation for donation receipt access tokens.
+ */
+export function verifyReceiptToken(donationId: string | number, token: string): boolean {
+  if (!token || typeof token !== "string") return false;
+  const expected = generateReceiptToken(donationId);
+  if (token.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 export interface AdminPayload {
   sub: string;
@@ -54,13 +98,15 @@ export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPaylo
     return null;
   }
 
+  const secret = getJwtSecret();
+
   // Every candidate must survive signature verification.
   for (const token of candidates) {
     if (!token || token === "session" || token === "admin_authenticated") {
       continue;
     }
     try {
-      return jwt.verify(token, JWT_SECRET) as AdminPayload;
+      return jwt.verify(token, secret) as AdminPayload;
     } catch {
       // try the next candidate
     }
@@ -118,15 +164,18 @@ export async function verifyAdminPermission(
 }
 
 export function createAdminCookieHeader(payload: AdminPayload): string {
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "12h" });
-  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
+  const token = jwt.sign(payload, getJwtSecret(), { expiresIn: "12h" });
+  const isProduction =
+    process.env.NODE_ENV === "production" ||
+    process.env.COOKIE_SECURE === "true" ||
+    (process.env.FRONTEND_URL?.startsWith("https://") ?? false);
   return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }
 
 export function createClearAdminCookieHeader(): string {
   const isProduction =
-    process.env.NODE_ENV === "production" &&
-    String(process.env.COOKIE_SECURE).toLowerCase() === "true" &&
-    !process.env.FRONTEND_URL?.includes("localhost");
+    process.env.NODE_ENV === "production" ||
+    process.env.COOKIE_SECURE === "true" ||
+    (process.env.FRONTEND_URL?.startsWith("https://") ?? false);
   return `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isProduction ? "; Secure" : ""}`;
 }

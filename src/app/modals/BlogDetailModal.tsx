@@ -7,6 +7,7 @@ import { type BlogPost } from "@/lib/data";
 import { fraunces, inter } from "../components/shared/styleHelpers";
 import { Badge } from "../components/ui/Badge";
 import { SafeImage } from "../components/SafeImage";
+import { GridGallery } from "../components/GridGallery";
 
 function isLikelyHtml(s: string) {
   return /<\/?[a-z][\s\S]*>/i.test(s);
@@ -30,12 +31,6 @@ export function BlogDetailModal({
   /** Provide to enable Previous / Next paging between posts (used on the Events Blog page). */
   onNavigate?: (dir: -1 | 1) => void;
 }) {
-  const [galleryTop, setGalleryTop] = useState(0);
-
-  useEffect(() => {
-    setGalleryTop(0);
-  }, [post.id]);
-
   useEffect(() => {
     const origOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -48,18 +43,16 @@ export function BlogDetailModal({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
-  const gallery = post.gallery ?? [];
+
+  const gallery = Array.isArray(post.gallery) ? post.gallery : [];
   const n = gallery.length;
-  const idxTop = n ? galleryTop % n : 0;
-  const idxMid = n ? (galleryTop - 1 + n) % n : 0;
-  const idxBot = n ? (galleryTop - 2 + n) % n : 0;
 
   const richHtml = toRichHtml(post.content || post.excerpt || "");
 
   return (
     <div className="fixed inset-0 z-[400] bg-[#f4efe7] overflow-y-auto">
-      <div className="sticky top-0 bg-[#f4efe7] shadow-[0_2px_16px_rgba(0,0,0,0.06)] z-10 py-3 sm:py-4 px-4 sm:px-6">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between">
+      <div className="sticky top-0 bg-[#f4efe7] shadow-[0_2px_16px_rgba(0,0,0,0.06)] z-10 py-3 sm:py-4 px-4 sm:px-8 md:px-12 xl:px-16">
+        <div className="max-w-[1800px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 font-['Inter',sans-serif] text-[14px] sm:text-[15px]">
             <span className="text-[#a65a4a] font-medium">{categoryLabel}</span>
           </div>
@@ -73,9 +66,9 @@ export function BlogDetailModal({
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
+      <div className="max-w-[1800px] w-full mx-auto px-4 sm:px-8 md:px-12 xl:px-16 pb-16 sm:pb-20">
         {post.coverImage && (
-          <div className="mt-4 sm:mt-8 rounded-2xl overflow-hidden h-[200px] sm:h-[320px] md:h-[468px] relative bg-[#a65a4a]/10">
+          <div className="mt-4 sm:mt-8 rounded-3xl overflow-hidden h-[240px] sm:h-[360px] md:h-[480px] lg:h-[580px] xl:h-[640px] relative bg-[#a65a4a]/10 shadow-md">
             <SafeImage
               src={post.coverImage}
               alt={post.title}
@@ -88,7 +81,7 @@ export function BlogDetailModal({
         )}
 
         <h1
-          className={`${fraunces()} font-normal text-[#a65a4a] text-[22px] sm:text-[36px] md:text-[52px] leading-[1.25] mt-4 max-w-[900px]`}
+          className={`${fraunces()} font-normal text-[#a65a4a] text-[24px] sm:text-[38px] md:text-[54px] lg:text-[60px] leading-[1.2] mt-6 sm:mt-8 max-w-[1200px]`}
           style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
         >
           {post.title}
@@ -105,128 +98,41 @@ export function BlogDetailModal({
         )}
 
         <div
-          className="blog-rich-content mt-6 sm:mt-8 max-w-[1152px]"
+          className="blog-rich-content mt-6 sm:mt-8 max-w-[1400px]"
           dangerouslySetInnerHTML={{ __html: richHtml }}
         />
 
-        {n > 0 && (
-          <div className="mt-12 sm:mt-20">
-            <h2
-              className={`${fraunces()} font-normal text-[#a65a4a] text-[22px] sm:text-[36px] md:text-[52px] leading-[1.25]`}
-              style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
-            >
-              Gallery
-            </h2>
-
-            <div className="flex items-center justify-center gap-2 sm:gap-6 md:gap-8 mt-6 sm:mt-10">
+        {n > 0 ? (
+          <GridGallery
+            images={gallery}
+            title={post.title}
+            categoryLabel={categoryLabel}
+            onNavigatePost={onNavigate}
+          />
+        ) : (
+          onNavigate && (
+            <div className="flex items-center justify-between mt-12 sm:mt-16 pt-8 border-t border-[#a65a4a]/20 max-w-[800px] mx-auto">
               <button
-                onClick={() => setGalleryTop((i) => (i - 1 + n) % n)}
-                className="size-9 sm:size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
-                aria-label="Previous gallery image"
+                type="button"
+                onClick={() => onNavigate(-1)}
+                className={`${inter()} inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full border border-[#a65a4a]/30 text-[#a65a4a] font-semibold text-[13px] sm:text-[14px] hover:bg-[#a65a4a] hover:text-white transition-all cursor-pointer`}
               >
-                <ChevronRight size={18} className="rotate-180" />
+                <ChevronLeft size={17} />
+                <span>Previous Story</span>
               </button>
-
-              <div
-                className="relative flex items-center justify-center"
-                style={{ width: "min(610px,88vw)", height: "min(452px,65vw)" }}
-              >
-                {n > 2 && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ transform: "rotate(-6.09deg)" }}
-                  >
-                    <div
-                      style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                      className="shadow-xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
-                    >
-                      <SafeImage
-                        src={gallery[idxBot]}
-                        alt="Gallery image"
-                        className="size-full object-cover"
-                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
-                        errorText="Image not available"
-                        iconSize={32}
-                      />
-                    </div>
-                  </div>
-                )}
-                {n > 1 && (
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ transform: "rotate(-3.13deg)" }}
-                  >
-                    <div
-                      style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                      className="shadow-xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
-                    >
-                      <SafeImage
-                        src={gallery[idxMid]}
-                        alt="Gallery image"
-                        className="size-full object-cover"
-                        containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
-                        errorText="Image not available"
-                        iconSize={32}
-                      />
-                    </div>
-                  </div>
-                )}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div
-                    style={{ width: "min(572px,82vw)", height: "min(393px,57vw)" }}
-                    className="shadow-2xl rounded-sm overflow-hidden bg-[#a65a4a]/10 relative"
-                  >
-                    <SafeImage
-                      src={gallery[idxTop]}
-                      alt="Gallery image"
-                      className="size-full object-cover"
-                      containerClassName="size-full flex flex-col items-center justify-center bg-[#a65a4a]/10 text-[#a65a4a]/70 gap-1 select-none"
-                      errorText="Image not available"
-                      iconSize={36}
-                    />
-                  </div>
-                </div>
-              </div>
-
+              <span className={`${inter()} text-[12px] sm:text-[13px] text-[#1e1e1e]/45 font-medium`}>
+                {categoryLabel}
+              </span>
               <button
-                onClick={() => setGalleryTop((i) => (i + 1) % n)}
-                className="size-10 flex items-center justify-center rounded-full border border-[#1e1e1e]/20 hover:border-[#a65a4a] hover:text-[#a65a4a] transition-colors cursor-pointer shrink-0"
-                aria-label="Next gallery image"
+                type="button"
+                onClick={() => onNavigate(1)}
+                className={`${inter()} inline-flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-full bg-[#a65a4a] text-white font-semibold text-[13px] sm:text-[14px] hover:bg-[#8f3c2c] transition-all cursor-pointer shadow-sm`}
               >
-                <ChevronRight size={18} />
+                <span>Next Story</span>
+                <ChevronRight size={17} />
               </button>
             </div>
-
-            <div className="flex items-center justify-center gap-2 mt-6">
-              {gallery.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setGalleryTop(i)}
-                  className={`size-2 rounded-full transition-all cursor-pointer ${
-                    i === idxTop ? "bg-[#a65a4a] w-5" : "bg-[#a65a4a]/30"
-                  }`}
-                  aria-label={`Go to image ${i + 1}`}
-                />
-              ))}
-            </div>
-
-            {onNavigate && (
-              <div className="flex items-center justify-between mt-12 max-w-[610px] mx-auto">
-                <button
-                  onClick={() => onNavigate(-1)}
-                  className={`${inter()} flex items-center gap-2 text-[#a65a4a] font-semibold text-[15px] hover:opacity-70 transition-opacity cursor-pointer`}
-                >
-                  <ChevronLeft size={18} /> Previous
-                </button>
-                <button
-                  onClick={() => onNavigate(1)}
-                  className={`${inter()} flex items-center gap-2 text-[#a65a4a] font-semibold text-[15px] hover:opacity-70 transition-opacity cursor-pointer`}
-                >
-                  Next <ChevronRight size={18} />
-                </button>
-              </div>
-            )}
-          </div>
+          )
         )}
       </div>
     </div>

@@ -5,7 +5,20 @@ import { isEventOpen, saveEvent, findCategory, type EventItem } from "@/lib/data
 import { toast } from "sonner";
 import { Shield } from "lucide-react";
 import { BlogDetailModal } from "../modals/BlogDetailModal";
-import { imgAboutBanner } from "../constants/images";
+import {
+  imgAboutBanner,
+  imgGal1,
+  imgGal2,
+  imgGal3,
+  imgStory1,
+  imgStory2,
+  imgStory3,
+  imgImpact1,
+  imgImpact2,
+  imgImpact3,
+  imgHeroCard,
+  imgTakeAction,
+} from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { EventCard } from "../components/EventCard";
@@ -14,9 +27,17 @@ import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { FilterTabs } from "../components/FilterTabs";
 import { StoryCard } from "../components/StoryCard";
 import { EmptyState } from "../components/ui/EmptyState";
-import { inter } from "../components/shared/styleHelpers";
+import { inter, scrollToTop, type Page } from "../components/shared/styleHelpers";
 
 const ALL = "All";
+
+const SAMPLE_EVENT_GALLERIES: string[][] = [
+  [imgGal1, imgGal2, imgGal3, imgStory1, imgImpact1, imgStory2, imgImpact3].filter(Boolean),
+  [imgStory2, imgStory3, imgImpact2, imgImpact3, imgHeroCard, imgTakeAction, imgGal1].filter(Boolean),
+  [imgGal1, imgGal2, imgImpact1, imgImpact2, imgImpact3, imgStory1, imgStory3].filter(Boolean),
+];
+
+const SAMPLE_EVENT_COVERS: string[] = [imgStory1, imgImpact2, imgHeroCard].filter(Boolean);
 
 /** Upcoming events first (soonest first), then past ones (most recent first). */
 function sortForDisplay(events: EventItem[], now = new Date()): EventItem[] {
@@ -33,7 +54,7 @@ function sortForDisplay(events: EventItem[], now = new Date()): EventItem[] {
   });
 }
 
-export function EventsPage() {
+export function EventsPage({ setPage }: { setPage?: (p: Page) => void } = {}) {
   const siteData = useSiteData();
   const { openModal } = useModal();
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
@@ -89,9 +110,21 @@ export function EventsPage() {
           return String(e.categoryId) === String(activeCategory) || e.categoryId === activeCategory;
         });
 
-  const eventPosts = [...siteData.blogPosts]
+  const rawEventPosts = [...siteData.blogPosts]
     .filter((p) => p.section === "event" && (isAdmin ? true : p.published !== false))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const eventPosts = rawEventPosts.map((p, idx) => {
+    const hasGallery = Array.isArray(p.gallery) && p.gallery.length > 0;
+    const fallbackGallery = SAMPLE_EVENT_GALLERIES[idx % SAMPLE_EVENT_GALLERIES.length] || [];
+    const fallbackCover = SAMPLE_EVENT_COVERS[idx % SAMPLE_EVENT_COVERS.length] || "";
+
+    return {
+      ...p,
+      coverImage: p.coverImage || fallbackCover,
+      gallery: hasGallery ? p.gallery : fallbackGallery,
+    };
+  });
 
   function handleReserve(ev: EventItem) {
     if (isEventOpen(ev)) openModal("reserve", { id: String(ev.id) });
@@ -179,12 +212,26 @@ export function EventsPage() {
       {/* ── Past events blog ── */}
       <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white/30">
         <div className="max-w-[1200px] mx-auto">
-          <div className="text-center mb-10">
-            <SectionLabel text="What We've Done" />
-            <SectionTitle text="Events Blog" center />
-            <p className={`${inter()} text-[#1e1e1e]/70 text-[17px] max-w-[640px] mx-auto mt-4`}>
-              A look back at the events we've run — with the stories and photos from each one.
-            </p>
+          <div className="flex flex-col sm:flex-row items-center justify-between mb-10 gap-4">
+            <div className="text-center sm:text-left">
+              <SectionLabel text="What We've Done" />
+              <SectionTitle text="Events Blog" />
+              <p className={`${inter()} text-[#1e1e1e]/70 text-[15px] sm:text-[17px] max-w-[640px] mt-2`}>
+                A look back at the events we've run — with the stories and photos from each one.
+              </p>
+            </div>
+            {setPage && (
+              <button
+                onClick={() => {
+                  setPage("eventsBlog");
+                  scrollToTop("instant");
+                }}
+                className={`${inter()} px-5 py-2.5 rounded-full bg-[#a65a4a] text-white font-semibold text-sm hover:bg-[#8f3c2c] transition-colors shrink-0 flex items-center gap-2 cursor-pointer shadow-xs`}
+              >
+                <span>Full Events Blog Page</span>
+                <span>→</span>
+              </button>
+            )}
           </div>
 
           {eventPosts.length > 0 ? (
@@ -195,6 +242,7 @@ export function EventsPage() {
                   title={p.title}
                   excerpt={p.excerpt}
                   coverImage={p.coverImage}
+                  galleryCount={Array.isArray(p.gallery) ? p.gallery.length : 0}
                   onClick={() => setActiveIndex(i)}
                   ctaText="Read More →"
                 />

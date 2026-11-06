@@ -277,7 +277,12 @@ export function DonationsAdmin() {
 
   useEffect(() => {
     reload(false);
-    const interval = setInterval(() => reload(true), 60000);
+    // Continuous background sync every 15 seconds
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        reload(true);
+      }
+    }, 15000);
 
     function handleSync() {
       reload(true);
@@ -289,14 +294,24 @@ export function DonationsAdmin() {
       channel.onmessage = () => handleSync();
     }
 
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        reload(true);
+      }
+    };
+
     window.addEventListener("mahila_submissions_changed", handleSync);
     window.addEventListener("storage", handleSync);
+    window.addEventListener("focus", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       clearInterval(interval);
       if (channel) channel.close();
       window.removeEventListener("mahila_submissions_changed", handleSync);
       window.removeEventListener("storage", handleSync);
+      window.removeEventListener("focus", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [reload]);
 

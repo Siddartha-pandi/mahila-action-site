@@ -28,7 +28,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
 
   function handleAttendEvents() {
     if (userProfile) {
-      nav("eventsBlog");
+      nav("events");
     } else {
       openModal("attend");
     }
@@ -36,7 +36,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
 
   function handleVolunteer() {
     if (userProfile) {
-      nav("eventsBlog");
+      nav("events");
     } else {
       openModal("volunteer");
     }
@@ -70,7 +70,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 Donate For The Cause
               </button>
               <button
-                onClick={() => nav("eventsBlog")}
+                onClick={() => nav("events")}
                 className={`${inter()} w-full sm:w-auto border-2 border-[#f4efe7] text-[#f4efe7] text-[14px] sm:text-[15px] font-bold px-6 sm:px-10 py-3 rounded-full hover:bg-[#f4efe7]/10 transition-colors cursor-pointer text-center`}
               >
                 Join The Movement
@@ -109,6 +109,12 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                   className="text-left hover:text-[#f4efe7] transition-colors cursor-pointer"
                 >
                   Attend Events
+                </button>
+                <button
+                  onClick={() => nav("eventsBlog")}
+                  className="text-left hover:text-[#f4efe7] transition-colors cursor-pointer"
+                >
+                  Events Blog
                 </button>
                 <button
                   onClick={() => openModal("partner")}

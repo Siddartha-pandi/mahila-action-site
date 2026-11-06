@@ -273,6 +273,32 @@ export const DEFAULT_BLOG_POSTS: BlogPost[] = [
     tags: [],
     createdAt: new Date(Date.now() - 6 * 86400000).toISOString(),
   },
+  {
+    id: "11",
+    section: "event",
+    categoryId: "1",
+    title: "Community Leadership Workshop 2026",
+    excerpt: "Over 60 grassroots women leaders gathered for interactive sessions on advocacy, civic leadership, and community organizing.",
+    content: "## Empowering Voices: Community Leadership Workshop\n\nOur recent leadership workshop brought together grassroots changemakers from across rural and semi-urban communities.\n\n### Interactive Skill Labs\nParticipants engaged in dynamic sessions covering public speaking, grassroots project planning, conflict mediation, and local council representation.\n\n### Community Resolutions\nBy the close of the three-day gathering, participants formed 8 active community committees to lead local health and education initiatives in their respective villages.",
+    coverImage: "",
+    gallery: [],
+    tags: ["Leadership", "Advocacy", "Community"],
+    published: true,
+    createdAt: new Date(Date.now() - 10 * 86400000).toISOString(),
+  },
+  {
+    id: "12",
+    section: "event",
+    categoryId: "3",
+    title: "Vocational Skills & Artisan Exhibition",
+    excerpt: "A vibrant showcase of handwoven textiles, natural pottery, and sustainable products created by women cooperatives.",
+    content: "## Celebrating Craft and Enterprise\n\nOur annual Artisan Exhibition brought together more than 40 women-run self-help groups and artisanal cooperatives.\n\n### Direct Fair-Trade Markets\nVisitors from across the city shopped directly from women artisans, supporting independent livelihoods and ethical production.\n\n### Digital Payments & Business Links\nGraduates of our digital financial literacy courses successfully managed stall operations using digital UPI payments and inventory logs.",
+    coverImage: "",
+    gallery: [],
+    tags: ["Livelihood", "Handloom", "Cooperatives"],
+    published: true,
+    createdAt: new Date(Date.now() - 24 * 86400000).toISOString(),
+  },
 ];
 
 export function findImpactPost(
@@ -590,6 +616,13 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
     // avoid re-triggering App.tsx's refresh and creating an infinite loop.
     if (!silent && typeof window !== "undefined") {
       window.dispatchEvent(new Event("mahila_sitedata_changed"));
+      try {
+        if ("BroadcastChannel" in window) {
+          const bc = new BroadcastChannel("mahila_live_channel");
+          bc.postMessage("sitedata_changed");
+          bc.close();
+        }
+      } catch {}
     }
   } catch (err) {
     console.error("Failed to save local site data:", err);
@@ -739,6 +772,10 @@ export async function loadSiteData(): Promise<SiteData> {
   if (!blogPosts.some((p) => p.section === "impact")) {
     const seedImpactPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "impact");
     blogPosts = [...blogPosts, ...seedImpactPosts];
+  }
+  if (!blogPosts.some((p) => p.section === "event")) {
+    const seedEventPosts = DEFAULT_BLOG_POSTS.filter((p) => p.section === "event");
+    blogPosts = [...blogPosts, ...seedEventPosts];
   }
 
   // Cache the fetched data locally for offline use, but silently so we

@@ -34,9 +34,15 @@ export const ROUTES: RouteMeta[] = [
   },
   {
     path: "/events",
-    title: `Events & Community Blog — ${SITE_NAME}`,
+    title: `Upcoming Events — ${SITE_NAME}`,
     description:
       "Upcoming community events, workshops, and volunteer opportunities from Mahila Action — join the movement near you.",
+  },
+  {
+    path: "/eventblog",
+    title: `Events Blog & Field Stories — ${SITE_NAME}`,
+    description:
+      "A look back at the events and workshops we have conducted, with stories and photo galleries from each community gathering.",
   },
   {
     path: "/donate",
@@ -63,7 +69,7 @@ export const ROUTES: RouteMeta[] = [
   {
     path: "/privacy",
     title: `Privacy Policy — ${SITE_NAME}`,
-    description: "Read Mahila Action's privacy policy regarding data collection, protection, and Google API user data compliance.",
+    description: "Read Mahila Action's privacy policy regarding data collection, protection, and media storage security.",
   },
   {
     path: "/terms",

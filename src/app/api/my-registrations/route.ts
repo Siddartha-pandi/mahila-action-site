@@ -70,7 +70,13 @@ export async function GET(req: NextRequest) {
       params
     );
 
-    const allRows = [...result.rows, ...permResult.rows, ...donationsResult.rows].sort(
+    const sanitizedDonations = donationsResult.rows.map((row: any) => ({
+      ...row,
+      pan_number: row.pan_number ? `${String(row.pan_number).slice(0, 2)}******${String(row.pan_number).slice(-2)}` : null,
+      address: row.address ? "Address on file" : null,
+    }));
+
+    const allRows = [...result.rows, ...permResult.rows, ...sanitizedDonations].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 

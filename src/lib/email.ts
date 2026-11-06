@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { generateReceiptToken } from "./auth";
 
 let warnedNoSmtp = false;
 
@@ -409,7 +410,10 @@ export async function sendDonationReceiptEmail(
   const methodDisplay = receiptMeta?.paymentMethod ? `<p style="margin: 0 0 4px;"><strong>Payment Method:</strong> ${esc(receiptMeta.paymentMethod.toUpperCase())}</p>` : "";
   const txDisplay = receiptMeta?.transactionId ? `<p style="margin: 0 0 4px;"><strong>Transaction / UTR Ref:</strong> ${esc(receiptMeta.transactionId)}</p>` : "";
 
-  const receiptUrl = receiptMeta?.donationId ? `${siteUrl}/api/donations/${receiptMeta.donationId}/receipt` : "";
+  const receiptToken = receiptMeta?.donationId ? generateReceiptToken(receiptMeta.donationId) : "";
+  const receiptUrl = receiptMeta?.donationId
+    ? `${siteUrl}/api/donations/${receiptMeta.donationId}/receipt?token=${receiptToken}`
+    : "";
 
   const bodyHtml = `
     <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">Thank you for your generous contribution!</h2>

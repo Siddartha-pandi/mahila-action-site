@@ -146,13 +146,13 @@ export function SubmissionsAdmin() {
     // or until someone pressed Refresh.
     reload(false);
 
-    // Auto-refresh submissions from the server every 1 minute
+    // Auto-refresh submissions from the server every 15 seconds
     const interval = setInterval(() => {
-      reload(true);
-    }, 60000);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        reload(true);
+      }
+    }, 15000);
 
-    // Re-read from the server rather than swapping in the local mirror first —
-    // that swap briefly replaced the full list with just this browser's rows.
     function handleInstantSync() {
       reload(true);
     }
@@ -164,14 +164,24 @@ export function SubmissionsAdmin() {
       channel.onmessage = () => handleInstantSync();
     }
 
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        reload(true);
+      }
+    };
+
     window.addEventListener("mahila_submissions_changed", handleInstantSync);
     window.addEventListener("storage", handleInstantSync);
+    window.addEventListener("focus", handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       clearInterval(interval);
       if (channel) channel.close();
       window.removeEventListener("mahila_submissions_changed", handleInstantSync);
       window.removeEventListener("storage", handleInstantSync);
+      window.removeEventListener("focus", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [reload]);
 

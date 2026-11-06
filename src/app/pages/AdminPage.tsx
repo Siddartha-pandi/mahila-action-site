@@ -16,6 +16,7 @@ import {
   UNAUTHENTICATED_ADMIN_USER,
 } from "@/lib/permissions";
 import {
+  LayoutDashboard,
   Inbox,
   Wrench,
   Calendar,
@@ -34,11 +35,10 @@ import {
   Trash2,
   HeartHandshake,
   Eye,
-  Image as ImageIcon,
 } from "lucide-react";
 import { type Page } from "../components/shared/styleHelpers";
+import { AdminCenterAdmin } from "@/app/admin/AdminCenterAdmin";
 import { SubmissionsAdmin } from "@/app/admin/SubmissionsAdmin";
-import { MediaAdmin } from "@/app/admin/MediaAdmin";
 import { DonationsAdmin } from "@/app/admin/DonationsAdmin";
 import { ContentTypeBuilderAdmin } from "@/app/admin/ContentTypeBuilderAdmin";
 import { EventsAdmin } from "@/app/admin/EventsAdmin";
@@ -56,17 +56,17 @@ import { LogoMark } from "../components/LogoMark";
 import { AdminSidebar } from "@/app/admin/AdminSidebar";
 
 const CUSTOM_TABS = [
-  { id: "submissions", label: "Form Submissions & Applications", icon: Inbox },
+  { id: "adminCenter", label: "Dashboard", icon: LayoutDashboard },
+  { id: "submissions", label: "Form Submissions", icon: Inbox },
   { id: "donations", label: "Donations & Contributions", icon: HeartHandshake },
-  { id: "media", label: "Media Library", icon: ImageIcon },
   { id: "events", label: "Upcoming Events", icon: Calendar },
+  { id: "councilors", label: "Councillors", icon: UserCheck },
   { id: "stories", label: "Community Stories", icon: BookOpen },
-  { id: "impactStories", label: "Our Impact Pages", icon: Sparkles },
+  { id: "impactStories", label: "Impact Pages", icon: Sparkles },
   { id: "categories", label: "Story Categories", icon: Tags },
   { id: "eventsBlog", label: "Events Blog", icon: Newspaper },
-  { id: "councilors", label: "Councilors", icon: UserCheck },
   { id: "timeline", label: "Timeline", icon: History },
-  { id: "contact", label: "Contact Info", icon: PhoneCall },
+  { id: "contact", label: "Contact Information", icon: PhoneCall },
   { id: "trash", label: "Recycle Bin", icon: Trash2 },
   { id: "roles", label: "User & Role Management", icon: ShieldCheck },
   { id: "contentTypeBuilder", label: "Content-Type Builder", icon: Wrench, isSuperAdminOnly: true },
@@ -98,6 +98,16 @@ export function AdminPage({
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<string>(() => {
     if (typeof window !== "undefined") {
+      const justLoggedIn = sessionStorage.getItem("admin_just_logged_in");
+      if (justLoggedIn) {
+        sessionStorage.removeItem("admin_just_logged_in");
+        try {
+          localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+          sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+        } catch {}
+        return "adminCenter";
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       const tabFromUrl = urlParams.get("tab") || urlParams.get("section");
       if (tabFromUrl && CUSTOM_TABS.some((t) => t.id === tabFromUrl)) {
@@ -110,9 +120,10 @@ export function AdminPage({
         }
       } catch {}
     }
-    return "submissions";
+    return "adminCenter";
   });
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => getCurrentAdminSession());
+  const [authResolved, setAuthResolved] = useState(false);
   const [trashCount, setTrashCount] = useState<number>(() => getTrashItems().length);
 
   useEffect(() => {
@@ -174,14 +185,27 @@ export function AdminPage({
           setCurrentAdminSession(sessionUser.email, sessionUser.role);
         }
         setCurrentAdminUser(getCurrentAdminSession());
+        if (typeof window !== "undefined" && sessionStorage.getItem("admin_just_logged_in")) {
+          sessionStorage.removeItem("admin_just_logged_in");
+          setActiveSection("adminCenter");
+          try {
+            localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+            sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+            const url = new URL(window.location.href);
+            url.searchParams.set("tab", "adminCenter");
+            window.history.replaceState({}, "", url.toString());
+          } catch {}
+        }
       } else {
         setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
       }
+      setAuthResolved(true);
     });
 
     fallbackTimer = setTimeout(() => {
       if (mounted) {
         setLoggedIn((current) => (current === null ? false : current));
+        setAuthResolved(true);
       }
     }, 1500);
 
@@ -234,11 +258,11 @@ export function AdminPage({
   const currentRole = getRoleById(currentAdminUser?.roleId);
 
   useEffect(() => {
-    if (!loggedIn) return;
+    if (!loggedIn || !authResolved) return;
     if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeSection)) {
       setActiveSection(visibleTabs[0].id);
     }
-  }, [loggedIn, visibleTabs, activeSection]);
+  }, [loggedIn, authResolved, visibleTabs, activeSection]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -254,12 +278,14 @@ export function AdminPage({
     setLoggedIn(true);
     setDraft({ ...existing });
 
-    // Open "Form Submissions & Applications" immediately after fresh login
-    setActiveSection("submissions");
+    // Open "Admin Center" immediately after fresh login
+    setActiveSection("adminCenter");
     try {
-      localStorage.setItem("mahila_admin_active_tab", "submissions");
+      localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+      sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+      sessionStorage.removeItem("admin_just_logged_in");
       const url = new URL(window.location.href);
-      url.searchParams.set("tab", "submissions");
+      url.searchParams.set("tab", "adminCenter");
       window.history.replaceState({}, "", url.toString());
     } catch {}
 
@@ -271,13 +297,16 @@ export function AdminPage({
     await signOutAdmin();
     clearAdminSession();
     try {
-      sessionStorage.setItem("mahila_admin_active_tab", "submissions");
-      localStorage.setItem("mahila_admin_active_tab", "submissions");
+      sessionStorage.removeItem("mahila_admin_active_tab");
+      sessionStorage.removeItem("admin_just_logged_in");
+      localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+      sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
       const url = new URL(window.location.href);
-      url.searchParams.set("tab", "submissions");
+      url.searchParams.delete("tab");
+      url.searchParams.delete("section");
       window.history.replaceState({}, "", url.toString());
     } catch {}
-    setActiveSection("submissions");
+    setActiveSection("adminCenter");
     setLoggedIn(false);
     setCurrentAdminUser(UNAUTHENTICATED_ADMIN_USER);
     toast("Signed out");
@@ -396,7 +425,8 @@ export function AdminPage({
           <button
             onClick={() => {
               let targetPage: Page = "home";
-              if (activeSection === "events" || activeSection === "eventsBlog") targetPage = "eventsBlog";
+              if (activeSection === "events") targetPage = "events";
+              else if (activeSection === "eventsBlog") targetPage = "eventsBlog";
               else if (activeSection === "stories" || activeSection === "impactStories" || activeSection === "categories") targetPage = "stories";
               else if (activeSection === "donations") targetPage = "donate";
               else if (activeSection === "contact") targetPage = "contact";
@@ -463,14 +493,19 @@ export function AdminPage({
               {activeSection === "roles" && (
                 <RolesAdmin onSessionChange={(u) => setCurrentAdminUser(u)} />
               )}
+              {activeSection === "adminCenter" && (
+                <AdminCenterAdmin
+                  siteData={siteData}
+                  onSelectSection={setActiveSection}
+                  currentAdminUser={currentAdminUser}
+                  onObserveSite={() => onExit()}
+                />
+              )}
               {activeSection === "submissions" && (
                 <SubmissionsAdmin />
               )}
               {activeSection === "donations" && (
                 <DonationsAdmin />
-              )}
-              {activeSection === "media" && (
-                <MediaAdmin />
               )}
               {activeSection === "contentTypeBuilder" && (
                 <ContentTypeBuilderAdmin />

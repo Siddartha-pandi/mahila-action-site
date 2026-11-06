@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getDonationConfig, numberToWordsInINR } from "@/lib/donationConfig";
+import { getAdminFromRequest, verifyReceiptToken } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const token = req.nextUrl.searchParams.get("token") || "";
+    const admin = await getAdminFromRequest(req);
+
+    // Require either administrator session or cryptographically signed receipt token
+    if (!admin && !verifyReceiptToken(id, token)) {
+      return NextResponse.json(
+        {
+          error:
+            "Access forbidden: A valid receipt authorization token or administrator authentication is required to access official tax receipts.",
+        },
+        { status: 403 }
+      );
+    }
     const res = await queryDb("SELECT * FROM donations WHERE id = $1", [id]);
     if (res.rows.length === 0) {
       return new NextResponse("Donation record not found.", { status: 404 });

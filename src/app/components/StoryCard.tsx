@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Images } from "lucide-react";
 import { inter } from "./shared/styleHelpers";
 import { SafeImage } from "./SafeImage";
 
@@ -14,6 +14,7 @@ export interface StoryCardProps {
   onClick: () => void;
   ctaText?: string;
   className?: string;
+  galleryCount?: number;
 }
 
 export function StoryCard({
@@ -24,6 +25,7 @@ export function StoryCard({
   onClick,
   ctaText = "Read Story →",
   className = "",
+  galleryCount,
 }: StoryCardProps) {
   const imgSrc = coverImage || fallbackImage;
 
@@ -50,7 +52,17 @@ export function StoryCard({
             <BookOpen size={32} className="opacity-75" />
           </div>
         )}
+
+        {typeof galleryCount === "number" && galleryCount > 0 && (
+          <div className="absolute top-3 right-3 bg-black/65 backdrop-blur-md text-white text-[11px] sm:text-[12px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-md border border-white/20 pointer-events-none select-none z-10">
+            <Images size={13} className="text-[#f4efe7]" />
+            <span>
+              {galleryCount} {galleryCount === 1 ? "Photo" : "Photos"}
+            </span>
+          </div>
+        )}
       </div>
+
       <div className="bg-[#a35848] p-5 sm:p-6 rounded-b-2xl flex flex-col flex-1">
         <p className={`${inter()} text-[#f4efe7] text-[19px] sm:text-[22px] font-semibold capitalize line-clamp-2`}>
           {title}

@@ -136,14 +136,18 @@ CREATE INDEX IF NOT EXISTS events_date_cat_idx ON events (event_date, category_i
 CREATE INDEX IF NOT EXISTS donations_status_created_idx ON donations (status, created_at);
 CREATE INDEX IF NOT EXISTS event_reservations_status_created_idx ON event_reservations (status, created_at);
 
--- 11. Media Table (Google Drive primary storage, PostgreSQL metadata)
+-- 11. Media Table (Neon Object Storage metadata + legacy PostgreSQL binary storage)
 CREATE TABLE IF NOT EXISTS media (
   id SERIAL PRIMARY KEY,
+  uuid TEXT,
   filename TEXT NOT NULL,
   mime_type TEXT NOT NULL,
   byte_size BIGINT NOT NULL DEFAULT 0,
-  drive_file_id TEXT,
+  object_key TEXT,
+  bucket_name TEXT,
+  visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'private')),
   url TEXT,
+  url_hash TEXT,
   thumbnail_url TEXT,
   media_type TEXT DEFAULT 'image',
   metadata JSONB DEFAULT '{}'::jsonb,
@@ -152,8 +156,13 @@ CREATE TABLE IF NOT EXISTS media (
 );
 
 CREATE INDEX IF NOT EXISTS media_created_at_idx ON media (created_at DESC);
-CREATE INDEX IF NOT EXISTS media_drive_file_id_idx ON media (drive_file_id);
+CREATE INDEX IF NOT EXISTS media_url_hash_idx ON media (url_hash);
 CREATE INDEX IF NOT EXISTS media_media_type_idx ON media (media_type);
+CREATE INDEX IF NOT EXISTS media_uuid_idx ON media (uuid);
+CREATE INDEX IF NOT EXISTS media_object_key_idx ON media (object_key);
+CREATE INDEX IF NOT EXISTS media_visibility_idx ON media (visibility);
+CREATE INDEX IF NOT EXISTS media_bucket_name_idx ON media (bucket_name);
+CREATE INDEX IF NOT EXISTS media_storage_gallery_idx ON media (visibility, media_type, created_at DESC) WHERE object_key IS NOT NULL;
 
 -- 12. Persistent Site Settings (Stores permanent OAuth refresh tokens & configurations)
 CREATE TABLE IF NOT EXISTS site_settings (

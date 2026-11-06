@@ -134,7 +134,7 @@ function rowPlaceholders(rowCount: number, columnCount: number): string {
   ).join(", ");
 }
 
-export async function seedAllData(dbPool: any): Promise<void> {
+export async function seedAllData(dbPool: any, options?: { force?: boolean }): Promise<void> {
   // Categories are now managed in JSON format (src/data/categories.json)
   // Map category code strings to integer IDs
   const catMap: Record<string, number> = {
@@ -160,10 +160,16 @@ export async function seedAllData(dbPool: any): Promise<void> {
     { kind: "vendor", enabled: true, regStart: daysAhead(-10), regEnd: daysAhead(18) },
     { kind: "donor", enabled: true, regStart: daysAhead(-10), regEnd: daysAhead(10) },
   ];
+
+  const isForce = Boolean(options?.force);
+  const eventConflict = isForce
+    ? "DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, image = EXCLUDED.image, event_date = EXCLUDED.event_date, location = EXCLUDED.location, total_seats = EXCLUDED.total_seats, windows = EXCLUDED.windows, category_id = EXCLUDED.category_id"
+    : "DO NOTHING";
+
   await dbPool.query(
     `INSERT INTO events (id, title, description, image, event_date, location, total_seats, windows, category_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (id) ${eventConflict}`,
     [
       1,
       "Community Leadership Workshop",
@@ -231,11 +237,15 @@ export async function seedAllData(dbPool: any): Promise<void> {
     },
   ];
 
+  const postConflict = isForce
+    ? "DO UPDATE SET section = EXCLUDED.section, category_id = EXCLUDED.category_id, title = EXCLUDED.title, excerpt = EXCLUDED.excerpt, content = EXCLUDED.content, cover_image = EXCLUDED.cover_image, gallery = EXCLUDED.gallery, tags = EXCLUDED.tags"
+    : "DO NOTHING";
+
   // One multi-row insert rather than one round trip per post.
   await dbPool.query(
     `INSERT INTO blog_posts (id, section, category_id, title, excerpt, content, cover_image, gallery, tags)
      VALUES ${rowPlaceholders(blogPosts.length, 9)}
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (id) ${postConflict}`,
     blogPosts.flatMap((post) => [
       post.id,
       post.section,
@@ -260,15 +270,107 @@ export async function seedAllData(dbPool: any): Promise<void> {
   } catch { }
 
   // Synchronize PostgreSQL SERIAL sequences past manually seeded IDs
-  const tablesToSync = ["users", "events", "blog_posts", "media"];
-  // Sent as one batch — statements sent together instead of multiple round trips.
+  await syncAllSequences(dbPool);
+}
+
+/**
+ * Synchronizes all PostgreSQL SERIAL sequences to be at least MAX(id).
+ * This prevents unique constraint violations (e.g. duplicate key value violates unique constraint "media_pkey")
+ * when rows have been manually inserted or seeded with explicit IDs.
+ */
+export async function syncAllSequences(pool?: any): Promise<void> {
+  const currentPool = pool || (await getPool());
+  const tables = [
+    "users",
+    "events",
+    "blog_posts",
+    "donations",
+    "event_reservations",
+    "contact_submissions",
+    "perm_volunteer_requests",
+    "recycle_bin",
+    "media",
+  ];
+
+  for (const t of tables) {
+    try {
+      await currentPool.query(`
+        SELECT CASE
+          WHEN (SELECT MAX(id) FROM ${t}) IS NOT NULL AND (SELECT MAX(id) FROM ${t}) > 0
+          THEN setval(pg_get_serial_sequence('${t}', 'id'), (SELECT MAX(id) FROM ${t}), true)
+          ELSE setval(pg_get_serial_sequence('${t}', 'id'), 1, false)
+        END;
+      `);
+    } catch { }
+  }
+}
+
+/**
+ * Safely reserves and returns the next ID from a table's SERIAL sequence.
+ * Guarantees that the returned ID is strictly greater than any existing ID in the table,
+ * automatically resynchronizing the sequence if it is lagging behind existing rows.
+ */
+export async function getNextSafeSequenceId(
+  tableName: string,
+  idColumn: string = "id"
+): Promise<number> {
+  const identPattern = /^[a-zA-Z0-9_]+$/;
+  if (!identPattern.test(tableName) || !identPattern.test(idColumn)) {
+    throw new Error(`Invalid database table or column identifier: ${tableName}.${idColumn}`);
+  }
+
   try {
-    await dbPool.query(
-      tablesToSync
-        .map((t) => `SELECT setval(pg_get_serial_sequence('${t}', 'id'), COALESCE((SELECT MAX(id) FROM ${t}), 1));`)
-        .join("\n")
+    // 1. Check current MAX(id) in the table
+    const maxRes = await queryDb(
+      `SELECT COALESCE(MAX(${idColumn}), 0) AS max_id FROM ${tableName}`
     );
-  } catch { }
+    const maxId = Number(maxRes.rows[0]?.max_id) || 0;
+
+    // 2. Fetch the sequence's next value
+    const seqRes = await queryDb(
+      `SELECT nextval(pg_get_serial_sequence($1, $2)) AS next_id`,
+      [tableName, idColumn]
+    );
+    let nextId = Number(seqRes.rows[0]?.next_id);
+
+    // 3. If nextId is missing, NaN, or <= maxId, the sequence is lagging behind existing IDs.
+    // Atomically synchronize the sequence to maxId, then re-fetch nextval (guaranteed > maxId).
+    if (!Number.isFinite(nextId) || nextId <= maxId) {
+      const syncVal = Math.max(maxId, 1);
+      await queryDb(
+        `SELECT setval(pg_get_serial_sequence($1, $2), $3, true)`,
+        [tableName, idColumn, syncVal]
+      );
+      const reSeqRes = await queryDb(
+        `SELECT nextval(pg_get_serial_sequence($1, $2)) AS next_id`,
+        [tableName, idColumn]
+      );
+      nextId = Number(reSeqRes.rows[0]?.next_id);
+    }
+
+    if (Number.isFinite(nextId) && nextId > 0) {
+      return nextId;
+    }
+  } catch (err) {
+    console.warn(`getNextSafeSequenceId warning for ${tableName}.${idColumn}:`, err);
+  }
+
+  // 4. Safe fallback if sequence cannot be queried
+  try {
+    const maxRes = await queryDb(
+      `SELECT COALESCE(MAX(${idColumn}), 0) + 1 AS next_id FROM ${tableName}`
+    );
+    const fallbackId = Number(maxRes.rows[0]?.next_id) || 1;
+    try {
+      await queryDb(
+        `SELECT setval(pg_get_serial_sequence($1, $2), $3, true)`,
+        [tableName, idColumn, fallbackId]
+      );
+    } catch { }
+    return fallbackId;
+  } catch {
+    return 1;
+  }
 }
 
 export async function initDb(): Promise<void> {
@@ -321,6 +423,7 @@ export async function initDb(): Promise<void> {
 
       if (hasTables && appliedVersion === schemaVersion) {
         await removeSuperadminRows(currentPool).catch(() => { });
+        await syncAllSequences(currentPool).catch(() => { });
         isInitialized = true;
         globalRef._dbInitialized = true;
         console.log("✓ PostgreSQL database already up to date.");
@@ -360,13 +463,27 @@ export async function initDb(): Promise<void> {
         "DROP TABLE IF EXISTS cms_timeline CASCADE",
         "ALTER TABLE media ALTER COLUMN data DROP NOT NULL",
         "ALTER TABLE media ALTER COLUMN byte_size TYPE BIGINT",
-        "ALTER TABLE media ADD COLUMN IF NOT EXISTS drive_file_id TEXT",
         "ALTER TABLE media ADD COLUMN IF NOT EXISTS url TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS url_hash TEXT",
         "ALTER TABLE media ADD COLUMN IF NOT EXISTS thumbnail_url TEXT",
         "ALTER TABLE media ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT 'image'",
         "ALTER TABLE media ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb",
-        "CREATE INDEX IF NOT EXISTS media_drive_file_id_idx ON media (drive_file_id)",
+        "CREATE INDEX IF NOT EXISTS media_url_hash_idx ON media (url_hash)",
+        "UPDATE media SET url_hash = encode(sha256(COALESCE(url, '/api/media/' || id)::bytea), 'hex') WHERE url_hash IS NULL OR url_hash = ''",
         "CREATE INDEX IF NOT EXISTS media_media_type_idx ON media (media_type)",
+        // ── Neon Object Storage columns (storage-migration.sql) ────────────────
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS uuid TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS object_key TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS bucket_name TEXT",
+        "ALTER TABLE media ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'",
+        `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'media_visibility_check') THEN ALTER TABLE media ADD CONSTRAINT media_visibility_check CHECK (visibility IN ('public', 'private')); END IF; END; $$`,
+        "CREATE INDEX IF NOT EXISTS media_uuid_idx ON media (uuid)",
+        "CREATE INDEX IF NOT EXISTS media_object_key_idx ON media (object_key)",
+        "CREATE INDEX IF NOT EXISTS media_visibility_idx ON media (visibility)",
+        "CREATE INDEX IF NOT EXISTS media_bucket_name_idx ON media (bucket_name)",
+        "CREATE INDEX IF NOT EXISTS media_storage_gallery_idx ON media (visibility, media_type, created_at DESC) WHERE object_key IS NOT NULL",
+        "UPDATE media SET visibility = 'public' WHERE visibility IS NULL OR visibility = ''",
+        `CREATE OR REPLACE VIEW storage_images AS SELECT id, uuid, filename, mime_type, byte_size, object_key, bucket_name, visibility, url, thumbnail_url, media_type, metadata, created_at FROM media WHERE object_key IS NOT NULL ORDER BY created_at DESC`,
       ];
 
       try {

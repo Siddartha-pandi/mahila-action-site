@@ -78,10 +78,15 @@ export function AdminObservationBar({ page, setPage }: AdminObservationBarProps)
     if (tab) {
       try {
         localStorage.setItem("mahila_admin_active_tab", tab);
+        sessionStorage.setItem("mahila_admin_active_tab", tab);
       } catch {}
       navigate(`/admin?tab=${encodeURIComponent(tab)}`);
     } else {
-      setPage("admin");
+      try {
+        localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+        sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+      } catch {}
+      navigate("/admin?tab=adminCenter");
     }
   }
 
@@ -100,8 +105,10 @@ export function AdminObservationBar({ page, setPage }: AdminObservationBarProps)
 
   // Contextual shortcut based on the page currently being observed
   let contextualAction: { label: string; tab: string; icon: typeof Pencil } | null = null;
-  if (page === "eventsBlog") {
+  if (page === "events") {
     contextualAction = { label: "Edit Events", tab: "events", icon: Pencil };
+  } else if (page === "eventsBlog") {
+    contextualAction = { label: "Edit Events Blog", tab: "eventsBlog", icon: Pencil };
   } else if (page === "stories") {
     contextualAction = { label: "Edit Stories", tab: "stories", icon: Pencil };
   } else if (page === "donate") {
@@ -127,9 +134,9 @@ export function AdminObservationBar({ page, setPage }: AdminObservationBarProps)
         <button
           onClick={() => handleReturnToAdmin()}
           className="font-semibold text-[12px] sm:text-[13px] text-white hover:text-amber-200 cursor-pointer flex items-center gap-1.5 transition-colors"
-          title="Return to Admin Panel"
+          title="Return to Admin Center"
         >
-          <span>Return to Admin Panel</span>
+          <span>Return to Admin Center</span>
         </button>
         <button
           onClick={toggleMinimized}
@@ -188,10 +195,10 @@ export function AdminObservationBar({ page, setPage }: AdminObservationBarProps)
           <button
             onClick={() => handleReturnToAdmin()}
             className="flex items-center gap-1.5 bg-[#a65a4a] hover:bg-[#993925] text-white px-3 sm:px-4 py-1.5 rounded-full font-semibold text-[11px] sm:text-[13px] shadow-sm hover:shadow-md transition-all cursor-pointer whitespace-nowrap border border-white/10"
-            title="Return to Admin Panel"
+            title="Return to Admin Center"
           >
             <LayoutDashboard className="w-3.5 h-3.5 shrink-0 text-amber-200" />
-            <span>Return to Admin Panel</span>
+            <span>Return to Admin Center</span>
           </button>
 
           {/* Sign Out */}

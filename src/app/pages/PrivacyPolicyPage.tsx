@@ -83,32 +83,17 @@ export function PrivacyPolicyPage({ setPage }: { setPage: (p: Page) => void }) {
             <div className="flex items-center gap-2.5 text-[#8b263e]">
               <Lock className="size-5" />
               <h3 className={`${fraunces()} text-[20px] sm:text-[22px] font-semibold text-[#1e1e1e]`}>
-                2. Google API Services &amp; OAuth Data Transparency
+                2. Media Storage &amp; Data Security
               </h3>
             </div>
             <div className={`${inter()} text-[#1e1e1e]/85 text-[15px] leading-relaxed space-y-3 pl-1`}>
               <p>
-                Our administrative tools allow authorized administrators to connect with Google Drive API services to store and synchronize community program media, photos, and organizational records.
+                Community media, photographs, and organizational records uploaded by authorized administrators are stored securely in our protected database infrastructure.
               </p>
-              <div className="bg-[#f9f7f4] border-l-4 border-[#8b263e] p-4 rounded-r-lg space-y-2">
-                <p className="font-semibold text-[#1e1e1e]">Limited Use Disclosure:</p>
-                <p className="text-[14px] text-[#1e1e1e]/80">
-                  Mahila Action&apos;s use and transfer to any other app of information received from Google APIs will adhere to the{" "}
-                  <a
-                    href="https://developers.google.com/terms/api-services-user-data-policy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#8b263e] underline font-medium hover:text-[#a65a4a]"
-                  >
-                    Google API Services User Data Policy
-                  </a>
-                  , including the Limited Use requirements.
-                </p>
-              </div>
               <ul className="list-disc pl-6 space-y-1.5 text-[#1e1e1e]/80">
-                <li>We only request access to Google scopes strictly necessary for organization-managed media storage (<code className="text-[13px] bg-[#e5ded3]/60 px-1.5 py-0.5 rounded text-[#1e1e1e]">drive.file</code>).</li>
-                <li>We do not sell, rent, or transfer your Google user data to third parties or advertising networks.</li>
-                <li>OAuth tokens are securely stored server-side and are used solely to fulfill administrator-initiated file uploads.</li>
+                <li>All media files are protected against unauthorized access and modification.</li>
+                <li>We do not sell, rent, or transfer your user data to third parties or advertising networks.</li>
+                <li>Authentication tokens are securely encrypted and handled with industry-standard security protocols.</li>
               </ul>
             </div>
           </section>

@@ -42,13 +42,38 @@ export function getDonationConfig(): DonationConfig {
   };
 
   // Allow environment overrides if provided
-  if (process.env.NEXT_PUBLIC_UPI_VPA) {
-    config.upi.vpa = process.env.NEXT_PUBLIC_UPI_VPA;
+  const envUpiId =
+    process.env.NEXT_PUBLIC_UPI_ID ||
+    process.env.NEXT_PUBLIC_UPI_VPA ||
+    process.env.UPI_ID ||
+    process.env.UPI_VPA;
+  if (envUpiId) {
+    config.upi.vpa = envUpiId;
+  }
+
+  const envPayeeName =
+    process.env.NEXT_PUBLIC_UPI_PAYEE_NAME ||
+    process.env.NEXT_PUBLIC_UPI_NAME ||
+    process.env.UPI_PAYEE_NAME;
+  if (envPayeeName) {
+    config.upi.payeeName = envPayeeName;
+  }
+
+  const envMerchantCode =
+    process.env.NEXT_PUBLIC_UPI_MERCHANT_CODE ||
+    process.env.UPI_MERCHANT_CODE;
+  if (envMerchantCode) {
+    config.upi.merchantCode = envMerchantCode;
   }
   if (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) {
     config.razorpay.keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
   } else if (process.env.RAZORPAY_KEY_ID) {
     config.razorpay.keyId = process.env.RAZORPAY_KEY_ID;
+  }
+
+  const envWebsite = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (envWebsite) {
+    config.ngo.website = envWebsite;
   }
 
   return config;

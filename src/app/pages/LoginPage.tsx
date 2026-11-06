@@ -78,7 +78,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
         }
         setCurrentAdminSession(canonicalEmail, adminRes.role);
         try {
-          localStorage.setItem("mahila_admin_active_tab", "submissions");
+          localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+          sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+          sessionStorage.setItem("admin_just_logged_in", "1");
         } catch {}
         setAuthBusy(false);
         toast.success("Signed in to Admin Panel!");
@@ -106,7 +108,9 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       }
       setCurrentAdminSession(canonicalEmail, fallbackAdmin.role);
       try {
-        localStorage.setItem("mahila_admin_active_tab", "submissions");
+        localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+        sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+        sessionStorage.setItem("admin_just_logged_in", "1");
       } catch {}
       toast.success("Signed in to Admin Panel!");
       setPage("admin");

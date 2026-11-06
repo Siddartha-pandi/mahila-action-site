@@ -1,3 +1,15 @@
+function notifyContentChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("mahila_content_changed"));
+  try {
+    if ("BroadcastChannel" in window) {
+      const bc = new BroadcastChannel("mahila_live_channel");
+      bc.postMessage("content_changed");
+      bc.close();
+    }
+  } catch {}
+}
+
 import { api } from "./api";
 import { comingSoon } from "./comingSoon";
 import siteContentJson from "../data/site_content.json";
@@ -116,6 +128,7 @@ export async function saveContentKey(key: string, value: string): Promise<boolea
   }
 
   const res = await api.put(`/api/content/${encodeURIComponent(key)}`, { value });
+  notifyContentChanged();
   return true; // Returns true since local state was saved successfully
 }
 
@@ -131,5 +144,6 @@ export async function saveAllContent(content: ContentMap): Promise<boolean> {
   if (!res.ok) {
     console.warn("saveAllContent: API not updated (saved locally):", res.error);
   }
+  notifyContentChanged();
   return true;
 }

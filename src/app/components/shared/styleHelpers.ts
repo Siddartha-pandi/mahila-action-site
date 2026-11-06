@@ -60,13 +60,25 @@ export function scrollToTop(behavior: ScrollBehavior = "instant") {
 }
 
 // ── Page type and URL mapping ─────────────────────────────────────────────
-export type Page = "home" | "about" | "stories" | "eventsBlog" | "donate" | "contact" | "account" | "admin" | "privacy" | "terms";
+export type Page =
+  | "home"
+  | "about"
+  | "stories"
+  | "events"
+  | "eventsBlog"
+  | "donate"
+  | "contact"
+  | "account"
+  | "admin"
+  | "privacy"
+  | "terms";
 
 export const PAGE_TO_PATH: Record<Page, string> = {
   home: "/home",
   about: "/about",
   stories: "/stories",
-  eventsBlog: "/events",
+  events: "/events",
+  eventsBlog: "/eventblog",
   donate: "/donate",
   contact: "/contact",
   account: "/account",
@@ -85,7 +97,8 @@ export function pathToPage(pathname: string): Page {
   if (first === "home") return "home";
   if (first === "about") return "about";
   if (first === "stories" || first === "story") return "stories";
-  if (first === "events" || first === "event") return "eventsBlog";
+  if (first === "events-blog" || first === "eventblog" || first === "eventsblog") return "eventsBlog";
+  if (first === "events" || first === "event") return "events";
   if (first === "donate") return "donate";
   if (first === "contact") return "contact";
   if (first === "account") return "account";
@@ -93,6 +106,8 @@ export function pathToPage(pathname: string): Page {
   if (first === "privacy" || first === "privacypolicy") return "privacy";
   if (first === "terms" || first === "tos" || first === "termsofservice") return "terms";
 
-  const entry = (Object.entries(PAGE_TO_PATH) as [Page, string][]).find(([, path]) => path === normalized);
+  const entry = (Object.entries(PAGE_TO_PATH) as [Page, string][]).find(
+    ([, path]) => path === normalized
+  );
   return entry ? entry[0] : "home";
 }

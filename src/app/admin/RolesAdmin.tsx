@@ -438,6 +438,7 @@ export function RolesAdmin({
                 name: "",
                 description: "",
                 permissions: {
+                  adminCenter: { view: true, edit: false, delete: false },
                   submissions: { view: true, edit: false, delete: false },
                   donations: { view: true, edit: false, delete: false },
                   events: { view: true, edit: false, delete: false },
@@ -744,7 +745,7 @@ export function RolesAdmin({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(Object.keys(MODULE_LABELS) as AdminModule[]).map((modKey) => (
+                  {(Object.keys(MODULE_LABELS) as AdminModule[]).filter((modKey) => modKey !== "media").map((modKey) => (
                     <tr key={modKey} className="hover:bg-gray-50/50">
                       <td className="px-5 py-3.5 font-medium text-[#1e1e1e]">
                         {MODULE_LABELS[modKey]}
@@ -957,7 +958,7 @@ export function RolesAdmin({
                         <p className="text-[11px] text-[#1e1e1e]/60 mb-2 font-medium">
                           Custom per-user overrides take precedence over the assigned role default.
                         </p>
-                        {(Object.keys(MODULE_LABELS) as AdminModule[]).map((modKey) => {
+                        {(Object.keys(MODULE_LABELS) as AdminModule[]).filter((modKey) => modKey !== "media").map((modKey) => {
                           const userPerms = typeof editingUser.permissions === "string"
                             ? JSON.parse(editingUser.permissions)
                             : (editingUser.permissions || {});

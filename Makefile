@@ -1,23 +1,28 @@
-.PHONY: install run dev build start seed seed-wait
+.PHONY: default dev seed build start clean install
 
 NPM ?= npm
 
-install:
-	$(NPM) install
+default: dev
 
-run: dev
-
+# Start Next.js web server
 dev:
 	$(NPM) run dev
 
+# Database Seed
+seed:
+	$(NPM) run seed:pg
+
+# Production Build & Run
 build:
 	$(NPM) run build
 
 start:
 	$(NPM) run start
 
-seed:
-	$(NPM) run seed:pg
+# Clean Cache
+clean:
+	$(NPM) run clean:all
 
-seed-wait:
-	$(NPM) run seed:pg:wait
+# Dependencies
+install:
+	$(NPM) install

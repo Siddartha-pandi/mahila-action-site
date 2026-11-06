@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { queryDb } from "@/lib/db";
+import { queryDb, getNextSafeSequenceId } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
 import { formatMediaFilename } from "@/lib/mediaShared";
 import {
-  isGoogleDriveConfigured,
-  uploadFileToDrive,
-  deleteFileFromDrive,
-  getDriveDirectUrl,
-  getDriveThumbnailUrl,
-} from "@/lib/googleDrive";
-import { syncGoogleDriveMedia } from "@/lib/googleDriveSync";
+  uploadToStorage,
+  buildObjectKey,
+  deleteFromStorage,
+  getPublicUrl,
+} from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +33,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
 ]);
 
-const MAX_DIRECT_FILE_SIZE = 50 * 1024 * 1024; // 50 MB (use /api/media/upload/resumable for larger files)
+const MAX_DIRECT_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 function getMediaTypeFromMime(mimeType: string): "image" | "video" | "pdf" | "document" {
   if (mimeType.startsWith("image/")) return "image";
@@ -55,7 +53,6 @@ function parseDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } | n
 }
 
 export async function POST(req: NextRequest) {
-  // Support permissions for "media" or fallback to "events"
   const auth = await verifyAdminPermission(req, "media", "edit");
   if (!auth.authorized) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -82,7 +79,6 @@ export async function POST(req: NextRequest) {
       const arrayBuffer = await file.arrayBuffer();
       buffer = Buffer.from(arrayBuffer);
     } else {
-      // JSON payload (e.g. { dataUrl: "data:image/png;base64,...", filename?: "crop.png", title?: "..." })
       const body = await req.json();
       if (!body.dataUrl || typeof body.dataUrl !== "string") {
         return NextResponse.json({ error: "Missing dataUrl in request body" }, { status: 400 });
@@ -106,7 +102,7 @@ export async function POST(req: NextRequest) {
     if (buffer.length > MAX_DIRECT_FILE_SIZE) {
       return NextResponse.json(
         {
-          error: `File size exceeds direct upload limit of 50 MB. For large videos, use the resumable upload endpoint.`,
+          error: `File size exceeds direct upload limit of 50 MB.`,
         },
         { status: 400 }
       );
@@ -145,13 +141,13 @@ export async function POST(req: NextRequest) {
 
     // 1. DUPLICATE CHECK: If exact file already exists, reuse it without duplicate upload
     const existingRes = await queryDb(
-      `SELECT id, filename, mime_type, byte_size, drive_file_id, url, thumbnail_url, media_type, metadata, created_at
+      `SELECT id, filename, mime_type, byte_size, url, url_hash, thumbnail_url, media_type, metadata, created_at
        FROM media
        WHERE metadata->>'checksum' = $1
-          OR (byte_size = $2 AND (data = $3 OR (drive_file_id IS NOT NULL AND filename = $4)))
+          OR (byte_size = $2 AND data = $3)
        ORDER BY id DESC
        LIMIT 1`,
-      [checksum, byteSize, buffer, filename]
+      [checksum, byteSize, buffer]
     );
 
     if (existingRes.rows.length > 0) {
@@ -165,10 +161,10 @@ export async function POST(req: NextRequest) {
           id: row.id,
           filename: row.filename,
           url: row.url || localProxyUrl,
+          hashedUrl: row.url_hash ? `/api/media/${row.url_hash}` : localProxyUrl,
           localUrl: localProxyUrl,
           directUrl: row.url || localProxyUrl,
           thumbnailUrl: row.thumbnail_url || localProxyUrl,
-          driveFileId: row.drive_file_id,
           mimeType: row.mime_type,
           byteSize: Number(row.byte_size),
           mediaType: row.media_type,
@@ -179,117 +175,133 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Determine Next ID from PostgreSQL sequence
-    let nextId: number;
-    try {
-      const seqRes = await queryDb("SELECT nextval(pg_get_serial_sequence('media', 'id')) as next_id");
-      nextId = Number(seqRes.rows[0]?.next_id);
-    } catch {
-      const maxRes = await queryDb("SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM media");
-      nextId = Number(maxRes.rows[0]?.next_id);
-    }
+    // 2. Determine Next ID safely from PostgreSQL sequence (preventing collisions)
+    let nextId = await getNextSafeSequenceId("media", "id");
 
-    // Determine extension and title for naming: <title>-<id>.<ext>
     const ext = filename.includes(".")
       ? filename.split(".").pop()!.toLowerCase()
       : (mimeType.split("/")[1] || "jpg").replace("+xml", "");
 
     const effectiveTitle = rawTitle || filename.replace(/\.[^/.]+$/, "");
-    const formattedFilename = formatMediaFilename(effectiveTitle, nextId, ext);
+    let formattedFilename = formatMediaFilename(effectiveTitle, nextId, ext);
 
-    // Upload to Google Drive if credentials exist
-    if (isGoogleDriveConfigured()) {
+    const fileUuid = crypto.randomUUID();
+    const objectKey = buildObjectKey(fileUuid, formattedFilename);
+    const visibility: "public" | "private" = "public";
+
+    let s3Bucket: string | null = null;
+    let s3ObjectKey: string | null = null;
+    let s3PublicUrl: string | null = null;
+    let isS3 = false;
+
+    // Upload to Neon Object Storage (S3) if configured
+    if (process.env.NEON_S3_ENDPOINT && process.env.NEON_S3_ACCESS_KEY_ID) {
       try {
-        const driveResult = await uploadFileToDrive({
-          buffer,
-          filename: formattedFilename,
-          mimeType,
-        });
-
-        const metadata = {
-          driveFileId: driveResult.id,
-          webViewLink: driveResult.webViewLink,
-          webContentLink: driveResult.webContentLink,
+        const uploadResult = await uploadToStorage(buffer, objectKey, mimeType, visibility, {
           uploadedBy: auth.admin?.email || "admin",
-          source: "admin_upload",
-          checksum,
-          title: effectiveTitle,
           originalName: filename,
-        };
+          checksum,
+        });
+        s3Bucket = uploadResult.bucket;
+        s3ObjectKey = uploadResult.objectKey;
+        s3PublicUrl = uploadResult.publicUrl || getPublicUrl(uploadResult.objectKey, uploadResult.bucket);
+        isS3 = true;
+      } catch (s3Err: any) {
+        console.warn("Neon S3 upload failed, falling back to database binary:", s3Err?.message || s3Err);
+      }
+    }
 
-        // Store file ID, URLs, formatted filename, MIME type, size, and metadata in PostgreSQL
-        const dbRes = await queryDb(
-          `INSERT INTO media (id, filename, mime_type, byte_size, drive_file_id, url, thumbnail_url, media_type, metadata)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           RETURNING id, filename, mime_type, byte_size, drive_file_id, url, thumbnail_url, media_type, metadata, created_at`,
+    let localProxyUrl = `/api/media/${nextId}`;
+    let finalUrl = s3PublicUrl || localProxyUrl;
+    let fallbackUrlHash = crypto.createHash("sha256").update(localProxyUrl).digest("hex");
+    let metadata = {
+      urlHash: fallbackUrlHash,
+      checksum,
+      title: effectiveTitle,
+      originalName: filename,
+      uploadedBy: auth.admin?.email || "admin",
+      source: isS3 ? "neon_object_storage" : "database_storage",
+      bucket: s3Bucket,
+      objectKey: s3ObjectKey,
+    };
+
+    let dbRes: any;
+    try {
+      dbRes = await queryDb(
+        `INSERT INTO media (id, uuid, filename, mime_type, byte_size, data, object_key, bucket_name, visibility, url, url_hash, thumbnail_url, media_type, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         RETURNING id, uuid, filename, mime_type, byte_size, object_key, bucket_name, visibility, url, url_hash, thumbnail_url, media_type, metadata, created_at`,
+        [
+          nextId,
+          fileUuid,
+          formattedFilename,
+          mimeType,
+          byteSize,
+          isS3 ? null : buffer, // Do not store BYTEA if saved in S3
+          s3ObjectKey,
+          s3Bucket,
+          visibility,
+          finalUrl,
+          fallbackUrlHash,
+          finalUrl,
+          mediaType,
+          JSON.stringify(metadata),
+        ]
+      );
+    } catch (insertErr: any) {
+      if (insertErr?.code === "23505" || insertErr?.message?.includes("media_pkey")) {
+        console.warn("Retrying media insert with refreshed sequence ID after unique constraint collision...");
+        nextId = await getNextSafeSequenceId("media", "id");
+        formattedFilename = formatMediaFilename(effectiveTitle, nextId, ext);
+        localProxyUrl = `/api/media/${nextId}`;
+        finalUrl = s3PublicUrl || localProxyUrl;
+        fallbackUrlHash = crypto.createHash("sha256").update(localProxyUrl).digest("hex");
+        metadata.urlHash = fallbackUrlHash;
+        dbRes = await queryDb(
+          `INSERT INTO media (id, uuid, filename, mime_type, byte_size, data, object_key, bucket_name, visibility, url, url_hash, thumbnail_url, media_type, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           RETURNING id, uuid, filename, mime_type, byte_size, object_key, bucket_name, visibility, url, url_hash, thumbnail_url, media_type, metadata, created_at`,
           [
             nextId,
+            fileUuid,
             formattedFilename,
             mimeType,
             byteSize,
-            driveResult.id,
-            driveResult.directUrl,
-            driveResult.thumbnailUrl,
+            isS3 ? null : buffer,
+            s3ObjectKey,
+            s3Bucket,
+            visibility,
+            finalUrl,
+            fallbackUrlHash,
+            finalUrl,
             mediaType,
             JSON.stringify(metadata),
           ]
         );
-
-        const row = dbRes.rows[0];
-        const localProxyUrl = `/api/media/${row.id}`;
-
-        return NextResponse.json(
-          {
-            ok: true,
-            id: row.id,
-            url: row.url || localProxyUrl,
-            localUrl: localProxyUrl,
-            directUrl: driveResult.directUrl,
-            thumbnailUrl: row.thumbnail_url,
-            driveFileId: row.drive_file_id,
-            filename: row.filename,
-            mimeType: row.mime_type,
-            byteSize: Number(row.byte_size),
-            mediaType: row.media_type,
-            metadata: row.metadata,
-            createdAt: row.created_at,
-          },
-          { status: 201 }
-        );
-      } catch (driveErr: any) {
-        console.error("Google Drive upload failed, falling back to local database storage:", driveErr);
+      } else {
+        throw insertErr;
       }
     }
 
-    // Fallback: store directly in PostgreSQL database if Google Drive is not configured
-    const metadataFallback = {
-      checksum,
-      title: effectiveTitle,
-      originalName: filename,
-      source: "db_fallback",
-    };
-
-    const dbRes = await queryDb(
-      `INSERT INTO media (id, filename, mime_type, byte_size, data, media_type, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, filename, mime_type, byte_size, media_type, created_at`,
-      [nextId, formattedFilename, mimeType, byteSize, buffer, mediaType, JSON.stringify(metadataFallback)]
-    );
-
     const row = dbRes.rows[0];
     const url = `/api/media/${row.id}`;
-
-    await queryDb(`UPDATE media SET url = $1 WHERE id = $2`, [url, row.id]);
+    const urlHash = row.url_hash || fallbackUrlHash;
 
     return NextResponse.json(
       {
         ok: true,
         id: row.id,
         url,
+        urlHash,
+        hashedUrl: `/api/media/${urlHash}`,
+        localUrl: url,
+        directUrl: url,
+        thumbnailUrl: url,
         filename: row.filename,
         mimeType: row.mime_type,
         byteSize: Number(row.byte_size),
         mediaType: row.media_type,
+        metadata: row.metadata,
         createdAt: row.created_at,
       },
       { status: 201 }
@@ -304,14 +316,6 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
 
-    // Optional Google Drive auto-sync (throttled to 10s cooldown)
-    if (url.searchParams.get("sync") === "auto" || url.searchParams.get("autoSync") === "true") {
-      try {
-        await syncGoogleDriveMedia();
-      } catch (syncErr) {
-        console.warn("Background auto-sync in GET /api/media:", syncErr);
-      }
-    }
     const rawLimit = Number(url.searchParams.get("limit"));
     const limit = !isNaN(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
     const rawOffset = Number(url.searchParams.get("offset"));
@@ -348,7 +352,7 @@ export async function GET(req: NextRequest) {
     const offsetIdx = queryParams.length;
 
     const res = await queryDb(
-      `SELECT id, filename, mime_type, byte_size, drive_file_id, url, thumbnail_url, media_type, metadata, created_at
+      `SELECT id, filename, mime_type, byte_size, url, url_hash, thumbnail_url, media_type, metadata, created_at
        FROM media
        ${whereSql}
        ORDER BY created_at DESC
@@ -358,28 +362,18 @@ export async function GET(req: NextRequest) {
 
     const items = res.rows.map((row: any) => {
       const localUrl = `/api/media/${row.id}`;
-      const isTransparentFormat =
-        row.mime_type === "image/png" ||
-        row.mime_type === "image/svg+xml" ||
-        row.mime_type === "image/webp";
-
-      const directUrl = row.drive_file_id
-        ? getDriveDirectUrl(row.drive_file_id, row.mime_type)
-        : row.url || localUrl;
-
-      // Note: Google Drive's /thumbnail API flattens transparent PNGs to solid black.
-      // Use directUrl for transparent formats so transparent backgrounds stay clean.
-      const thumbnailUrl = row.drive_file_id
-        ? (isTransparentFormat ? directUrl : getDriveThumbnailUrl(row.drive_file_id))
-        : row.thumbnail_url || (row.mime_type?.startsWith("image/") ? localUrl : null);
+      const hashedUrl = row.url_hash ? `/api/media/${row.url_hash}` : localUrl;
+      const fileUrl = row.url || localUrl;
+      const thumbnailUrl = row.thumbnail_url || (row.mime_type?.startsWith("image/") ? localUrl : null);
 
       return {
         id: row.id,
         filename: row.filename,
         mimeType: row.mime_type,
         byteSize: Number(row.byte_size),
-        driveFileId: row.drive_file_id,
-        url: directUrl,
+        urlHash: row.url_hash || null,
+        hashedUrl,
+        url: fileUrl,
         localUrl,
         thumbnailUrl,
         mediaType: row.media_type || getMediaTypeFromMime(row.mime_type),
@@ -395,7 +389,6 @@ export async function GET(req: NextRequest) {
         total,
         limit,
         offset,
-        driveConfigured: isGoogleDriveConfigured(),
       },
       {
         headers: {
@@ -425,27 +418,27 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "No media IDs provided" }, { status: 400 });
     }
 
-    const selectRes = await queryDb(
-      "SELECT id, filename, drive_file_id FROM media WHERE id = ANY($1::int[])",
-      [ids]
-    );
-
-    for (const row of selectRes.rows) {
-      if (row.drive_file_id) {
-        try {
-          await deleteFileFromDrive(row.drive_file_id);
-        } catch (driveErr) {
-          console.warn(`Could not delete file ${row.drive_file_id} from Google Drive:`, driveErr);
+    // Delete associated S3 objects first if present
+    try {
+      const s3Items = await queryDb(
+        "SELECT object_key, bucket_name FROM media WHERE id = ANY($1::int[]) AND object_key IS NOT NULL",
+        [ids]
+      );
+      for (const item of s3Items.rows) {
+        if (item.object_key && item.bucket_name) {
+          await deleteFromStorage(item.object_key, item.bucket_name).catch(() => {});
         }
       }
+    } catch (s3Err) {
+      console.warn("Error deleting objects from S3:", s3Err);
     }
 
-    await queryDb("DELETE FROM media WHERE id = ANY($1::int[])", [ids]);
+    const deleteRes = await queryDb("DELETE FROM media WHERE id = ANY($1::int[]) RETURNING id", [ids]);
 
     return NextResponse.json({
       ok: true,
-      deletedCount: selectRes.rows.length,
-      deletedIds: ids,
+      deletedCount: deleteRes.rows.length,
+      deletedIds: deleteRes.rows.map((r: any) => r.id),
     });
   } catch (err: any) {
     console.error("DELETE /api/media error:", err);

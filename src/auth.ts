@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { queryDb } from "./lib/db";
+import { getJwtSecret } from "./lib/auth";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -96,7 +97,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
-  secret: process.env.AUTH_SECRET || process.env.JWT_SECRET || "default_authjs_secret_key_dev",
+  secret: getJwtSecret(),
   trustHost: true,
 });
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { queryDb } from "@/lib/db";
-import { createAdminCookieHeader } from "@/lib/auth";
+import { createAdminCookieHeader, getJwtSecret } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       if (isValidSuperadmin) {
         const adminPayload = { sub: "superadmin_env", email: envSuperadminEmail || "superadmin", role: "superadmin" };
         const cookieHeader = createAdminCookieHeader(adminPayload);
-        const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
+        const token = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
 
         return NextResponse.json(
           { ok: true, email: envSuperadminEmail || "superadmin", role: "superadmin", jwt: token },
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     const adminPayload = { sub: user.id, email: user.email, role: user.role };
     const cookieHeader = createAdminCookieHeader(adminPayload);
-    const token = jwt.sign(adminPayload, process.env.JWT_SECRET || "default_jwt_secret_dev_key", { expiresIn: "12h" });
+    const token = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
 
     return NextResponse.json(
       { ok: true, email: user.email, role: user.role, jwt: token },
@@ -77,6 +77,6 @@ export async function POST(req: NextRequest) {
     );
   } catch (err: any) {
     console.error("Admin login error:", err);
-    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "Invalid credentials or login failed." }, { status: 500 });
   }
 }

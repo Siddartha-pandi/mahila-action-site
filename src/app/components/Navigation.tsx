@@ -14,6 +14,7 @@ import {
   Mail,
   ChevronRight,
   LayoutDashboard,
+  Newspaper,
 } from "lucide-react";
 import { getSavedUserSession, type VolunteerAccountProfile } from "@/lib/backend";
 import { LogoMark } from "./LogoMark";
@@ -84,7 +85,8 @@ export function Navigation({
     { label: "Home", page: "home", icon: Home },
     { label: "Who Are We", page: "about", icon: Users },
     { label: "Our Stories", page: "stories", icon: BookOpen },
-    { label: "Events", page: "eventsBlog", icon: Calendar },
+    { label: "Events", page: "events", icon: Calendar },
+    { label: "Events Blog", page: "eventsBlog", icon: Newspaper },
     { label: "Contact Us", page: "contact", icon: Mail },
   ];
 
@@ -149,10 +151,10 @@ export function Navigation({
             <button
               onClick={() => nav("admin")}
               className={`${inter()} bg-[#1c1917] hover:bg-[#2c2725] text-white border border-amber-500/40 text-[12px] sm:text-[13px] font-semibold px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-xs`}
-              title="Return to Admin Panel"
+              title="Open Admin Center"
             >
               <LayoutDashboard size={14} className="text-amber-300 shrink-0" />
-              <span className="hidden lg:inline">Admin Panel</span>
+              <span className="hidden lg:inline">Admin Center</span>
               <span className="lg:hidden">Admin</span>
             </button>
           )}
@@ -257,7 +259,7 @@ export function Navigation({
                 >
                   <div className="flex items-center gap-2.5">
                     <LayoutDashboard size={18} className="text-amber-300" />
-                    <span>Return to Admin Panel</span>
+                    <span>Return to Admin Center</span>
                   </div>
                   <span className="text-[11px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
                     Admin

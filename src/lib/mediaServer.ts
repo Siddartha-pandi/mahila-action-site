@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
-import { queryDb } from "./db";
-import { isGoogleDriveConfigured, uploadFileToDrive } from "./googleDrive";
+import { queryDb, getNextSafeSequenceId } from "./db";
 import { formatMediaFilename } from "./mediaShared";
+import { uploadToStorage, buildObjectKey, getPublicUrl } from "./storage";
 
 /**
  * Ensures an image URL is saved to the PostgreSQL media table if it is a base64 Data URL.
@@ -56,66 +56,110 @@ export async function ensureMediaUrl(
     console.warn("ensureMediaUrl duplicate check error:", checkErr);
   }
 
-  // 2. Reserve next sequence ID
-  let nextId: number;
-  try {
-    const seqRes = await queryDb("SELECT nextval(pg_get_serial_sequence('media', 'id')) as next_id");
-    nextId = Number(seqRes.rows[0]?.next_id);
-  } catch {
-    const maxRes = await queryDb("SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM media");
-    nextId = Number(maxRes.rows[0]?.next_id);
-  }
+  // 2. Reserve next sequence ID safely (preventing sequence drift / collisions)
+  let nextId = await getNextSafeSequenceId("media", "id");
 
   const rawTitle = defaultFilename.replace(/\.[^/.]+$/, "");
-  const formattedFilename = formatMediaFilename(rawTitle, nextId, ext);
+  let formattedFilename = formatMediaFilename(rawTitle, nextId, ext);
+
+  const fileUuid = crypto.randomUUID();
+  const objectKey = buildObjectKey(fileUuid, formattedFilename);
+  const visibility: "public" | "private" = "public";
+
+  let s3Bucket: string | null = null;
+  let s3ObjectKey: string | null = null;
+  let s3PublicUrl: string | null = null;
+  let isS3 = false;
+
+  // Upload to Neon Object Storage (S3) if configured
+  if (process.env.NEON_S3_ENDPOINT && process.env.NEON_S3_ACCESS_KEY_ID) {
+    try {
+      const uploadResult = await uploadToStorage(buffer, objectKey, mimeType, visibility, {
+        originalName: defaultFilename,
+        checksum,
+      });
+      s3Bucket = uploadResult.bucket;
+      s3ObjectKey = uploadResult.objectKey;
+      s3PublicUrl = uploadResult.publicUrl || getPublicUrl(uploadResult.objectKey, uploadResult.bucket);
+      isS3 = true;
+    } catch (s3Err: any) {
+      console.warn("Neon S3 upload failed in ensureMediaUrl, falling back to database binary:", s3Err?.message || s3Err);
+    }
+  }
+
+  let localProxyUrl = `/api/media/${nextId}`;
+  let finalUrl = s3PublicUrl || localProxyUrl;
+  let fallbackUrlHash = crypto.createHash("sha256").update(localProxyUrl).digest("hex");
+  let metadata = {
+    checksum,
+    urlHash: fallbackUrlHash,
+    title: rawTitle,
+    source: isS3 ? "neon_object_storage" : "database_storage",
+    bucket: s3Bucket,
+    objectKey: s3ObjectKey,
+  };
 
   try {
-    if (isGoogleDriveConfigured()) {
-      try {
-        const driveResult = await uploadFileToDrive({
-          buffer,
-          filename: formattedFilename,
+    let res: any;
+    try {
+      res = await queryDb(
+        `INSERT INTO media (id, uuid, filename, mime_type, byte_size, data, object_key, bucket_name, visibility, url, url_hash, thumbnail_url, media_type, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'image', $13)
+         RETURNING id, url`,
+        [
+          nextId,
+          fileUuid,
+          formattedFilename,
           mimeType,
-        });
-
-        const res = await queryDb(
-          `INSERT INTO media (id, filename, mime_type, byte_size, drive_file_id, url, thumbnail_url, media_type, metadata)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'image', $8)
-           RETURNING id`,
+          byteSize,
+          isS3 ? null : buffer, // Do not store BYTEA if saved in S3
+          s3ObjectKey,
+          s3Bucket,
+          visibility,
+          finalUrl,
+          fallbackUrlHash,
+          finalUrl,
+          JSON.stringify(metadata),
+        ]
+      );
+    } catch (insertErr: any) {
+      if (insertErr?.code === "23505" || insertErr?.message?.includes("media_pkey")) {
+        console.warn("ensureMediaUrl: Retrying insert with refreshed sequence ID after unique constraint collision...");
+        nextId = await getNextSafeSequenceId("media", "id");
+        formattedFilename = formatMediaFilename(rawTitle, nextId, ext);
+        localProxyUrl = `/api/media/${nextId}`;
+        finalUrl = s3PublicUrl || localProxyUrl;
+        fallbackUrlHash = crypto.createHash("sha256").update(localProxyUrl).digest("hex");
+        metadata.urlHash = fallbackUrlHash;
+        res = await queryDb(
+          `INSERT INTO media (id, uuid, filename, mime_type, byte_size, data, object_key, bucket_name, visibility, url, url_hash, thumbnail_url, media_type, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'image', $13)
+           RETURNING id, url`,
           [
             nextId,
+            fileUuid,
             formattedFilename,
             mimeType,
             byteSize,
-            driveResult.id,
-            driveResult.directUrl,
-            driveResult.thumbnailUrl,
-            JSON.stringify({
-              driveFileId: driveResult.id,
-              checksum,
-              title: rawTitle,
-              source: "ensureMediaUrl",
-            }),
+            isS3 ? null : buffer,
+            s3ObjectKey,
+            s3Bucket,
+            visibility,
+            finalUrl,
+            fallbackUrlHash,
+            finalUrl,
+            JSON.stringify(metadata),
           ]
         );
-
-        const row = res.rows?.[0];
-        if (row?.id) {
-          return `/api/media/${row.id}`;
-        }
-      } catch (driveErr) {
-        console.warn("ensureMediaUrl: Drive upload failed, falling back to database bytea storage:", driveErr);
+      } else {
+        throw insertErr;
       }
     }
 
-    const res = await queryDb(
-      `INSERT INTO media (id, filename, mime_type, byte_size, data, media_type, metadata)
-       VALUES ($1, $2, $3, $4, $5, 'image', $6)
-       RETURNING id`,
-      [nextId, formattedFilename, mimeType, byteSize, buffer, JSON.stringify({ checksum, title: rawTitle, source: "db_fallback" })]
-    );
-
     const row = res.rows?.[0];
+    if (row?.url) {
+      return row.url;
+    }
     if (row?.id) {
       return `/api/media/${row.id}`;
     }

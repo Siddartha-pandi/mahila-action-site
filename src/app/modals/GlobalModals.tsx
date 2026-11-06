@@ -77,7 +77,7 @@ export function GlobalModals() {
     );
   }
 
-  if ((modal === "story" || modal === "impact") && modalId) {
+  if ((modal === "story" || modal === "impact" || modal === "event" || modal === "eventsBlog") && modalId) {
     const post =
       modal === "impact"
         ? findImpactPost(siteData.blogPosts, siteData.categories, modalId)
@@ -104,6 +104,8 @@ export function GlobalModals() {
         ? "Community Wellbeing"
         : modal === "impact"
         ? "Our Impacts"
+        : modal === "event" || modal === "eventsBlog" || post.section === "event"
+        ? "Events Blog"
         : "Our Stories";
 
     const categoryLabel = catName ?? fallbackCategoryName;

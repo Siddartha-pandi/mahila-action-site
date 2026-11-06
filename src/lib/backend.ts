@@ -20,6 +20,9 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
         sessionStorage.setItem("admin_jwt", token);
       }
       localStorage.removeItem("admin_jwt");
+      localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+      sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+      sessionStorage.setItem("admin_just_logged_in", "1");
       window.dispatchEvent(new Event("mahila_admin_auth_changed"));
       window.dispatchEvent(new Event("storage"));
     }
@@ -39,6 +42,9 @@ export async function signOutAdmin() {
   if (typeof window !== "undefined") {
     sessionStorage.removeItem("admin_jwt");
     localStorage.removeItem("admin_jwt");
+    sessionStorage.removeItem("admin_just_logged_in");
+    localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+    sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
     window.dispatchEvent(new Event("mahila_admin_auth_changed"));
     window.dispatchEvent(new Event("storage"));
   }
@@ -798,6 +804,13 @@ async function submitForm(type: SubmissionItem["type"], path: string, payload: a
             localStorage.setItem("mahila_site_data_v2", JSON.stringify(site));
             if (typeof window !== "undefined") {
               window.dispatchEvent(new Event("mahila_sitedata_changed"));
+              try {
+                if ("BroadcastChannel" in window) {
+                  const bc = new BroadcastChannel("mahila_live_channel");
+                  bc.postMessage("sitedata_changed");
+                  bc.close();
+                }
+              } catch {}
             }
           }
         }
