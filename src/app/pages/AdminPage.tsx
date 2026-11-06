@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { saveAllContent, type ContentMap } from "@/lib/content";
-import { type SiteData } from "@/lib/data";
+import { type SiteData, saveLocalSiteData } from "@/lib/data";
 import { signInAdmin, signOutAdmin, onAdminAuthChange } from "@/lib/backend";
 import {
   getCurrentAdminSession,
@@ -367,7 +367,10 @@ export function AdminPage({
   }
 
   function updateSiteData(patch: Partial<SiteData>) {
-    onSiteDataChange({ ...siteData, ...patch });
+    const next = { ...siteData, ...patch };
+    onSiteDataChange(next);
+    // Silently save in local site data cache so drafts survive reloads or focus triggers
+    saveLocalSiteData(patch, true);
   }
 
   return (

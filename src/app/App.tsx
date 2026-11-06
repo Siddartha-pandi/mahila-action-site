@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { DEFAULTS, loadContent, type ContentMap } from "@/lib/content";
@@ -46,6 +46,11 @@ export default function App() {
   const page = pathToPage(location.pathname);
   const setPage = useCallback((p: Page) => navigate(PAGE_TO_PATH[p]), [navigate]);
 
+  const pageRef = useRef(page);
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+
   const [content, setContent] = useState<ContentMap>(DEFAULTS);
   const [siteData, setSiteData] = useState<SiteData>(DEFAULT_SITE_DATA);
 
@@ -66,10 +71,13 @@ export default function App() {
           if (JSON.stringify(prev) === JSON.stringify(freshContent)) return prev;
           return freshContent;
         });
-        setSiteData((prev) => {
-          if (JSON.stringify(prev) === JSON.stringify(freshSiteData)) return prev;
-          return freshSiteData;
-        });
+        // Do not overwrite siteData during background polling when the user is actively working inside Admin Panel
+        if (pageRef.current !== "admin") {
+          setSiteData((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(freshSiteData)) return prev;
+            return freshSiteData;
+          });
+        }
       } catch (err) {
         console.warn("Background data sync warning:", err);
       } finally {

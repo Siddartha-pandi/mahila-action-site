@@ -12,10 +12,18 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
   const canEdit = hasPermission(session, "councilors", "edit");
   const canDelete = hasPermission(session, "councilors", "delete");
 
-  function update(patch: Partial<Councilor>) {
+  async function update(patch: Partial<Councilor>, autoPersist = false) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for councilors.");
     if (!active) return;
-    onChange(councilors.map((c) => (c.id === active.id ? { ...c, ...patch } : c)));
+    const updated = { ...active, ...patch };
+    onChange(councilors.map((c) => (c.id === active.id ? updated : c)));
+    if (autoPersist && updated.name?.trim()) {
+      try {
+        await saveCouncilor(updated);
+      } catch (err) {
+        console.warn("Auto-persist councilor warning:", err);
+      }
+    }
   }
 
   function handleAdd() {
@@ -68,7 +76,7 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
             <label className={labelBase}>Role / Title</label>
             <input value={active.role} onChange={(e) => update({ role: e.target.value })} className={inputBase} />
           </div>
-          <ImageField label="Profile Photo" value={active.image} onChange={(v) => update({ image: v })} title={active.name} />
+          <ImageField label="Profile Photo" value={active.image} onChange={(v) => update({ image: v }, true)} title={active.name} />
           <div>
             <label className={labelBase}>Bio / Story</label>
             <textarea value={active.bio} onChange={(e) => update({ bio: e.target.value })} rows={4} className={`${inputBase} resize-y`} />

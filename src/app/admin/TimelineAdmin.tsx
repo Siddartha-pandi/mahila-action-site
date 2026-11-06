@@ -36,10 +36,18 @@ export function TimelineAdmin({
   const canMoveEarlier = canEdit && activeIndex > 0;
   const canMoveLater = canEdit && activeIndex >= 0 && activeIndex < sorted.length - 1;
 
-  function update(patch: Partial<TimelineEntry>) {
+  async function update(patch: Partial<TimelineEntry>, autoPersist = false) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
-    onChange(timeline.map((t) => (String(t.id) === String(active.id) ? { ...t, ...patch } : t)));
+    const updated = { ...active, ...patch };
+    onChange(timeline.map((t) => (String(t.id) === String(active.id) ? updated : t)));
+    if (autoPersist && updated.title?.trim()) {
+      try {
+        await saveTimelineEntry(updated);
+      } catch (err) {
+        console.warn("Auto-persist timeline warning:", err);
+      }
+    }
   }
 
   function handleAdd() {
@@ -159,7 +167,7 @@ export function TimelineAdmin({
             <label className={labelBase}>Milestone Title</label>
             <input value={active.title} onChange={(e) => update({ title: e.target.value })} className={inputBase} />
           </div>
-          <ImageField label="Milestone Photo" value={active.image} onChange={(v) => update({ image: v })} title={active.title} />
+          <ImageField label="Milestone Photo" value={active.image} onChange={(v) => update({ image: v }, true)} title={active.title} />
           <div>
             <label className={labelBase}>Description</label>
             <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={4} className={`${inputBase} resize-y`} />

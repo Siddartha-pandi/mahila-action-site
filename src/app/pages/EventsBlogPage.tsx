@@ -3,20 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { findCategory, type BlogPost } from "@/lib/data";
 import { BlogDetailModal } from "../modals/BlogDetailModal";
-import {
-  imgAboutBanner,
-  imgGal1,
-  imgGal2,
-  imgGal3,
-  imgStory1,
-  imgStory2,
-  imgStory3,
-  imgImpact1,
-  imgImpact2,
-  imgImpact3,
-  imgHeroCard,
-  imgTakeAction,
-} from "../constants/images";
+import { imgAboutBanner } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { PageBanner } from "../components/PageBanner";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
@@ -27,14 +14,6 @@ import { inter, fraunces, scrollToTop, type Page } from "../components/shared/st
 import { Search, X, Calendar, ArrowRight, Shield } from "lucide-react";
 
 const ALL = "All";
-
-const SAMPLE_EVENT_GALLERIES: string[][] = [
-  [imgGal1, imgGal2, imgGal3, imgStory1, imgImpact1, imgStory2, imgImpact3].filter(Boolean),
-  [imgStory2, imgStory3, imgImpact2, imgImpact3, imgHeroCard, imgTakeAction, imgGal1].filter(Boolean),
-  [imgGal1, imgGal2, imgImpact1, imgImpact2, imgImpact3, imgStory1, imgStory3].filter(Boolean),
-];
-
-const SAMPLE_EVENT_COVERS: string[] = [imgStory1, imgImpact2, imgHeroCard].filter(Boolean);
 
 export function EventsBlogPage({ setPage }: { setPage?: (p: Page) => void }) {
   const siteData = useSiteData();
@@ -64,17 +43,11 @@ export function EventsBlogPage({ setPage }: { setPage?: (p: Page) => void }) {
   }, [siteData.blogPosts, isAdmin]);
 
   const eventPosts = useMemo(() => {
-    return rawEventPosts.map((p, idx) => {
-      const hasGallery = Array.isArray(p.gallery) && p.gallery.length > 0;
-      const fallbackGallery = SAMPLE_EVENT_GALLERIES[idx % SAMPLE_EVENT_GALLERIES.length] || [];
-      const fallbackCover = SAMPLE_EVENT_COVERS[idx % SAMPLE_EVENT_COVERS.length] || "";
-
-      return {
-        ...p,
-        coverImage: p.coverImage || fallbackCover,
-        gallery: hasGallery ? p.gallery : fallbackGallery,
-      };
-    });
+    return rawEventPosts.map((p) => ({
+      ...p,
+      coverImage: p.coverImage || "",
+      gallery: Array.isArray(p.gallery) ? p.gallery : [],
+    }));
   }, [rawEventPosts]);
 
   // Filter by category and search query

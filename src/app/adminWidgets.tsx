@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Plus,
@@ -45,8 +45,15 @@ export function ImageField({
   const [resolvingCrop, setResolvingCrop] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
+  const [localVal, setLocalVal] = useState<string | null>(null);
 
-  const safeVal = typeof value === "string" ? value : "";
+  const safeVal = localVal !== null ? localVal : typeof value === "string" ? value : "";
+
+  useEffect(() => {
+    if (value && localVal && value === localVal) {
+      setLocalVal(null);
+    }
+  }, [value, localVal]);
 
   async function processFile(file: File) {
     if (!file.type.startsWith("image/")) {
@@ -60,6 +67,7 @@ export function ImageField({
     setUploading(true);
     try {
       const url = await uploadMediaToDb(file, file.name, title);
+      setLocalVal(url);
       if (url.startsWith("data:")) {
         toast.warning("Image could not be saved to media table (saved locally).");
       } else {
@@ -187,6 +195,7 @@ export function ImageField({
               if (e.key === "Enter") {
                 e.preventDefault();
                 if (urlDraft.trim()) {
+                  setLocalVal(urlDraft.trim());
                   onChange(urlDraft.trim());
                   setUrlDraft("");
                   setShowUrlInput(false);
@@ -198,6 +207,7 @@ export function ImageField({
             type="button"
             onClick={() => {
               if (urlDraft.trim()) {
+                setLocalVal(urlDraft.trim());
                 onChange(urlDraft.trim());
                 setUrlDraft("");
                 setShowUrlInput(false);
@@ -357,6 +367,7 @@ export function ImageField({
                 <button
                   type="button"
                   onClick={() => {
+                    setLocalVal("");
                     onChange("");
                     if (fileRef.current) fileRef.current.value = "";
                   }}
@@ -389,6 +400,7 @@ export function ImageField({
                 `${title ? title + "-cropped" : "cropped"}.png`,
                 title
               );
+              setLocalVal(url);
               if (url.startsWith("data:")) {
                 toast.warning("Cropped image could not be saved to media table (saved locally).");
               } else {

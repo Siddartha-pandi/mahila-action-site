@@ -1107,10 +1107,18 @@ export function EventsAdmin({
     };
   }, []);
 
-  function update(patch: Partial<EventItem>) {
+  async function update(patch: Partial<EventItem>, autoPersist = false) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
-    onChange(events.map((e) => (String(e.id) === String(active.id) ? { ...e, ...patch } : e)));
+    const updated = { ...active, ...patch };
+    onChange(events.map((e) => (String(e.id) === String(active.id) ? updated : e)));
+    if (autoPersist && updated.title?.trim()) {
+      try {
+        await saveEvent(updated);
+      } catch (err) {
+        console.warn("Auto-persist event warning:", err);
+      }
+    }
   }
 
   /**
@@ -1691,7 +1699,7 @@ export function EventsAdmin({
                 <label className={labelBase}>Description</label>
                 <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={3} className={`${inputBase} resize-y`} />
               </div>
-              <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v })} title={active.title} />
+              <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v }, true)} title={active.title} />
               <div>
                 <label className={labelBase}>Category (shown as the badge on the event image)</label>
                 <select
