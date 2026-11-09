@@ -1,36 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
-import fs from "fs/promises";
-import path from "path";
+import { ensureMediaUrl } from "@/lib/mediaServer";
+import { readCouncilors, writeCouncilors, CouncilorRecord } from "../route";
 
-const COUNCILORS_PATH = path.join(process.cwd(), "src", "data", "councilors.json");
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export function generateStaticParams() {
   return [];
-}
-
-interface CouncilorRecord {
-  id: string | number;
-  name: string;
-  role?: string;
-  bio?: string;
-  image?: string;
-  order?: number;
-  order_index?: number;
-}
-
-async function readCouncilors(): Promise<CouncilorRecord[]> {
-  try {
-    const raw = await fs.readFile(COUNCILORS_PATH, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-async function writeCouncilors(data: CouncilorRecord[]): Promise<void> {
-  await fs.mkdir(path.dirname(COUNCILORS_PATH), { recursive: true });
-  await fs.writeFile(COUNCILORS_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -52,8 +29,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
-import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await verifyAdminPermission(req, "councilors", "edit");

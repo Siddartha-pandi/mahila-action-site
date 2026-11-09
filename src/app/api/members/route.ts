@@ -5,6 +5,9 @@ import bcrypt from "bcryptjs";
 import { firstError, normalizePhone, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { sendMemberWelcomeEmail } from "@/lib/email";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   const auth = await verifyAdminPermission(req, "roles", "view");
   if (!auth.authorized) {

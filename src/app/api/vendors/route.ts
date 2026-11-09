@@ -4,6 +4,9 @@ import { getAdminFromRequest } from "@/lib/auth";
 import { firstError, normalizePhone, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 import { sendVendorConfirmationEmail, sendVendorAlertToAdmin } from "@/lib/email";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

@@ -3,6 +3,9 @@ import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
 import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await verifyAdminPermission(req, "roles", "view");
   if (!auth.authorized) {

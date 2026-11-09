@@ -60,24 +60,19 @@ const nextConfig = {
       },
     ];
 
-    if (process.env.NODE_ENV === "development") {
-      return [
-        {
-          source: "/:path*",
-          headers: [
-            ...securityHeaders,
-            {
-              key: "Cache-Control",
-              value: "no-store, no-cache, must-revalidate, proxy-revalidate",
-            },
-          ],
-        },
-      ];
-    }
-
     return [
       {
-        source: "/:path*",
+        source: "/api/:path*",
+        headers: [
+          ...securityHeaders,
+          {
+            key: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate, proxy-revalidate",
+          },
+        ],
+      },
+      {
+        source: "/((?!api/).*)",
         headers: securityHeaders,
       },
     ];

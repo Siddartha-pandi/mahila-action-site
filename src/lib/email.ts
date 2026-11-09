@@ -6,7 +6,9 @@ let warnedNoSmtp = false;
 function getSiteUrl(): string {
   const url =
     process.env.FRONTEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.NODE_ENV === "production" ? "" : process.env.NEXT_PUBLIC_API_URL) ||
     "http://localhost:3000";
   return url.replace(/\/+$/, "");
 }

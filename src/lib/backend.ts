@@ -19,8 +19,8 @@ export async function signInAdmin(email: string, password: string): Promise<{ ok
     if (typeof window !== "undefined") {
       if (token) {
         sessionStorage.setItem("admin_jwt", token);
+        localStorage.setItem("admin_jwt", token);
       }
-      localStorage.removeItem("admin_jwt");
       localStorage.setItem("mahila_admin_active_tab", "adminCenter");
       sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
       sessionStorage.setItem("admin_just_logged_in", "1");

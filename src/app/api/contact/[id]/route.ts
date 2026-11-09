@@ -3,6 +3,9 @@ import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
 import { LIMITS, firstError, normalizePhone, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const ALLOWED_STATUSES = ["New", "Contacted", "Completed"];
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

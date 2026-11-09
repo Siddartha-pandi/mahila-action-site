@@ -71,7 +71,11 @@ export function getDonationConfig(): DonationConfig {
     config.razorpay.keyId = process.env.RAZORPAY_KEY_ID;
   }
 
-  const envWebsite = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_API_URL;
+  const envWebsite =
+    process.env.FRONTEND_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.NODE_ENV === "production" ? "" : process.env.NEXT_PUBLIC_API_URL);
   if (envWebsite) {
     config.ngo.website = envWebsite;
   }

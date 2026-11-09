@@ -1,36 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
-import fs from "fs/promises";
-import path from "path";
+import { ensureMediaUrl } from "@/lib/mediaServer";
+import { readTimeline, writeTimeline, TimelineRecord } from "../route";
 
-const TIMELINE_PATH = path.join(process.cwd(), "src", "data", "timeline.json");
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export function generateStaticParams() {
   return [];
-}
-
-interface TimelineRecord {
-  id: string | number;
-  year: string;
-  title: string;
-  description?: string;
-  image?: string;
-  order?: number;
-  order_index?: number;
-}
-
-async function readTimeline(): Promise<TimelineRecord[]> {
-  try {
-    const raw = await fs.readFile(TIMELINE_PATH, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-async function writeTimeline(data: TimelineRecord[]): Promise<void> {
-  await fs.mkdir(path.dirname(TIMELINE_PATH), { recursive: true });
-  await fs.writeFile(TIMELINE_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const list = await readTimeline();
     const item = list.find((t) => String(t.id) === String(id));
     if (!item) {
-      return NextResponse.json({ error: "Timeline item not found" }, { status: 404 });
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
     return NextResponse.json({
       ...item,
@@ -53,8 +30,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-import { ensureMediaUrl } from "@/lib/mediaServer";
-
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await verifyAdminPermission(req, "timeline", "edit");
   if (!auth.authorized) {
@@ -67,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const list = await readTimeline();
     const idx = list.findIndex((t) => String(t.id) === String(id));
     if (idx === -1) {
-      return NextResponse.json({ error: "Timeline item not found" }, { status: 404 });
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
     const orderIndex =
@@ -92,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     list[idx] = updated;
     await writeTimeline(list);
 
-    return NextResponse.json({ ok: true, item: updated });
+    return NextResponse.json({ ok: true, milestone: updated });
   } catch (err: any) {
     console.error("PATCH /api/cms/timeline/[id] error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -114,7 +89,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const list = await readTimeline();
     const next = list.filter((t) => String(t.id) !== String(id));
     if (next.length === list.length) {
-      return NextResponse.json({ error: "Timeline item not found" }, { status: 404 });
+      return NextResponse.json({ error: "Milestone not found" }, { status: 404 });
     }
 
     await writeTimeline(next);

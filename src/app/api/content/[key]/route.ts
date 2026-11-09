@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
+import { ensureMediaUrl } from "@/lib/mediaServer";
+import { getDbSetting, setDbSetting } from "@/lib/siteSettings";
 import fs from "fs/promises";
 import path from "path";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const SITE_CONTENT_PATH = path.join(process.cwd(), "src", "data", "site_content.json");
 
@@ -11,14 +16,21 @@ export function generateStaticParams() {
 
 async function readSiteContent(): Promise<Record<string, string>> {
   try {
+    const dbData = await getDbSetting<Record<string, string> | null>("site_content", null);
+    if (dbData && typeof dbData === "object" && Object.keys(dbData).length > 0) {
+      return dbData;
+    }
+  } catch {}
+
+  try {
     const raw = await fs.readFile(SITE_CONTENT_PATH, "utf-8");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    setDbSetting("site_content", parsed).catch(() => {});
+    return parsed;
   } catch {
     return {};
   }
 }
-
-import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ key: string }> }) {
   const auth = await verifyAdminPermission(req, "stories", "edit");
@@ -37,8 +49,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ key:
     const current = await readSiteContent();
     current[key] = await ensureMediaUrl(value, `content-${key}.png`);
 
-    await fs.mkdir(path.dirname(SITE_CONTENT_PATH), { recursive: true });
-    await fs.writeFile(SITE_CONTENT_PATH, JSON.stringify(current, null, 2), "utf-8");
+    // 1. Persist to PostgreSQL database for serverless production
+    await setDbSetting("site_content", current);
+
+    // 2. Optional local write
+    try {
+      await fs.mkdir(path.dirname(SITE_CONTENT_PATH), { recursive: true });
+      await fs.writeFile(SITE_CONTENT_PATH, JSON.stringify(current, null, 2), "utf-8");
+    } catch {}
 
     return NextResponse.json({ ok: true, key, value: current[key] });
   } catch (err: any) {

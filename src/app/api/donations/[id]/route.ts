@@ -12,6 +12,9 @@ import {
   validateAddress,
 } from "@/lib/validation";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const ALLOWED_STATUSES = ["New", "Contacted", "Completed", "Rejected"];
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

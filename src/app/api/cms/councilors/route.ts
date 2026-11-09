@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
+import { ensureMediaUrl } from "@/lib/mediaServer";
+import { getDbSetting, setDbSetting } from "@/lib/siteSettings";
 import fs from "fs/promises";
 import path from "path";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const COUNCILORS_PATH = path.join(process.cwd(), "src", "data", "councilors.json");
 
-interface CouncilorRecord {
+export interface CouncilorRecord {
   id: string | number;
   name: string;
   role?: string;
@@ -15,18 +20,34 @@ interface CouncilorRecord {
   order_index?: number;
 }
 
-async function readCouncilors(): Promise<CouncilorRecord[]> {
+export async function readCouncilors(): Promise<CouncilorRecord[]> {
+  try {
+    const dbData = await getDbSetting<CouncilorRecord[] | null>("councilors", null);
+    if (Array.isArray(dbData) && dbData.length > 0) {
+      return dbData;
+    }
+  } catch {}
+
   try {
     const raw = await fs.readFile(COUNCILORS_PATH, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      setDbSetting("councilors", parsed).catch(() => {});
+      return parsed;
+    }
+  } catch {}
+  return [];
 }
 
-async function writeCouncilors(data: CouncilorRecord[]): Promise<void> {
-  await fs.mkdir(path.dirname(COUNCILORS_PATH), { recursive: true });
-  await fs.writeFile(COUNCILORS_PATH, JSON.stringify(data, null, 2), "utf-8");
+export async function writeCouncilors(data: CouncilorRecord[]): Promise<void> {
+  // 1. Persist to PostgreSQL database for serverless production
+  await setDbSetting("councilors", data);
+
+  // 2. Optional local write
+  try {
+    await fs.mkdir(path.dirname(COUNCILORS_PATH), { recursive: true });
+    await fs.writeFile(COUNCILORS_PATH, JSON.stringify(data, null, 2), "utf-8");
+  } catch {}
 }
 
 export async function GET() {
@@ -41,15 +62,18 @@ export async function GET() {
         id: String(r.id),
         order: Number(r.order_index ?? r.order ?? 0),
         order_index: Number(r.order_index ?? r.order ?? 0),
-      }))
+      })),
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
     );
   } catch (err: any) {
     console.error("GET /api/cms/councilors error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
-
-import { ensureMediaUrl } from "@/lib/mediaServer";
 
 export async function POST(req: NextRequest) {
   const auth = await verifyAdminPermission(req, "councilors", "edit");

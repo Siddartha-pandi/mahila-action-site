@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import dotenv from "dotenv";
+import { FALLBACK_SCHEMA_SQL } from "./schemaSql";
 
 dotenv.config();
 
@@ -31,20 +32,25 @@ export async function getPool() {
   const pkg = await import("pg");
   const { Pool } = pkg.default || pkg;
 
-  const cleanUrl = databaseUrl.replace("sslmode=require", "sslmode=verify-full");
+  // Clean URL parameters that can cause node-postgres SCRAM / SSL handshake issues on serverless
+  const cleanUrl = databaseUrl
+    .replace(/([?&])channel_binding=[^&]*(&|$)/g, "$1")
+    .replace(/([?&])sslmode=[^&]*(&|$)/g, "$1")
+    .replace(/[?&]$/, "");
+
   const useSsl =
     process.env.DATABASE_SSL === "true" ||
-    cleanUrl.includes("sslmode=") ||
-    cleanUrl.includes("neon.tech") ||
-    cleanUrl.includes("postgres.database.azure.com");
+    databaseUrl.includes("sslmode=") ||
+    databaseUrl.includes("neon.tech") ||
+    databaseUrl.includes("postgres.database.azure.com");
 
   const pgPool = new Pool({
     connectionString: cleanUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : false,
-    max: 10,
+    max: process.env.NODE_ENV === "production" ? 4 : 10,
     min: 0,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 20000,
+    connectionTimeoutMillis: 20000,
     keepAlive: true,
   });
 
@@ -397,8 +403,7 @@ export async function initDb(): Promise<void> {
       } else if (fs.existsSync(schemaPath2)) {
         rawSchema = fs.readFileSync(schemaPath2, "utf8");
       } else {
-        console.warn("schema.sql not found");
-        return;
+        rawSchema = FALLBACK_SCHEMA_SQL;
       }
 
       await currentPool.query("SELECT 1");
@@ -419,7 +424,19 @@ export async function initDb(): Promise<void> {
       const hasTables = Boolean(tableCheck.rows[0]?.regclass);
 
       const schemaVersion = schemaFingerprint(rawSchema);
-      const appliedVersion = readAppliedSchemaVersion();
+      let appliedVersion = readAppliedSchemaVersion();
+
+      if (!appliedVersion && hasTables) {
+        try {
+          const vRes = await currentPool.query(
+            "SELECT value FROM site_settings WHERE key = $1 LIMIT 1",
+            [SCHEMA_MARKER_KEY]
+          );
+          if (vRes.rows && vRes.rows.length > 0 && vRes.rows[0].value) {
+            appliedVersion = vRes.rows[0].value;
+          }
+        } catch {}
+      }
 
       if (hasTables && appliedVersion === schemaVersion) {
         await removeSuperadminRows(currentPool).catch(() => { });
@@ -503,6 +520,14 @@ export async function initDb(): Promise<void> {
       // Seed all default data into database
       await seedAllData(currentPool);
       recordSchemaVersion(schemaVersion);
+      try {
+        await currentPool.query(
+          `INSERT INTO site_settings (key, value, updated_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+          [SCHEMA_MARKER_KEY, schemaVersion]
+        );
+      } catch {}
 
       isInitialized = true;
       globalRef._dbInitialized = true;

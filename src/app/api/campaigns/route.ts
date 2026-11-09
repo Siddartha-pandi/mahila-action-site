@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { verifyAdminPermission } from "@/lib/auth";
 import { CAMPAIGNS, Campaign } from "@/app/constants/campaigns";
+import { getDbSetting, setDbSetting } from "@/lib/siteSettings";
 import fs from "fs/promises";
 import path from "path";
 
@@ -9,9 +10,17 @@ const CAMPAIGNS_FILE = path.join(process.cwd(), "src", "data", "campaigns.json")
 
 async function readCampaignsFile(): Promise<Campaign[]> {
   try {
+    const dbData = await getDbSetting<Campaign[] | null>("campaigns", null);
+    if (Array.isArray(dbData) && dbData.length > 0) {
+      return dbData;
+    }
+  } catch {}
+
+  try {
     const raw = await fs.readFile(CAMPAIGNS_FILE, "utf-8");
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
+      setDbSetting("campaigns", parsed).catch(() => {});
       return parsed;
     }
   } catch {}
@@ -19,8 +28,14 @@ async function readCampaignsFile(): Promise<Campaign[]> {
 }
 
 async function writeCampaignsFile(data: Campaign[]): Promise<void> {
-  await fs.mkdir(path.dirname(CAMPAIGNS_FILE), { recursive: true });
-  await fs.writeFile(CAMPAIGNS_FILE, JSON.stringify(data, null, 2), "utf-8");
+  // 1. Persist to PostgreSQL database for serverless production
+  await setDbSetting("campaigns", data);
+
+  // 2. Optional local write
+  try {
+    await fs.mkdir(path.dirname(CAMPAIGNS_FILE), { recursive: true });
+    await fs.writeFile(CAMPAIGNS_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch {}
 }
 
 export const dynamic = "force-dynamic";
@@ -41,7 +56,9 @@ export async function GET(req: NextRequest) {
       `SELECT COALESCE(campaign_name, '') as campaign_name, SUM(amount) as total_raised
        FROM donations
        WHERE status != 'Rejected'
-       GROUP BY campaign_name`
+       GROUP BY campaign_name`,
+      [],
+      { noCache: true }
     );
 
     const donationTotals: Record<string, number> = {};
@@ -123,4 +140,8 @@ export async function POST(req: NextRequest) {
     console.error("POST /api/campaigns error:", err?.message || err);
     return NextResponse.json({ error: "Failed to update campaigns." }, { status: 500 });
   }
+}
+
+export async function PUT(req: NextRequest) {
+  return POST(req);
 }

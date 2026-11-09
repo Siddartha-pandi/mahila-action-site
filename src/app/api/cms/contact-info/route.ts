@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminPermission } from "@/lib/auth";
 import { firstError, normalizePhone, validateEmail, validatePhone } from "@/lib/validation";
+import { getDbSetting, setDbSetting } from "@/lib/siteSettings";
 import fs from "fs/promises";
 import path from "path";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const CONTACT_JSON_PATH = path.join(process.cwd(), "src", "data", "contact.json");
 
 const DEFAULT_CONTACT_DATA = {
-  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "",
+  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "contact@mahilaaction.org",
   emailNote: "We reply within 24 hours",
   phone: "+91 70955 48387",
   phoneNote: "Mon – Sat, 9 AM – 6 PM IST",
-  address: "Visakapatnam, Andhra Pradesh",
+  address: "Visakhapatnam, Andhra Pradesh",
   addressNote: "India – 500 001",
   hours: "Mon – Fri",
   hoursNote: "9:00 AM – 5:30 PM IST",
@@ -19,20 +23,19 @@ const DEFAULT_CONTACT_DATA = {
 
 async function readContactJson() {
   try {
+    const dbData = await getDbSetting<any>("contact_info", null);
+    if (dbData && typeof dbData === "object") {
+      return { ...DEFAULT_CONTACT_DATA, ...dbData };
+    }
+  } catch {}
+
+  try {
     const raw = await fs.readFile(CONTACT_JSON_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_CONTACT_DATA, ...parsed };
+    const data = { ...DEFAULT_CONTACT_DATA, ...parsed };
+    setDbSetting("contact_info", data).catch(() => {});
+    return data;
   } catch {
-    try {
-      await fs.mkdir(path.dirname(CONTACT_JSON_PATH), { recursive: true });
-      await fs.writeFile(
-        CONTACT_JSON_PATH,
-        JSON.stringify(DEFAULT_CONTACT_DATA, null, 2),
-        "utf-8"
-      );
-    } catch {
-      // ignore
-    }
     return DEFAULT_CONTACT_DATA;
   }
 }
@@ -50,6 +53,10 @@ export async function GET() {
       address_note: data.addressNote || data.address_note || "",
       hoursNote: data.hoursNote || data.hours_note || "",
       hours_note: data.hoursNote || data.hours_note || "",
+    }, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
     });
   } catch (err: any) {
     console.error("GET /api/cms/contact-info error:", err);
@@ -84,12 +91,18 @@ export async function PUT(req: NextRequest) {
       hoursNote: b.hoursNote || b.hours_note || "",
     };
 
-    await fs.mkdir(path.dirname(CONTACT_JSON_PATH), { recursive: true });
-    await fs.writeFile(
-      CONTACT_JSON_PATH,
-      JSON.stringify(updated, null, 2),
-      "utf-8"
-    );
+    // 1. Save to PostgreSQL for serverless persistence
+    await setDbSetting("contact_info", updated);
+
+    // 2. Optional local file update
+    try {
+      await fs.mkdir(path.dirname(CONTACT_JSON_PATH), { recursive: true });
+      await fs.writeFile(
+        CONTACT_JSON_PATH,
+        JSON.stringify(updated, null, 2),
+        "utf-8"
+      );
+    } catch {}
 
     return NextResponse.json({
       ok: true,
