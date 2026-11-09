@@ -19,7 +19,12 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
     onChange(councilors.map((c) => (c.id === active.id ? updated : c)));
     if (autoPersist && updated.name?.trim()) {
       try {
-        await saveCouncilor(updated);
+        const res = await saveCouncilor(updated);
+        if (res.ok && res.councilor) {
+          const savedId = res.id || active.id;
+          setActiveId(savedId);
+          onChange(councilors.map((c) => (c.id === active.id ? res.councilor! : c)));
+        }
       } catch (err) {
         console.warn("Auto-persist councilor warning:", err);
       }
@@ -48,8 +53,16 @@ export function CouncilorsAdmin({ councilors, onChange }: { councilors: Councilo
     if (!active.name?.trim()) {
       return toast.error("Councilor name cannot be empty.");
     }
-    await saveCouncilor(active);
-    toast.success("Councilor profile saved!");
+    const res = await saveCouncilor(active);
+    if (res.ok) {
+      const savedId = res.id || active.id;
+      const saved = res.councilor || { ...active, id: savedId };
+      setActiveId(savedId);
+      onChange(councilors.map((c) => (c.id === active.id ? saved : c)));
+      toast.success("Councilor profile saved!");
+    } else {
+      toast.error(res.error || "Failed to save councilor profile.");
+    }
   }
 
   return (

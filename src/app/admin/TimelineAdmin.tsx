@@ -41,9 +41,14 @@ export function TimelineAdmin({
     if (!active) return;
     const updated = { ...active, ...patch };
     onChange(timeline.map((t) => (String(t.id) === String(active.id) ? updated : t)));
-    if (autoPersist && updated.title?.trim()) {
+    if (autoPersist && updated.title?.trim() && updated.year?.trim()) {
       try {
-        await saveTimelineEntry(updated);
+        const res = await saveTimelineEntry(updated);
+        if (res.ok && res.entry) {
+          const savedId = res.id || String(active.id);
+          setActiveId(savedId);
+          onChange(timeline.map((t) => (String(t.id) === String(active.id) ? res.entry! : t)));
+        }
       } catch (err) {
         console.warn("Auto-persist timeline warning:", err);
       }
@@ -77,8 +82,16 @@ export function TimelineAdmin({
     if (!active.year?.trim() || !active.title?.trim()) {
       return toast.error("Please enter both a year and milestone title.");
     }
-    await saveTimelineEntry(active);
-    toast.success("Timeline entry saved!");
+    const res = await saveTimelineEntry(active);
+    if (res.ok) {
+      const savedId = res.id || String(active.id);
+      const saved = res.entry || { ...active, id: savedId };
+      setActiveId(savedId);
+      onChange(timeline.map((t) => (String(t.id) === String(active.id) ? saved : t)));
+      toast.success("Timeline entry saved!");
+    } else {
+      toast.error(res.error || "Failed to save timeline entry.");
+    }
   }
 
   async function move(dir: -1 | 1) {

@@ -50,6 +50,7 @@ export function DonationsAdmin() {
   const [filterCampaign, setFilterCampaign] = useState<string>("all");
   const [filterDonorType, setFilterDonorType] = useState<string>("all");
   const [filterMethod, setFilterMethod] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedDonation, setSelectedDonation] = useState<SubmissionItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -379,6 +380,11 @@ export function DonationsAdmin() {
       if (!camp.includes(filterCampaign.toLowerCase())) return false;
     }
 
+    if (filterStatus !== "all") {
+      const st = String(item.status || "New").toLowerCase();
+      if (st !== filterStatus.toLowerCase()) return false;
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       const rNum = String(item.data?.receipt_number || "").toLowerCase();
@@ -444,6 +450,37 @@ export function DonationsAdmin() {
       else next.add(id);
       return next;
     });
+  };
+
+  const handleStatusChange = async (item: SubmissionItem, newStatus: SubmissionItem["status"]) => {
+    if (!canEdit) return toast.error("Permission denied to update donation status.");
+    const res = await updateSubmissionStatusRemote(item, newStatus);
+    if (!res.ok) return toast.error(res.error || "Failed to update donation status.");
+    setSubmissions((prev) =>
+      prev.map((s) => (String(s.id) === String(item.id) ? { ...s, status: newStatus } : s))
+    );
+    if (selectedDonation && String(selectedDonation.id) === String(item.id)) {
+      setSelectedDonation((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
+    toast.success(`Donation marked as ${newStatus}`);
+  };
+
+  const handleBatchStatusChange = async (newStatus: SubmissionItem["status"]) => {
+    if (!canEdit) return toast.error("Permission denied to update donation status.");
+    const targets = allDonations.filter((d) => selectedIds.has(String(d.id)));
+    if (!targets.length) return;
+    let count = 0;
+    for (const item of targets) {
+      const res = await updateSubmissionStatusRemote(item, newStatus);
+      if (res.ok) count++;
+    }
+    setSubmissions((prev) =>
+      prev.map((s) => (selectedIds.has(String(s.id)) ? { ...s, status: newStatus } : s))
+    );
+    if (selectedDonation && selectedIds.has(String(selectedDonation.id))) {
+      setSelectedDonation((prev) => (prev ? { ...prev, status: newStatus } : null));
+    }
+    toast.success(`Updated ${count} donation(s) to ${newStatus}`);
   };
 
   const handleDelete = async (item: SubmissionItem) => {
@@ -741,6 +778,18 @@ export function DonationsAdmin() {
             <option value="razorpay">🌐 Razorpay Gateway</option>
           </select>
 
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-3 py-2 text-[12px] border border-[#a65a4a]/25 rounded-xl bg-white text-gray-700 font-medium shadow-2xs cursor-pointer"
+          >
+            <option value="all">⚡ All Statuses</option>
+            <option value="Completed">✅ Completed</option>
+            <option value="New">⏳ New / Pending</option>
+            <option value="Contacted">💬 Contacted</option>
+            <option value="Rejected">❌ Rejected</option>
+          </select>
+
           <p className="text-[12px] text-gray-500 font-medium shrink-0 ml-1">
             Showing <strong className="text-gray-900">{filteredDonations.length}</strong> of {totalCount}
           </p>
@@ -758,6 +807,22 @@ export function DonationsAdmin() {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {canEdit && (
+                <>
+                  <button
+                    onClick={() => handleBatchStatusChange("Completed")}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                  >
+                    <CheckCircle size={13} /> Mark Completed
+                  </button>
+                  <button
+                    onClick={() => handleBatchStatusChange("Contacted")}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-semibold bg-purple-600 text-white hover:bg-purple-700 transition-colors cursor-pointer"
+                  >
+                    <UserCheck size={13} /> Mark Contacted
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => exportCSV(true)}
                 className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[11px] font-semibold bg-[#a65a4a] text-white hover:bg-[#993925] transition-colors cursor-pointer"
@@ -812,6 +877,7 @@ export function DonationsAdmin() {
                   <th className="py-3.5 px-4">Campaign / Cause</th>
                   <th className="py-3.5 px-4 text-right">Amount (₹)</th>
                   <th className="py-3.5 px-4">Payment Method</th>
+                  <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Date</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
@@ -891,6 +957,43 @@ export function DonationsAdmin() {
                           <div className="text-[11px] text-[#1e1e1e]/45 font-mono truncate max-w-[140px]" title={item.data.transaction_id}>
                             Ref: {item.data.transaction_id}
                           </div>
+                        )}
+                      </td>
+
+                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                        {canEdit ? (
+                          <select
+                            value={item.status || "New"}
+                            onChange={(e) => handleStatusChange(item, e.target.value as SubmissionItem["status"])}
+                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer outline-none ${
+                              item.status === "Completed"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                : item.status === "Contacted"
+                                ? "bg-purple-50 text-purple-800 border-purple-300"
+                                : item.status === "Rejected"
+                                ? "bg-rose-50 text-rose-800 border-rose-300"
+                                : "bg-blue-50 text-blue-800 border-blue-300"
+                            }`}
+                          >
+                            <option value="New">⏳ New</option>
+                            <option value="Completed">✅ Completed</option>
+                            <option value="Contacted">💬 Contacted</option>
+                            <option value="Rejected">❌ Rejected</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                              item.status === "Completed"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                : item.status === "Contacted"
+                                ? "bg-purple-50 text-purple-800 border-purple-300"
+                                : item.status === "Rejected"
+                                ? "bg-rose-50 text-rose-800 border-rose-300"
+                                : "bg-blue-50 text-blue-800 border-blue-300"
+                            }`}
+                          >
+                            {item.status || "New"}
+                          </span>
                         )}
                       </td>
 
@@ -1052,9 +1155,40 @@ export function DonationsAdmin() {
                 <span className="text-gray-500 text-[12px]">
                   Date: {new Date(selectedDonation.createdAt).toLocaleString("en-IN")}
                 </span>
-                <span className="text-[12px] text-emerald-800 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Recorded in Books
+                <span
+                  className={`text-[12px] font-semibold px-2.5 py-0.5 rounded-full border ${
+                    selectedDonation.status === "Completed"
+                      ? "text-emerald-800 bg-emerald-50 border-emerald-200"
+                      : selectedDonation.status === "Contacted"
+                      ? "text-purple-800 bg-purple-50 border-purple-200"
+                      : selectedDonation.status === "Rejected"
+                      ? "text-rose-800 bg-rose-50 border-rose-200"
+                      : "text-blue-800 bg-blue-50 border-blue-200"
+                  }`}
+                >
+                  Status: {selectedDonation.status || "New"}
                 </span>
+              </div>
+
+              <div className="pt-3 border-t border-gray-100">
+                <span className="text-gray-500 block text-[11px] uppercase font-bold mb-1.5">Change Status</span>
+                <div className="flex gap-2">
+                  {(["New", "Contacted", "Completed", "Rejected"] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => handleStatusChange(selectedDonation, st)}
+                      className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer border ${
+                        (selectedDonation.status || "New") === st
+                          ? "bg-[#a65a4a] text-white border-[#a65a4a]"
+                          : "bg-white text-gray-700 border-gray-300 hover:border-[#a65a4a]"
+                      } disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

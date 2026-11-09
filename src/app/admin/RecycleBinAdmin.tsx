@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   getTrashItems,
+  fetchTrashItems,
   restoreTrashItem,
   removeFromTrash,
   clearTrash,
@@ -37,7 +38,11 @@ export function RecycleBinAdmin() {
   }
 
   useEffect(() => {
-    reload();
+    fetchTrashItems().then((serverItems) => {
+      setItems(serverItems);
+    }).catch(() => {
+      reload();
+    });
 
     function handleSync() {
       reload();
@@ -61,9 +66,9 @@ export function RecycleBinAdmin() {
     };
   }, []);
 
-  function handleRestore(item: TrashItem) {
+  async function handleRestore(item: TrashItem) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to restore items.");
-    const ok = restoreTrashItem(item);
+    const ok = await restoreTrashItem(item);
     if (ok) {
       toast.success(`Restored "${item.title}" successfully!`);
       reload();
@@ -72,17 +77,17 @@ export function RecycleBinAdmin() {
     }
   }
 
-  function handlePermanentDelete(item: TrashItem) {
+  async function handlePermanentDelete(item: TrashItem) {
     if (!canDelete) return toast.error("Permission denied: DELETE rights required to permanently delete items.");
     if (!confirm(`Are you sure you want to permanently delete "${item.title}"? This cannot be undone.`)) {
       return;
     }
-    removeFromTrash(item.id, item.type);
+    await removeFromTrash(item.id, item.type);
     toast.success(`Permanently deleted "${item.title}".`);
     reload();
   }
 
-  function handleEmptyTrash() {
+  async function handleEmptyTrash() {
     if (!canDelete) return toast.error("Permission denied: DELETE rights required to empty recycle bin.");
     if (!items.length) {
       return toast.error("Recycle Bin is already empty.");
@@ -90,7 +95,7 @@ export function RecycleBinAdmin() {
     if (!confirm("Are you sure you want to EMPTY the Recycle Bin? All deleted items will be permanently erased!")) {
       return;
     }
-    clearTrash();
+    await clearTrash();
     toast.success("Recycle Bin emptied successfully.");
     reload();
   }

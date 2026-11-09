@@ -12,9 +12,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const numId = Number(id);
+    const rawNum = id.replace(/^(post_|blog_|story_|impact_)/, "");
     const result = !isNaN(numId)
       ? await queryDb("SELECT * FROM blog_posts WHERE id = $1", [numId])
-      : await queryDb("SELECT * FROM blog_posts WHERE LOWER(TRIM(title)) = LOWER(TRIM($1)) LIMIT 1", [id]);
+      : !isNaN(Number(rawNum))
+      ? await queryDb("SELECT * FROM blog_posts WHERE id = $1", [Number(rawNum)])
+      : await queryDb("SELECT * FROM blog_posts WHERE id::text = $1 OR LOWER(TRIM(title)) = LOWER(TRIM($1)) LIMIT 1", [id]);
 
     const r = result.rows[0];
     if (!r) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -100,11 +103,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Find target post numeric id
     let targetPostId: number | null = null;
+    const rawNum = String(id).replace(/^(post_|blog_|story_|impact_)/, "");
     if (!isNaN(Number(id))) {
       targetPostId = Number(id);
+    } else if (!isNaN(Number(rawNum))) {
+      targetPostId = Number(rawNum);
     } else {
       const found = await queryDb(
-        "SELECT id FROM blog_posts WHERE LOWER(TRIM(title)) = LOWER(TRIM($1)) LIMIT 1",
+        "SELECT id FROM blog_posts WHERE LOWER(TRIM(title)) = LOWER(TRIM($1)) OR id::text = $1 LIMIT 1",
         [id]
       );
       if (found.rows[0]?.id) {
@@ -180,10 +186,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const numId = Number(id);
-    const res = !isNaN(numId)
-      ? await queryDb("DELETE FROM blog_posts WHERE id = $1 RETURNING id", [numId])
-      : await queryDb("DELETE FROM blog_posts WHERE LOWER(TRIM(title)) = LOWER(TRIM($1)) RETURNING id", [id]);
+    const targetId = String(id);
+    const rawNum = targetId.replace(/^(post_|blog_|story_|impact_)/, "");
+    let res;
+    if (/^\d+$/.test(targetId)) {
+      res = await queryDb("DELETE FROM blog_posts WHERE id = $1 RETURNING id", [parseInt(targetId, 10)]);
+    } else if (/^\d+$/.test(rawNum)) {
+      res = await queryDb("DELETE FROM blog_posts WHERE id = $1 RETURNING id", [parseInt(rawNum, 10)]);
+    } else {
+      res = await queryDb("DELETE FROM blog_posts WHERE id::text = $1 OR LOWER(TRIM(title)) = LOWER(TRIM($1)) RETURNING id", [targetId]);
+    }
 
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });

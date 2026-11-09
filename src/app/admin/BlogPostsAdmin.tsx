@@ -41,7 +41,12 @@ export function BlogPostsAdmin({
     onChange(posts.map((p) => (String(p.id) === String(active.id) ? updated : p)));
     if (autoPersist && updated.title?.trim()) {
       try {
-        await saveBlogPost(updated);
+        const res = await saveBlogPost(updated);
+        if (res.ok && res.id && res.id !== String(updated.id)) {
+          const savedPost = res.post || { ...updated, id: res.id };
+          setActiveId(res.id);
+          onChange(posts.map((p) => (String(p.id) === String(active.id) ? savedPost : p)));
+        }
       } catch (err) {
         console.warn("Auto-persist warning:", err);
       }
@@ -70,12 +75,18 @@ export function BlogPostsAdmin({
     if (!post) return;
     const nextPublished = post.published === false;
     const updated = { ...post, published: nextPublished };
-    onChange(posts.map((p) => (String(p.id) === String(post.id) ? updated : p)));
-    await saveBlogPost(updated);
-    if (nextPublished) {
-      toast.success(`"${post.title}" is now Published and live on the website!`);
+    const res = await saveBlogPost(updated);
+    if (res.ok) {
+      const savedId = res.id || String(post.id);
+      const savedPost = res.post || { ...updated, id: savedId };
+      onChange(posts.map((p) => (String(p.id) === String(post.id) ? savedPost : p)));
+      if (nextPublished) {
+        toast.success(`"${post.title}" is now Published and live on the website!`);
+      } else {
+        toast.success(`"${post.title}" is now Unpublished (Draft) and hidden from the website.`);
+      }
     } else {
-      toast.success(`"${post.title}" is now Unpublished (Draft) and hidden from the website.`);
+      toast.error(res.error || "Failed to update publish status.");
     }
   }
 
@@ -89,12 +100,16 @@ export function BlogPostsAdmin({
     if (forcePublished !== undefined) {
       update({ published: forcePublished });
     }
-    const ok = await saveBlogPost(postToSave);
+    const res = await saveBlogPost(postToSave);
     const isPub = postToSave.published !== false;
-    if (ok) {
+    if (res.ok) {
+      const savedId = res.id || String(postToSave.id);
+      const savedPost = res.post || { ...postToSave, id: savedId };
+      setActiveId(savedId);
+      onChange(posts.map((p) => (String(p.id) === String(postToSave.id) ? savedPost : p)));
       toast.success(`${sectionNoun} saved as ${isPub ? "Published (Live)" : "Draft"}!`);
     } else {
-      toast.error(`Failed to save ${sectionNoun.toLowerCase()}.`);
+      toast.error(res.error || `Failed to save ${sectionNoun.toLowerCase()}.`);
     }
   }
 

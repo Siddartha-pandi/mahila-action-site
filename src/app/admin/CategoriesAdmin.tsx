@@ -42,6 +42,9 @@ export function CategoriesAdmin({
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for categories.");
     const cat = newCategory(categories);
     const saved = await saveCategory(cat);
+    if (saved.ok === false) {
+      return toast.error(saved.error || "Failed to create category");
+    }
     const finalCat = saved || cat;
     onCategoriesChange([...categories, finalCat]);
     toast.success(`Category #${finalCat.id} created!`);
@@ -52,7 +55,10 @@ export function CategoriesAdmin({
     const name = (nameDraft[c.id] ?? c.name).trim();
     if (!name) return toast.error("Category name can't be empty");
     const updated = { ...c, name };
-    await saveCategory(updated);
+    const saved = await saveCategory(updated);
+    if (saved.ok === false) {
+      return toast.error(saved.error || "Failed to update category");
+    }
     onCategoriesChange(categories.map((x) => (x.id === c.id ? updated : x)));
     toast.success("Category updated");
   }

@@ -122,7 +122,7 @@ export interface SubmissionItem {
   type: "contact" | "volunteer" | "reservation" | "vendor" | "donation" | "member" | "perm_volunteer_request" | "perm_volunteer_deactivate";
   data: any;
   createdAt: string;
-  status: "New" | "Contacted" | "Completed";
+  status: "New" | "Contacted" | "Completed" | "Rejected";
 }
 
 /** How someone can take part in a single event. */
@@ -205,6 +205,7 @@ function rowToSubmission(type: SubmissionItem["type"], row: any): SubmissionItem
     type: resolvedType,
     data: {
       ...rest,
+      id: String(id),
       request_type,
       companions: parseJsonColumn(rest.companions, []),
       selected_events: parseJsonColumn(rest.selected_events, []),
@@ -858,6 +859,9 @@ export async function saveDonation(data: {
   payment_method?: string;
   transaction_id?: string;
   notes?: string;
+  is_offline?: boolean;
+  status?: string;
+  created_at?: string;
 }): Promise<SaveResult> {
   return submitForm("donation", "/api/donations", { donation_type: "one-time" as const, ...data });
 }
@@ -891,9 +895,11 @@ export async function saveVolunteer(data: {
   name: string;
   email: string;
   phone: string;
-  skills: string;
+  skills?: string;
   volunteer_commitment?: string;
   selected_events: string[];
+  seats?: number;
+  companions?: any[];
 }): Promise<SaveResult> {
   return submitForm("volunteer", "/api/volunteers", data);
 }
@@ -1111,8 +1117,14 @@ export async function savePermVolunteerRequest(data: {
   email: string;
   phone?: string;
   message?: string;
+  request_type?: "activate" | "deactivate";
 }): Promise<SaveResult> {
-  return submitForm("perm_volunteer_request", "/api/perm-volunteers", { ...data, request_type: "activate" });
+  const reqType = data.request_type || "activate";
+  return submitForm(
+    reqType === "deactivate" ? "perm_volunteer_deactivate" : "perm_volunteer_request",
+    "/api/perm-volunteers",
+    { ...data, request_type: reqType }
+  );
 }
 
 export function getUserPermVolunteerRequest(

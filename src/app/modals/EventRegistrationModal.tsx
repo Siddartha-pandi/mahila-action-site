@@ -182,26 +182,18 @@ export function EventRegistrationModal({
       ])
     );
     if (invalid) return fail(invalid);
-    // The volunteer application itself carries the event; any extra people come
-    // through as a seat reservation so their details aren't lost.
+    // Save volunteer registration along with any additional companion volunteers directly
     const res = await saveVolunteer({
-      name, email, phone, skills,
+      name,
+      email,
+      phone,
+      skills,
       volunteer_commitment: commitment,
       selected_events: [event.title],
+      seats: Number(volunteerParty.count),
+      companions: volunteerParty.companions,
     });
     if (!res.ok) return fail(res.error || "Something went wrong submitting your registration — please try again.");
-
-    if (volunteerParty.companions.length > 0) {
-      const seats = await saveReservation({
-        name, email, phone,
-        seats: Number(volunteerParty.count),
-        event_name: event.title,
-        event_id: event.id,
-        volunteer_commitment: commitment,
-        companions: volunteerParty.companions,
-      });
-      if (!seats.ok) toast.error(seats.error || "Your registration went through, but we couldn't record the additional volunteers.");
-    }
     return true;
   }
 

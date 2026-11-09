@@ -878,45 +878,61 @@ export function newBlogPost(section: "story" | "event" | "impact", categoryId: s
   };
 }
 
-export async function saveBlogPost(p: BlogPost): Promise<boolean> {
+export async function saveBlogPost(p: BlogPost): Promise<{ ok: boolean; id?: string; post?: BlogPost; error?: string }> {
   let itemToSave = { ...p, id: String(p.id) };
+  let isOk = true;
+  let errMsg: string | undefined;
+
   try {
     const res = await api.post<any>(ENDPOINTS.blogPosts, p);
-    if (res.data?.coverImage) {
-      itemToSave.coverImage = res.data.coverImage;
+    if (!res.ok) {
+      isOk = false;
+      errMsg = res.error;
+    } else {
+      if (res.data?.coverImage) {
+        itemToSave.coverImage = res.data.coverImage;
+      }
+      if (Array.isArray(res.data?.gallery)) {
+        itemToSave.gallery = res.data.gallery;
+      }
+      if (res.data?.id != null) {
+        itemToSave.id = String(res.data.id);
+      }
+      if (res.data?.categoryId != null) {
+        itemToSave.categoryId = String(res.data.categoryId);
+      }
+      if (res.data?.published !== undefined) {
+        itemToSave.published = res.data.published;
+      }
     }
-    if (Array.isArray(res.data?.gallery)) {
-      itemToSave.gallery = res.data.gallery;
-    }
-    if (res.data?.id != null) {
-      itemToSave.id = String(res.data.id);
-    }
-    if (res.data?.categoryId != null) {
-      itemToSave.categoryId = String(res.data.categoryId);
-    }
-    if (res.data?.published !== undefined) {
-      itemToSave.published = res.data.published;
-    }
-  } catch {}
+  } catch (err: any) {
+    isOk = false;
+    errMsg = err?.message || "Failed to save blog post";
+  }
 
   const current = getLocalSiteData();
   const blogPosts = current.blogPosts ?? DEFAULT_BLOG_POSTS;
   const idx = blogPosts.findIndex((item) => String(item.id) === String(p.id) || String(item.id) === String(itemToSave.id));
   const updated = idx >= 0 ? blogPosts.map((item, i) => (i === idx ? itemToSave : item)) : [...blogPosts, itemToSave];
   saveLocalSiteData({ blogPosts: updated });
-  return true;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
+
+  return { ok: isOk, id: itemToSave.id, post: itemToSave, error: errMsg };
 }
 
 export async function deleteBlogPost(id: string): Promise<boolean> {
   const current = getLocalSiteData();
   const allBlogs = current.blogPosts ?? DEFAULT_BLOG_POSTS;
-  const target = allBlogs.find((p) => p.id === id);
+  const target = allBlogs.find((p) => String(p.id) === String(id));
 
   if (target && typeof window !== "undefined") {
     try {
       const { addToTrash } = require("./recycleBin");
       addToTrash({
-        id: target.id,
+        id: String(target.id),
         type: "blog",
         title: target.title,
         subtitle: `Blog Post (${target.section})`,
@@ -927,12 +943,16 @@ export async function deleteBlogPost(id: string): Promise<boolean> {
     }
   }
 
-  const blogPosts = allBlogs.filter((p) => p.id !== id);
+  const blogPosts = allBlogs.filter((p) => String(p.id) !== String(id));
   saveLocalSiteData({ blogPosts });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
 
   try {
     const res = await api.del(`${ENDPOINTS.blogPosts}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return Boolean(res.ok);
   } catch {
     return true;
   }
@@ -951,36 +971,53 @@ export function newCategory(existingCategories?: Category[]): Category {
   return { id: String(nextId), name: "New Category" };
 }
 
-export async function saveCategory(c: Category): Promise<Category> {
+export async function saveCategory(c: Category): Promise<Category & { ok?: boolean; error?: string }> {
   let saved = { ...c };
+  let isOk = true;
+  let errMsg: string | undefined;
+
   try {
     const res = await api.post<any>(ENDPOINTS.categories, c);
-    if (res.data?.id) {
+    if (!res.ok) {
+      isOk = false;
+      errMsg = res.error;
+    } else if (res.data?.category) {
+      saved = { ...saved, ...res.data.category, id: String(res.data.category.id) };
+    } else if (res.data?.id) {
       saved = { ...saved, id: String(res.data.id) };
     }
-  } catch {
-    // offline or local fallback
+  } catch (err: any) {
+    isOk = false;
+    errMsg = err?.message;
   }
 
   const current = getLocalSiteData();
   const categories = current.categories ?? DEFAULT_CATEGORIES;
-  const idx = categories.findIndex((item) => item.id === c.id || item.id === saved.id);
+  const idx = categories.findIndex((item) => String(item.id) === String(c.id) || String(item.id) === String(saved.id));
   const updated = idx >= 0
     ? categories.map((item, i) => (i === idx ? saved : item))
     : [...categories, saved];
   saveLocalSiteData({ categories: updated });
 
-  return saved;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
+
+  return { ...saved, ok: isOk, error: errMsg };
 }
 
 export async function deleteCategory(id: string): Promise<boolean> {
   const current = getLocalSiteData();
-  const categories = (current.categories ?? DEFAULT_CATEGORIES).filter((c) => c.id !== id);
+  const categories = (current.categories ?? DEFAULT_CATEGORIES).filter((c) => String(c.id) !== String(id));
   saveLocalSiteData({ categories });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
 
   try {
     const res = await api.del(`${ENDPOINTS.categories}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return Boolean(res.ok);
   } catch {
     return true;
   }
@@ -1027,36 +1064,52 @@ export function newCouncilor(order: number): Councilor {
   return { id: uid("coun"), name: "New Councilor", role: "", bio: "", image: "", order };
 }
 
-export async function saveCouncilor(c: Councilor): Promise<boolean> {
+export async function saveCouncilor(c: Councilor): Promise<{ ok: boolean; id?: string; councilor?: Councilor; error?: string }> {
   let itemToSave = { ...c };
+  let isOk = true;
+  let errMsg: string | undefined;
+
   try {
     const res = await api.post<any>(ENDPOINTS.councilors, c);
-    if (res.data?.image) {
-      itemToSave.image = res.data.image;
+    if (!res.ok) {
+      isOk = false;
+      errMsg = res.error;
+    } else {
+      if (res.data?.image) {
+        itemToSave.image = res.data.image;
+      }
+      if (res.data?.id != null) {
+        itemToSave.id = String(res.data.id);
+      }
     }
-    if (res.data?.id != null) {
-      itemToSave.id = String(res.data.id);
-    }
-  } catch {}
+  } catch (err: any) {
+    isOk = false;
+    errMsg = err?.message || "Failed to save councilor";
+  }
 
   const current = getLocalSiteData();
   const councilors = current.councilors ?? DEFAULT_COUNCILORS;
-  const idx = councilors.findIndex((item) => item.id === c.id || item.id === itemToSave.id);
+  const idx = councilors.findIndex((item) => String(item.id) === String(c.id) || String(item.id) === String(itemToSave.id));
   const updated = idx >= 0 ? councilors.map((item, i) => (i === idx ? itemToSave : item)) : [...councilors, itemToSave];
   saveLocalSiteData({ councilors: updated });
-  return true;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
+
+  return { ok: isOk, id: itemToSave.id, councilor: itemToSave, error: errMsg };
 }
 
 export async function deleteCouncilor(id: string): Promise<boolean> {
   const current = getLocalSiteData();
   const allCouncilors = current.councilors ?? DEFAULT_COUNCILORS;
-  const target = allCouncilors.find((c) => c.id === id);
+  const target = allCouncilors.find((c) => String(c.id) === String(id));
 
   if (target && typeof window !== "undefined") {
     try {
       const { addToTrash } = require("./recycleBin");
       addToTrash({
-        id: target.id,
+        id: String(target.id),
         type: "councilor",
         title: target.name,
         subtitle: target.role || "Councilor",
@@ -1067,12 +1120,16 @@ export async function deleteCouncilor(id: string): Promise<boolean> {
     }
   }
 
-  const councilors = allCouncilors.filter((c) => c.id !== id);
+  const councilors = allCouncilors.filter((c) => String(c.id) !== String(id));
   saveLocalSiteData({ councilors });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
 
   try {
     const res = await api.del(`${ENDPOINTS.councilors}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return Boolean(res.ok);
   } catch {
     return true;
   }
@@ -1086,24 +1143,40 @@ export function newTimelineEntry(order: number): TimelineEntry {
   return { id: uid("tl"), year: new Date().getFullYear().toString(), title: "New Milestone", description: "", image: "", order };
 }
 
-export async function saveTimelineEntry(t: TimelineEntry): Promise<boolean> {
+export async function saveTimelineEntry(t: TimelineEntry): Promise<{ ok: boolean; id?: string; entry?: TimelineEntry; error?: string }> {
   let itemToSave = { ...t };
+  let isOk = true;
+  let errMsg: string | undefined;
+
   try {
     const res = await api.post<any>(ENDPOINTS.timeline, t);
-    if (res.data?.image) {
-      itemToSave.image = res.data.image;
+    if (!res.ok) {
+      isOk = false;
+      errMsg = res.error;
+    } else {
+      if (res.data?.image) {
+        itemToSave.image = res.data.image;
+      }
+      if (res.data?.id != null) {
+        itemToSave.id = String(res.data.id);
+      }
     }
-    if (res.data?.id != null) {
-      itemToSave.id = String(res.data.id);
-    }
-  } catch {}
+  } catch (err: any) {
+    isOk = false;
+    errMsg = err?.message || "Failed to save timeline entry";
+  }
 
   const current = getLocalSiteData();
   const timeline = current.timeline ?? DEFAULT_TIMELINE;
-  const idx = timeline.findIndex((item) => item.id === t.id || item.id === itemToSave.id);
+  const idx = timeline.findIndex((item) => String(item.id) === String(t.id) || String(item.id) === String(itemToSave.id));
   const updated = idx >= 0 ? timeline.map((item, i) => (i === idx ? itemToSave : item)) : [...timeline, itemToSave];
   saveLocalSiteData({ timeline: updated });
-  return true;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
+
+  return { ok: isOk, id: itemToSave.id, entry: itemToSave, error: errMsg };
 }
 
 export async function saveTimelineOrder(items: TimelineEntry[]): Promise<boolean> {
@@ -1115,6 +1188,11 @@ export async function saveTimelineOrder(items: TimelineEntry[]): Promise<boolean
     await api.post<any>(ENDPOINTS.timeline, normalized);
   } catch {}
   saveLocalSiteData({ timeline: normalized });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
+
   return true;
 }
 
@@ -1138,12 +1216,16 @@ export async function deleteTimelineEntry(id: string): Promise<boolean> {
     }
   }
 
-  const timeline = allTimeline.filter((t) => t.id !== id);
+  const timeline = allTimeline.filter((t) => String(t.id) !== String(id));
   saveLocalSiteData({ timeline });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mahila_sitedata_changed"));
+  }
 
   try {
     const res = await api.del(`${ENDPOINTS.timeline}/${encodeURIComponent(id)}`);
-    return res.ok || true;
+    return Boolean(res.ok);
   } catch {
     return true;
   }
