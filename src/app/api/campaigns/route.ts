@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
       const tag = String(c.tag || "General").trim();
       const goal = Math.max(1000, Number(c.goal) || 100000);
       const raised = Math.max(0, Number(c.raised) || 0);
+      const coverImage = typeof c.coverImage === "string" ? c.coverImage.trim() : (typeof c.image === "string" ? c.image.trim() : "");
 
       return {
         id,
@@ -130,6 +131,8 @@ export async function POST(req: NextRequest) {
         tag,
         goal,
         raised,
+        coverImage,
+        ...(coverImage ? { image: coverImage } : {}),
       };
     });
 

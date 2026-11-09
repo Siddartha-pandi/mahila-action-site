@@ -4,6 +4,8 @@ export interface Campaign {
   tag: string;
   raised: number;
   goal: number;
+  coverImage?: string;
+  image?: string;
 }
 
 export const CAMPAIGNS: Campaign[] = [

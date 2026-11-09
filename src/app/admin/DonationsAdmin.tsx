@@ -40,6 +40,7 @@ import { addToTrash } from "../../lib/recycleBin";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
+import { ImageField } from "../adminWidgets";
 import { firstError, validateEmail, validatePhone } from "@/lib/validation";
 import { toast } from "sonner";
 
@@ -155,6 +156,7 @@ export function DonationsAdmin() {
         tag: "Community",
         goal: 500000,
         raised: 0,
+        coverImage: "",
       },
     ]);
   };
@@ -1349,6 +1351,14 @@ export function DonationsAdmin() {
                         <span className="text-[10px] text-gray-400 mt-0.5 block">
                           Website donations will automatically sum on top of this base amount.
                         </span>
+                      </div>
+                      <div className="col-span-1 md:col-span-2 pt-1">
+                        <ImageField
+                          label="Cover Image"
+                          value={camp.coverImage || camp.image || ""}
+                          onChange={(url) => handleUpdateEditingCampaign(idx, { coverImage: url, image: url })}
+                          title={camp.name || "Campaign Cover"}
+                        />
                       </div>
                     </div>
                   </div>

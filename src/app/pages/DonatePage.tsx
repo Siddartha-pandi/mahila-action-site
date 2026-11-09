@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search } from "lucide-react";
+import { Search, Heart } from "lucide-react";
 import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
-import { imgDonateBanner, imgTakeAction, imgStory1, imgStory2, imgStory3 } from "../constants/images";
+import { imgDonateBanner } from "../constants/images";
 import { SectionLabel, SectionTitle } from "../components/SectionLabel";
 import { PageBanner } from "../components/PageBanner";
 import { DonationFormCard } from "../forms/DonationFormCard";
 import { TransactionCheckerModal } from "../modals/TransactionCheckerModal";
+import { SafeImage } from "../components/SafeImage";
 import { inter } from "../components/shared/styleHelpers";
 import { useUserProfile } from "../hooks/useUserProfile";
 
@@ -16,13 +17,6 @@ export function DonatePage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>(CAMPAIGNS);
   const [selectedCampaignId, setSelectedCampaignId] = useState(CAMPAIGNS[0].id);
   const [showChecker, setShowChecker] = useState(false);
-
-  const campaignImages: Record<string, string> = {
-    "learning-centres": imgTakeAction,
-    "women-leadership-fund": imgStory1,
-    "skills-for-tomorrow": imgStory2,
-    "community-health-drive": imgStory3,
-  };
 
   // Fetch live campaign totals from the API (aggregated from database donations)
   const fetchLiveCampaigns = useCallback(async () => {
@@ -65,7 +59,7 @@ export function DonatePage() {
 
   const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId) ?? campaigns[0];
   const otherCampaigns = campaigns.filter((c) => c.id !== selectedCampaign.id);
-  const activeImage = campaignImages[selectedCampaign.id] || imgTakeAction;
+  const activeImage = selectedCampaign.coverImage || selectedCampaign.image;
   const progress = Math.min((selectedCampaign.raised / selectedCampaign.goal) * 100, 100);
 
   function pickCampaign(id: string) {
@@ -84,15 +78,24 @@ export function DonatePage() {
             <SectionLabel text="Take Action" />
             <SectionTitle text="One Contribution. Many Futures." />
 
-            <div className="relative mt-5 sm:mt-6 rounded-2xl overflow-hidden h-[240px] sm:h-[360px] md:h-[480px] shadow-sm">
-              <img
-                loading="lazy"
-                decoding="async"
-                src={activeImage}
-                alt={selectedCampaign.name}
-                className="absolute inset-0 size-full object-cover transition-all duration-500"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent" />
+            <div className="relative mt-5 sm:mt-6 rounded-2xl overflow-hidden h-[240px] sm:h-[360px] md:h-[480px] shadow-sm bg-[#a65a4a]/10">
+              {activeImage ? (
+                <SafeImage
+                  src={activeImage}
+                  alt={selectedCampaign.name}
+                  className="absolute inset-0 size-full object-cover transition-all duration-500"
+                  fallbackContainer={
+                    <div className="absolute inset-0 size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
+                      <Heart size={48} className="opacity-75" />
+                    </div>
+                  }
+                />
+              ) : (
+                <div className="absolute inset-0 size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
+                  <Heart size={48} className="opacity-75" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/20 to-transparent pointer-events-none" />
 
               {/* Category tag */}
               <div className="absolute top-4 sm:top-6 left-4 sm:left-8">
@@ -177,6 +180,7 @@ export function DonatePage() {
             {campaigns.map((c) => {
               const isSelected = c.id === selectedCampaign.id;
               const cProgress = Math.min((c.raised / c.goal) * 100, 100);
+              const cCover = c.coverImage || c.image;
               return (
                 <div
                   key={c.id}
@@ -184,16 +188,25 @@ export function DonatePage() {
                     isSelected ? "border-[#993925] ring-2 ring-[#993925]/20 shadow-md" : "border-[#a65a4a]/30 hover:border-[#a65a4a]"
                   }`}
                 >
-                  <div className="relative h-[180px] overflow-hidden">
-                    <img
-                      loading="lazy"
-                      decoding="async"
-                      src={campaignImages[c.id] || imgTakeAction}
-                      alt={c.name}
-                      className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute top-4 left-4">
-                      <span className={`${inter()} border border-[#f4efe7] text-[#f4efe7] text-[11px] font-semibold px-3 py-1 rounded-full bg-black/30`}>
+                  <div className="relative h-[180px] overflow-hidden bg-[#a65a4a]/10">
+                    {cCover ? (
+                      <SafeImage
+                        src={cCover}
+                        alt={c.name}
+                        className="absolute inset-0 size-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        fallbackContainer={
+                          <div className="absolute inset-0 size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
+                            <Heart size={36} className="opacity-75" />
+                          </div>
+                        }
+                      />
+                    ) : (
+                      <div className="absolute inset-0 size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
+                        <Heart size={36} className="opacity-75" />
+                      </div>
+                    )}
+                    <div className="absolute top-4 left-4 z-10">
+                      <span className={`${inter()} border border-[#f4efe7] text-[#f4efe7] text-[11px] font-semibold px-3 py-1 rounded-full bg-black/30 backdrop-blur-xs`}>
                         {c.tag}
                       </span>
                     </div>
