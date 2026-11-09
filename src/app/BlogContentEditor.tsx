@@ -16,7 +16,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ImageCropModal } from "./modals/ImageCropModal";
-import { fileToDataUrl, uploadMediaToDb } from "@/lib/media";
+import { fileToDataUrl, urlToDataUrl, uploadMediaToDb } from "@/lib/media";
 import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -221,10 +221,19 @@ export function BlogContentEditor({
     emitChange();
   }
 
-  function insertImageFromUrl() {
-    const url = window.prompt("Paste an image URL");
-    if (!url) return;
-    setCropTarget({ src: url, forImg: null });
+  async function insertImageFromUrl() {
+    const url = window.prompt("Paste an image URL (https://... or /api/media/...)");
+    if (!url || !url.trim()) return;
+    const raw = url.trim();
+    const toastId = toast.loading("Loading image for cropping...");
+    try {
+      const dataUrl = await urlToDataUrl(raw);
+      toast.dismiss(toastId);
+      setCropTarget({ src: dataUrl || raw, forImg: null });
+    } catch {
+      toast.dismiss(toastId);
+      setCropTarget({ src: raw, forImg: null });
+    }
   }
 
   async function handleFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
@@ -236,10 +245,20 @@ export function BlogContentEditor({
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  function handleEditorDoubleClick(e: React.MouseEvent<HTMLDivElement>) {
+  async function handleEditorDoubleClick(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
     if (target.tagName === "IMG") {
-      setCropTarget({ src: (target as HTMLImageElement).src, forImg: target as HTMLImageElement });
+      const imgEl = target as HTMLImageElement;
+      const rawSrc = imgEl.src;
+      if (!rawSrc) return;
+      if (rawSrc.startsWith("data:")) {
+        setCropTarget({ src: rawSrc, forImg: imgEl });
+        return;
+      }
+      const toastId = toast.loading("Preparing image for cropping...");
+      const dataUrl = await urlToDataUrl(rawSrc);
+      toast.dismiss(toastId);
+      setCropTarget({ src: dataUrl || rawSrc, forImg: imgEl });
     }
   }
 

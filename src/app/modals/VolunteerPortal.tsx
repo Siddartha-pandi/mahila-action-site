@@ -20,45 +20,7 @@ import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination, consumeIntendedDestination } from "../hooks/useAuthGuard";
 import { useSiteData, type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
 
-// Fallback static volunteer events (used as display items when no CMS events exist)
-const VOLUNTEER_EVENTS = [
-  {
-    id: 1, status: "ongoing" as const,
-    title: "Community Leadership Workshop", date: "Aug 12, 2026",
-    location: "Hyderabad", category: "Women & Leadership",
-    slots: 12, desc: "Facilitate group sessions helping women develop leadership and public-speaking confidence.",
-  },
-  {
-    id: 2, status: "ongoing" as const,
-    title: "Mobile Health Camp", date: "Aug 18, 2026",
-    location: "Secunderabad", category: "Community Wellbeing",
-    slots: 8, desc: "Support our field medical team with registration, crowd management, and health record entry.",
-  },
-  {
-    id: 3, status: "upcoming" as const,
-    title: "Digital Literacy Drive", date: "Sep 4, 2026",
-    location: "Warangal", category: "Education & Learning",
-    slots: 20, desc: "Teach basic smartphone and internet skills to first-time users in rural communities.",
-  },
-  {
-    id: 4, status: "upcoming" as const,
-    title: "Livelihood Skills Fair", date: "Sep 14, 2026",
-    location: "Nizamabad", category: "Livelihood & Skills",
-    slots: 15, desc: "Help coordinate stalls, mentor participants, and document success stories at our annual skills fair.",
-  },
-  {
-    id: 5, status: "upcoming" as const,
-    title: "Child Learning Carnival", date: "Oct 2, 2026",
-    location: "Hyderabad", category: "Education & Learning",
-    slots: 30, desc: "Run activity booths, storytelling sessions, and art workshops for children aged 6–14.",
-  },
-  {
-    id: 6, status: "upcoming" as const,
-    title: "Women's Rights Awareness Walk", date: "Oct 11, 2026",
-    location: "Hyderabad", category: "Women & Leadership",
-    slots: 50, desc: "March alongside the community, carry banners, and distribute awareness leaflets.",
-  },
-];
+// No static fallback events: only events created in CMS are displayed.
 
 const inputCls = `w-full border-2 border-[#a65a4a]/25 bg-[#f4efe7] rounded-xl px-4 py-3 text-[14px] text-[#1e1e1e] placeholder-[#1e1e1e]/35 focus:outline-none focus:border-[#a65a4a] transition-colors font-['Inter',sans-serif]`;
 const labelCls = `font-['Inter',sans-serif] text-[11px] font-semibold text-[#1e1e1e]/55 uppercase tracking-wider mb-1 block`;
@@ -147,6 +109,15 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [resetPass, setResetPass] = useState("");
   const [resetConfirm, setResetConfirm] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const effectiveResetToken =
+    resetToken ||
+    (typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("id") ||
+        new URLSearchParams(window.location.search).get("token") ||
+        ""
+      : "");
 
   // Auto sign-out after 5 minutes of inactivity
   useEffect(() => {
@@ -269,17 +240,38 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
   async function handleResetSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!resetToken) return toast.error("This reset link is missing its token — please request a new one.");
+    setResetError(null);
+    if (!effectiveResetToken) {
+      setResetError("This reset link is missing its token. Please request a new one.");
+      return toast.error("This reset link is missing its token — please request a new one.");
+    }
     const weak = validatePassword(resetPass, "New password");
     if (weak) return toast.error(weak);
     if (resetPass !== resetConfirm) return toast.error("Passwords don't match.");
     setAuthBusy(true);
-    const result = await resetVolunteerPassword(resetToken, resetPass);
+    const result = await resetVolunteerPassword(effectiveResetToken, resetPass);
     setAuthBusy(false);
-    if (!result.ok) return toast.error(result.error || "Something went wrong — please try again.");
+    if (!result.ok) {
+      const message = result.error || "Something went wrong — please try again.";
+      setResetError(message);
+      return toast.error(message);
+    }
+
+    // Clean URL so token doesn't linger or re-trigger reset step
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      sp.delete("id");
+      sp.delete("token");
+      sp.set("kind", "login");
+      window.history.replaceState({}, "", `${window.location.pathname}?${sp.toString()}`);
+    }
+
     if (result.profile?.email) {
       setLoginEmail(result.profile.email);
     }
+    setResetPass("");
+    setResetConfirm("");
+    setResetError(null);
     toast.success("Password updated successfully! You can now sign in with your new password.");
     setStep("login");
   }
@@ -351,19 +343,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
       ? events
       : siteData?.events && siteData.events.length > 0
       ? siteData.events
-      : (VOLUNTEER_EVENTS.map(v => ({
-          id: String(v.id),
-          title: v.title,
-          description: v.desc,
-          image: "",
-          eventDate: v.date,
-          location: v.location,
-          totalSeats: v.slots,
-          maxVolunteers: 0,
-          windows: [{ kind: "volunteer" as const, enabled: true, regStart: "2026-01-01", regEnd: "2026-12-31" }],
-          categoryId: null,
-          createdAt: new Date().toISOString(),
-        })) as EventItem[])
+      : []
   );
 
   const realEvents = availableEvents
@@ -699,12 +679,21 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
           {/* ── Choose new password (opened from the emailed reset link) ── */}
           {step === "reset" && (
             <form onSubmit={handleResetSubmit} className="p-5 sm:p-8 flex flex-col gap-3.5 sm:gap-4">
-              {!resetToken ? (
+              {!effectiveResetToken || resetError ? (
                 <div className="flex items-start gap-2.5 bg-[#993925]/8 border border-[#993925]/25 rounded-xl px-4 py-3">
                   <AlertCircle size={17} className="text-[#993925] shrink-0 mt-0.5" />
                   <p className="font-['Inter',sans-serif] text-[#993925] text-[13px] leading-relaxed">
-                    This reset link is missing its token.{" "}
-                    <button type="button" onClick={() => { setForgotSent(false); setForgotError(null); setStep("forgot"); }} className="font-semibold underline cursor-pointer">
+                    {resetError || "This reset link is missing its token."}{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotSent(false);
+                        setForgotError(null);
+                        setResetError(null);
+                        setStep("forgot");
+                      }}
+                      className="font-semibold underline cursor-pointer"
+                    >
                       Request a new one
                     </button>
                   </p>
@@ -716,20 +705,52 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
               )}
               <div>
                 <label className={labelCls}>New Password</label>
-                <input value={resetPass} onChange={e => setResetPass(e.target.value)} placeholder="••••••••" type="password" className={inputCls} autoFocus />
+                <input
+                  value={resetPass}
+                  onChange={e => {
+                    setResetPass(e.target.value);
+                    setResetError(null);
+                  }}
+                  placeholder="••••••••"
+                  type="password"
+                  className={inputCls}
+                  autoFocus
+                />
               </div>
               <div>
                 <label className={labelCls}>Confirm New Password</label>
-                <input value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} placeholder="••••••••" type="password" className={inputCls} />
+                <input
+                  value={resetConfirm}
+                  onChange={e => {
+                    setResetConfirm(e.target.value);
+                    setResetError(null);
+                  }}
+                  placeholder="••••••••"
+                  type="password"
+                  className={inputCls}
+                />
               </div>
               {resetConfirm.length > 0 && resetPass !== resetConfirm && (
                 <p className="font-['Inter',sans-serif] text-[#993925] text-[12px] -mt-1">Passwords don't match.</p>
               )}
-              <button type="submit" disabled={authBusy} className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60">
+              <button
+                type="submit"
+                disabled={authBusy || !effectiveResetToken}
+                className="w-full bg-[#a65a4a] text-[#f4efe7] font-['Inter',sans-serif] font-semibold text-[15px] sm:text-[16px] py-3.5 sm:py-4 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-60"
+              >
                 {authBusy ? "Saving…" : "Save New Password"}
               </button>
               <p className="font-['Inter',sans-serif] text-[13px] text-center text-[#1e1e1e]/55">
-                <button type="button" onClick={() => setStep("login")} className="text-[#a65a4a] font-semibold cursor-pointer hover:underline">← Back to sign in</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResetError(null);
+                    setStep("login");
+                  }}
+                  className="text-[#a65a4a] font-semibold cursor-pointer hover:underline"
+                >
+                  ← Back to sign in
+                </button>
               </p>
             </form>
           )}
@@ -938,55 +959,66 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
-                        {filtered.map(ev => {
-                          const selected = selectedEvents.includes(ev.id);
-                          const isDisabled = ev.disabled;
-                          return (
-                            <button
-                              key={ev.id}
-                              onClick={() => toggleEvent(ev.id)}
-                              disabled={isDisabled}
-                              title={isDisabled ? (ev.disabledReason === "Already an attendee" ? "You're already registered as an attendee — attendees don't need to sign up as volunteers" : "You're already registered as a volunteer for this event") : undefined}
-                              className={`text-left rounded-2xl border-2 p-4 sm:p-5 transition-all ${
-                                isDisabled
-                                  ? "border-[#1e1e1e]/8 bg-[#1e1e1e]/4 opacity-60 cursor-not-allowed"
-                                  : selected
-                                  ? "border-[#a65a4a] bg-[#a65a4a]/5 cursor-pointer"
-                                  : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40 cursor-pointer"
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-3">
-                                <div className="flex flex-wrap gap-1.5">
-                                  <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full ${categoryColors[ev.category] ?? "bg-gray-100 text-gray-600"}`}>
-                                    {ev.category || "Community Event"}
-                                  </span>
-                                  {isDisabled && ev.disabledReason && (
-                                    <span className="font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">
-                                      <CheckCircle size={10} />
-                                      {ev.disabledReason}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                        {filtered.length > 0 ? (
+                          filtered.map(ev => {
+                            const selected = selectedEvents.includes(ev.id);
+                            const isDisabled = ev.disabled;
+                            return (
+                              <button
+                                key={ev.id}
+                                onClick={() => toggleEvent(ev.id)}
+                                disabled={isDisabled}
+                                title={isDisabled ? (ev.disabledReason === "Already an attendee" ? "You're already registered as an attendee — attendees don't need to sign up as volunteers" : "You're already registered as a volunteer for this event") : undefined}
+                                className={`text-left rounded-2xl border-2 p-4 sm:p-5 transition-all ${
                                   isDisabled
-                                    ? "border-[#1e1e1e]/20 bg-[#1e1e1e]/10"
+                                    ? "border-[#1e1e1e]/8 bg-[#1e1e1e]/4 opacity-60 cursor-not-allowed"
                                     : selected
-                                    ? "border-[#a65a4a] bg-[#a65a4a]"
-                                    : "border-[#1e1e1e]/25"
-                                }`}>
-                                  {selected && !isDisabled && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
-                                  {isDisabled && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3 text-[#1e1e1e]/40"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
+                                    ? "border-[#a65a4a] bg-[#a65a4a]/5 cursor-pointer"
+                                    : "border-[#1e1e1e]/10 bg-white hover:border-[#a65a4a]/40 cursor-pointer"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-3">
+                                  <div className="flex flex-wrap gap-1.5">
+                                    <span className={`font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full ${categoryColors[ev.category] ?? "bg-gray-100 text-gray-600"}`}>
+                                      {ev.category || "Community Event"}
+                                    </span>
+                                    {isDisabled && ev.disabledReason && (
+                                      <span className="font-['Inter',sans-serif] text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 flex items-center gap-1">
+                                        <CheckCircle size={10} />
+                                        {ev.disabledReason}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                                    isDisabled
+                                      ? "border-[#1e1e1e]/20 bg-[#1e1e1e]/10"
+                                      : selected
+                                      ? "border-[#a65a4a] bg-[#a65a4a]"
+                                      : "border-[#1e1e1e]/25"
+                                  }`}>
+                                    {selected && !isDisabled && <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="size-3"><polyline points="20 6 9 17 4 12" /></svg>}
+                                    {isDisabled && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3 text-[#1e1e1e]/40"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>}
+                                  </div>
                                 </div>
-                              </div>
-                              <p className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e] leading-snug">{ev.title}</p>
-                              <div className="flex gap-3 mt-2 mb-3">
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><Calendar size={11} /> {ev.date}</span>
-                                <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><MapPin size={11} /> {ev.location}</span>
-                              </div>
-                              <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 leading-relaxed">{ev.desc}</p>
-                            </button>
-                          );
-                        })}
+                                <p className="font-['Inter',sans-serif] font-semibold text-[15px] text-[#1e1e1e] leading-snug">{ev.title}</p>
+                                <div className="flex gap-3 mt-2 mb-3">
+                                  <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><Calendar size={11} /> {ev.date}</span>
+                                  <span className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/55 flex items-center gap-1"><MapPin size={11} /> {ev.location}</span>
+                                </div>
+                                <p className="font-['Inter',sans-serif] text-[12px] text-[#1e1e1e]/60 leading-relaxed">{ev.desc}</p>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="col-span-full py-10 text-center bg-[#1e1e1e]/4 rounded-2xl border border-[#1e1e1e]/10">
+                            <p className="font-['Inter',sans-serif] text-[15px] font-semibold text-[#1e1e1e]/80">
+                              No Events Open for Registration
+                            </p>
+                            <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/50 mt-1">
+                              There are currently no events open for volunteer signups. Please check back later!
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       <button

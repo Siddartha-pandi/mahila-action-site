@@ -1041,6 +1041,13 @@ export function EventsOverviewTable({
                 </tr>
               );
             })}
+            {events.length === 0 && (
+              <tr>
+                <td colSpan={10} className="py-12 text-center text-gray-500 text-sm">
+                  No events found. Click <strong>+ Create Event</strong> to add your first event.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -273,6 +273,10 @@ export async function sendPasswordResetEmail(to: string, resetLink: string) {
     <h2 style="margin: 0 0 16px; font-size: 20px; color: #993925;">Reset Your Password</h2>
     <p>We received a request to reset your password for Mahila Action.</p>
     <p>Click the button below to choose a new password. This link is secure and will expire in <strong>30 minutes</strong>:</p>
+    <p style="margin-top: 24px; font-size: 13px; color: #706460; word-break: break-all;">
+      If the button below doesn't work, copy and paste this link directly into your browser:<br>
+      <a href="${esc(resetLink)}" style="color: #993925; text-decoration: underline;">${esc(resetLink)}</a>
+    </p>
   `;
 
   return await deliver({

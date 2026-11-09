@@ -6,7 +6,16 @@ import { sendPasswordChangedEmail } from "@/lib/email";
 import { validatePassword } from "@/lib/validation";
 
 function toProfile(row: any) {
-  return { name: row.name, email: row.email, phone: row.phone, skills: row.skills || "" };
+  return {
+    id: String(row.id),
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    skills: row.skills || "",
+    role: row.role || "user",
+    permissions: row.permissions || null,
+    status: row.status || "Active",
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -25,7 +34,8 @@ export async function POST(req: NextRequest) {
     const result = await queryDb("SELECT * FROM users WHERE reset_token_hash = $1", [tokenHash]);
     const user = result.rows[0];
 
-    if (!user || !user.reset_token_expires || new Date(user.reset_token_expires) < new Date()) {
+    const expiryTime = user.reset_token_expires ? new Date(user.reset_token_expires).getTime() : 0;
+    if (!user || !user.reset_token_expires || isNaN(expiryTime) || expiryTime < Date.now()) {
       return NextResponse.json({ error: "This reset link is invalid or has expired. Please request a new one." }, { status: 400 });
     }
 

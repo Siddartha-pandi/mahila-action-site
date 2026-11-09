@@ -146,6 +146,7 @@ export function ImageField({
   }
 
   async function openCrop() {
+    if (!safeVal) return;
     if (safeVal.startsWith("data:")) {
       setCropSrc(safeVal);
       setCropping(true);
@@ -154,8 +155,40 @@ export function ImageField({
     setResolvingCrop(true);
     const resolved = await urlToDataUrl(safeVal);
     setResolvingCrop(false);
-    setCropSrc(resolved ?? safeVal);
+    if (!resolved) {
+      toast.error("Could not load image from URL for cropping. Check network or image link.");
+      return;
+    }
+    setCropSrc(resolved);
     setCropping(true);
+  }
+
+  async function handleCropUrlInput() {
+    const raw = (urlDraft || safeVal || "").trim();
+    if (!raw) {
+      toast.error("Please enter an image URL first");
+      return;
+    }
+    setResolvingCrop(true);
+    const resolved = await urlToDataUrl(raw);
+    setResolvingCrop(false);
+    if (!resolved) {
+      toast.error("Could not fetch image from this URL to crop. Check the link or upload the file.");
+      return;
+    }
+    setCropSrc(resolved);
+    setCropping(true);
+  }
+
+  function handleApplyUrl() {
+    const raw = urlDraft.trim();
+    if (raw) {
+      setLocalVal(raw);
+      onChange(raw);
+      setUrlDraft("");
+      setShowUrlInput(false);
+      toast.success("Image URL linked! Click 'Crop & Adjust' to crop it.");
+    }
   }
 
   return (
@@ -182,41 +215,42 @@ export function ImageField({
         onChange={handleFile}
       />
 
-      {/* Hidden/Collapsible Direct URL Input */}
+      {/* Collapsible Direct URL Input with Crop & Apply options */}
       {showUrlInput && (
-        <div className="flex gap-2 p-2 bg-[#faf7f3] border border-[#a65a4a]/20 rounded-lg animate-in fade-in">
+        <div className="flex flex-col sm:flex-row gap-2 p-2.5 bg-[#faf7f3] border border-[#a65a4a]/25 rounded-lg animate-in fade-in">
           <input
             type="text"
             value={urlDraft || (safeVal.startsWith("data:") ? "" : safeVal)}
             onChange={(e) => setUrlDraft(e.target.value)}
-            placeholder="Paste image URL (/api/media/... or external link)"
+            placeholder="Paste image URL (https://... or /api/media/...)"
             className={inputBase}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                if (urlDraft.trim()) {
-                  setLocalVal(urlDraft.trim());
-                  onChange(urlDraft.trim());
-                  setUrlDraft("");
-                  setShowUrlInput(false);
-                }
+                handleApplyUrl();
               }
             }}
           />
-          <button
-            type="button"
-            onClick={() => {
-              if (urlDraft.trim()) {
-                setLocalVal(urlDraft.trim());
-                onChange(urlDraft.trim());
-                setUrlDraft("");
-                setShowUrlInput(false);
-              }
-            }}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-[#a65a4a] text-white text-[12px] font-medium hover:bg-[#8f4738] cursor-pointer transition-colors"
-          >
-            Apply
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleCropUrlInput}
+              disabled={resolvingCrop || uploading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#a65a4a] text-[#a65a4a] bg-white hover:bg-[#a65a4a]/10 text-[12px] font-medium cursor-pointer transition-colors disabled:opacity-50"
+              title="Crop this URL image before saving"
+            >
+              {resolvingCrop ? <Loader2 size={13} className="animate-spin" /> : <Crop size={13} />}
+              Crop & Use
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyUrl}
+              disabled={resolvingCrop || uploading}
+              className="px-3 py-1.5 rounded-lg bg-[#a65a4a] text-white text-[12px] font-medium hover:bg-[#8f4738] cursor-pointer transition-colors disabled:opacity-50"
+            >
+              Apply
+            </button>
+          </div>
         </div>
       )}
 
@@ -551,8 +585,29 @@ export function GalleryField({
     setResolvingIndex(i);
     const resolved = await urlToDataUrl(img);
     setResolvingIndex(null);
-    setCropSrc(resolved ?? img);
+    if (!resolved) {
+      toast.error("Could not load image from URL for cropping. Check network or image link.");
+      return;
+    }
+    setCropSrc(resolved);
     setCropIndex(i);
+  }
+
+  async function handleCropUrlInput() {
+    const raw = urlDraft.trim();
+    if (!raw) {
+      toast.error("Please enter an image URL first");
+      return;
+    }
+    setResolvingIndex(-1);
+    const resolved = await urlToDataUrl(raw);
+    setResolvingIndex(null);
+    if (!resolved) {
+      toast.error("Could not fetch image from this URL to crop. Check the link or upload files.");
+      return;
+    }
+    setCropSrc(resolved);
+    setCropIndex(-1); // -1 indicates adding a new item via crop
   }
 
   return (
@@ -581,12 +636,12 @@ export function GalleryField({
       />
 
       {showUrlDrawer && (
-        <div className="flex gap-2 p-2 bg-[#faf7f3] border border-[#a65a4a]/20 rounded-lg animate-in fade-in">
+        <div className="flex flex-col sm:flex-row gap-2 p-2.5 bg-[#faf7f3] border border-[#a65a4a]/25 rounded-lg animate-in fade-in">
           <input
             type="text"
             value={urlDraft}
             onChange={(e) => setUrlDraft(e.target.value)}
-            placeholder="Paste image URL (/api/media/... or external link)"
+            placeholder="Paste image URL (https://... or /api/media/...)"
             className={inputBase}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -594,22 +649,39 @@ export function GalleryField({
                 if (urlDraft.trim()) {
                   onChange([...safeList, urlDraft.trim()]);
                   setUrlDraft("");
+                  setShowUrlDrawer(false);
+                  toast.success("Image added to gallery!");
                 }
               }
             }}
           />
-          <button
-            type="button"
-            onClick={() => {
-              if (urlDraft.trim()) {
-                onChange([...safeList, urlDraft.trim()]);
-                setUrlDraft("");
-              }
-            }}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-[#a65a4a] text-white text-[12px] font-medium hover:bg-[#8f4738] cursor-pointer transition-colors"
-          >
-            Add
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleCropUrlInput}
+              disabled={resolvingIndex === -1 || uploading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#a65a4a] text-[#a65a4a] bg-white hover:bg-[#a65a4a]/10 text-[12px] font-medium cursor-pointer transition-colors disabled:opacity-50"
+              title="Crop this URL image before adding"
+            >
+              {resolvingIndex === -1 ? <Loader2 size={13} className="animate-spin" /> : <Crop size={13} />}
+              Crop & Add
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (urlDraft.trim()) {
+                  onChange([...safeList, urlDraft.trim()]);
+                  setUrlDraft("");
+                  setShowUrlDrawer(false);
+                  toast.success("Image added to gallery!");
+                }
+              }}
+              disabled={resolvingIndex === -1 || uploading}
+              className="px-3 py-1.5 rounded-lg bg-[#a65a4a] text-white text-[12px] font-medium hover:bg-[#8f4738] cursor-pointer transition-colors disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
         </div>
       )}
 
@@ -740,13 +812,24 @@ export function GalleryField({
             if (targetIndex === null) return;
             setUploading(true);
             try {
-              const url = await uploadMediaToDb(cropped, "gallery-cropped.png", title);
+              const url = await uploadMediaToDb(
+                cropped,
+                `${title ? title + "-cropped" : "gallery-cropped"}.png`,
+                title
+              );
               if (url.startsWith("data:")) {
                 toast.warning("Cropped image could not be saved to media table (saved locally).");
               } else {
                 toast.success("Cropped image saved to media library!");
               }
-              onChange(safeList.map((v, idx) => (idx === targetIndex ? url : v)));
+              if (targetIndex === -1) {
+                // New URL image added via crop
+                onChange([...safeList, url]);
+                setUrlDraft("");
+                setShowUrlDrawer(false);
+              } else {
+                onChange(safeList.map((v, idx) => (idx === targetIndex ? url : v)));
+              }
             } catch (err: any) {
               toast.error(err?.message || "Failed to upload cropped image");
             } finally {

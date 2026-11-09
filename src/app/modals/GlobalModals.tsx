@@ -42,20 +42,24 @@ export function GlobalModals() {
     );
   }
 
-  if (modal === "volunteer" || modal === "login" || modal === "reset" || modal === "forgot" || modalKind === "reset" || modalKind === "forgot") {
+  const isResetMode = modal === "reset" || modalKind === "reset" || Boolean(modalId && modal === "volunteer");
+  const isForgotMode = modal === "forgot" || modalKind === "forgot";
+  const isLoginMode = modal === "login" || modalKind === "login";
+
+  if (modal === "volunteer" || isLoginMode || isResetMode || isForgotMode) {
     return (
       <VolunteerPortal
         onClose={closeModal}
         initialStep={
-          modal === "reset" || modalKind === "reset"
+          isResetMode
             ? "reset"
-            : modal === "forgot" || modalKind === "forgot"
+            : isForgotMode
             ? "forgot"
-            : modal === "login" || modalKind === "login"
+            : isLoginMode
             ? "login"
             : undefined
         }
-        resetToken={modalKind === "reset" || modal === "reset" ? (modalId ?? undefined) : undefined}
+        resetToken={isResetMode ? (modalId ?? undefined) : undefined}
         events={siteData.events}
       />
     );

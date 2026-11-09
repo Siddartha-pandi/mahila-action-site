@@ -10,15 +10,17 @@ import { useSearchParams } from "react-router";
 // browser back button closes it naturally.
 export function useModal() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const modal = searchParams.get("modal");
-  const modalId = searchParams.get("id");
+  const rawModal = searchParams.get("modal");
+  const modalId = searchParams.get("id") || searchParams.get("token");
   const modalKind = searchParams.get("kind");
+  const modal = rawModal || (modalKind === "reset" || searchParams.has("token") ? "volunteer" : null);
 
   const openModal = useCallback(
     (name: string, extra?: Record<string, string>) => {
       const next = new URLSearchParams(searchParams);
       next.set("modal", name);
       next.delete("id");
+      next.delete("token");
       next.delete("kind");
       Object.entries(extra ?? {}).forEach(([k, v]) => next.set(k, v));
       setSearchParams(next);
@@ -39,6 +41,7 @@ export function useModal() {
     const next = new URLSearchParams(searchParams);
     next.delete("modal");
     next.delete("id");
+    next.delete("token");
     next.delete("kind");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);

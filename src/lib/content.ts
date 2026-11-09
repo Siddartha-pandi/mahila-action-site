@@ -36,20 +36,20 @@ const FALLBACK_DEFAULTS: Record<string, string> = {
   // Events
   events_heading: "Join The Movement",
   events_subtext: "Real change starts with participation. Volunteer your time, share your skills, or join a community event near you.",
-  event_title: "Community Leadership Workshop",
-  event_date: "August 12, 2026",
-  event_location: "Hyderabad",
-  event_seats: "45",
+  event_title: "",
+  event_date: "",
+  event_location: "",
+  event_seats: "",
 
   // Stories
   stories_heading: "Lives In Motion",
   stories_subtext: "Every initiative creates a ripple effect that reaches individuals, families, and entire communities.",
-  story1_title: "She Found Her Voice",
-  story1_excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.",
-  story2_title: "A New Dawn for Priya",
-  story2_excerpt: "Access to education transformed one family's future across three generations.",
-  story3_title: "Building Futures Together",
-  story3_excerpt: "How a community cooperative changed the economic landscape of an entire village.",
+  story1_title: "",
+  story1_excerpt: "",
+  story2_title: "",
+  story2_excerpt: "",
+  story3_title: "",
+  story3_excerpt: "",
 
   // About
   about_mission_title: "Self-Led Sustainable Transformation",

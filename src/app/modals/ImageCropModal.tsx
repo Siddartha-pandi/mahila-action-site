@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { X, Check, RotateCcw } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { X, Check, RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "../components/ui/Button";
+import { urlToDataUrl } from "@/lib/media";
 
 type Box = { x: number; y: number; w: number; h: number };
 type DragMode = "move" | "nw" | "ne" | "sw" | "se" | null;
@@ -35,11 +36,42 @@ export function ImageCropModal({
   onConfirm: (croppedDataUrl: string) => void;
 }) {
   const imgRef = useRef<HTMLImageElement>(null);
+  const [activeSrc, setActiveSrc] = useState<string>(src);
+  const [loadingImage, setLoadingImage] = useState<boolean>(!src.startsWith("data:"));
   const [displaySize, setDisplaySize] = useState<{ w: number; h: number } | null>(null);
   const [box, setBox] = useState<Box | null>(null);
   const [aspect, setAspect] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dragRef = useRef<{ mode: DragMode; startX: number; startY: number; startBox: Box } | null>(null);
+
+  // If a remote URL is passed, resolve it to same-origin base64 Data URL to guarantee canvas export works without CORS taint
+  useEffect(() => {
+    if (src.startsWith("data:")) {
+      setActiveSrc(src);
+      setLoadingImage(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingImage(true);
+    urlToDataUrl(src)
+      .then((dataUrl) => {
+        if (cancelled) return;
+        if (dataUrl) {
+          setActiveSrc(dataUrl);
+        } else {
+          setActiveSrc(src);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setActiveSrc(src);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingImage(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
 
   function initBox(w: number, h: number, lockAspect: number | null) {
     let bw = w * 0.8;
@@ -130,12 +162,12 @@ export function ImageCropModal({
       if (!ctx) throw new Error("no ctx");
       ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
-      const isPng = src.startsWith("data:image/png") || src.toLowerCase().endsWith(".png");
+      const isPng = activeSrc.startsWith("data:image/png") || activeSrc.toLowerCase().endsWith(".png");
       const dataUrl = isPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.92);
       onConfirm(dataUrl);
     } catch {
       setError(
-        "This image can't be cropped in the browser because it's hosted on a site that blocks cross-origin access. Try uploading the file directly instead of using its URL."
+        "This image can't be cropped due to host restrictions. Try downloading and uploading the file directly."
       );
     }
   }
@@ -181,16 +213,24 @@ export function ImageCropModal({
           )}
         </div>
 
-        <div className="flex-1 overflow-auto flex items-center justify-center bg-[#1e1e1e]/90 p-2.5 sm:p-6">
-          <div className="relative select-none" style={{ touchAction: "none" }}>
-            <img
-              ref={imgRef}
-              src={src}
-              alt="Crop preview"
-              onLoad={handleImgLoad}
-              className="block max-w-[560px] max-h-[60vh] w-auto h-auto"
-              draggable={false}
-            />
+        <div className="flex-1 overflow-auto flex items-center justify-center bg-[#1e1e1e]/90 p-2.5 sm:p-6 min-h-[320px]">
+          {loadingImage ? (
+            <div className="flex flex-col items-center justify-center gap-2.5 text-white/80 py-12">
+              <Loader2 size={32} className="animate-spin text-[#d48b7b]" />
+              <p className="text-[13px] font-medium font-['Inter',sans-serif]">Loading image for cropping...</p>
+              <span className="text-[11px] text-white/50">Fetching cross-origin secure data</span>
+            </div>
+          ) : (
+            <div className="relative select-none" style={{ touchAction: "none" }}>
+              <img
+                ref={imgRef}
+                src={activeSrc}
+                crossOrigin="anonymous"
+                alt="Crop preview"
+                onLoad={handleImgLoad}
+                className="block max-w-[560px] max-h-[60vh] w-auto h-auto"
+                draggable={false}
+              />
             {box && (
               <>
                 <div
@@ -229,7 +269,8 @@ export function ImageCropModal({
               </>
             )}
           </div>
-        </div>
+        )}
+      </div>
 
         {error && (
           <p className="px-5 py-2 text-[12px] font-['Inter',sans-serif] text-red-600 bg-red-50 border-t border-red-100 font-medium">

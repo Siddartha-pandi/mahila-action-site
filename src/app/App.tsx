@@ -153,20 +153,52 @@ export default function App() {
 
   useEffect(() => {
     if (location.pathname === "/" || location.pathname === "") {
+      const search = location.search || "";
+      const hasActionOrModal = search.includes("modal=") || search.includes("kind=") || search.includes("token=") || search.includes("id=");
       let targetPath = "/home";
-      try {
-        const saved = sessionStorage.getItem("mahila_active_path");
-        if (saved && saved !== "/" && saved !== "/home" && saved.startsWith("/")) {
-          targetPath = saved;
-        }
-      } catch {}
-      navigate(targetPath, { replace: true });
+      let targetSearch = search;
+
+      if (!hasActionOrModal) {
+        try {
+          const saved = sessionStorage.getItem("mahila_active_path");
+          if (saved && saved !== "/" && saved !== "/home" && saved.startsWith("/")) {
+            const [savedPath, savedQuery] = saved.split("?");
+            targetPath = savedPath || "/home";
+            if (savedQuery) targetSearch = `?${savedQuery}`;
+          }
+        } catch {}
+      }
+
+      navigate({ pathname: targetPath, search: targetSearch }, { replace: true });
       return;
     }
 
     const segments = location.pathname.split("/").filter(Boolean);
     const first = segments[0]?.toLowerCase();
     const slugId = segments[1];
+
+    if (first === "reset-password" || first === "reset") {
+      const q = new URLSearchParams(location.search);
+      const token = q.get("token") || q.get("id") || slugId || "";
+      navigate(
+        {
+          pathname: "/home",
+          search: `?modal=volunteer&kind=reset&id=${encodeURIComponent(token)}&token=${encodeURIComponent(token)}`,
+        },
+        { replace: true }
+      );
+      return;
+    }
+
+    if (first === "forgot-password" || first === "forgot") {
+      navigate({ pathname: "/home", search: "?modal=volunteer&kind=forgot" }, { replace: true });
+      return;
+    }
+
+    if (first === "login" || first === "signin") {
+      navigate({ pathname: "/home", search: "?modal=volunteer&kind=login" }, { replace: true });
+      return;
+    }
 
     if (slugId && !location.search.includes("modal=")) {
       if (first === "events" || first === "event") {

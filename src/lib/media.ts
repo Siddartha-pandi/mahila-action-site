@@ -27,27 +27,73 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 }
 
 /**
- * Fetches a remote image URL and converts it to a data URL, so the crop modal
- * always works on same-origin data — this avoids the browser's canvas CORS
- * restriction that otherwise blocks cropping most externally-hosted images.
- * Returns null if the host doesn't allow cross-origin fetches (rare), in
- * which case the caller falls back to cropping the URL directly.
+ * Fetches a remote or relative image URL and converts it to a base64 Data URL,
+ * so the crop modal always works on same-origin data — this avoids browser
+ * canvas CORS/taint restrictions that otherwise block cropping externally-hosted images.
+ * Uses a server-side proxy fallback for cross-origin URLs.
  */
 export async function urlToDataUrl(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    if (!blob.type.startsWith("image/")) return null;
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("data:")) return trimmed;
+
+  const isExternal = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+
+  // 1. Try our server-side proxy first for external URLs to eliminate browser CORS taint
+  if (isExternal) {
+    try {
+      const proxyUrl = `/api/media/proxy?url=${encodeURIComponent(trimmed)}&format=dataurl`;
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.dataUrl && typeof json.dataUrl === "string") {
+          return json.dataUrl;
+        }
+      }
+    } catch {
+      // Continue to next fallback
+    }
   }
+
+  // 2. Direct fetch (works for same-origin URLs like /api/media/... or CORS-permissive domains)
+  try {
+    const res = await fetch(trimmed);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.type.startsWith("image/") || blob.type.startsWith("application/octet-stream")) {
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+    }
+  } catch {
+    // Continue to next fallback
+  }
+
+  // 3. Last fallback: try proxy endpoint as binary blob if dataurl format failed
+  if (isExternal) {
+    try {
+      const proxyUrl = `/api/media/proxy?url=${encodeURIComponent(trimmed)}`;
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        return await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch {
+      // No further fallback
+    }
+  }
+
+  return null;
 }
 
 /**

@@ -154,49 +154,13 @@ export async function seedAllData(dbPool: any, options?: { force?: boolean }): P
   // stored in the database. Also runs on the fast path — see removeSuperadminRows.
   await removeSuperadminRows(dbPool);
 
-  // 3. Default Events (ID: 1)
-  const today = new Date();
-  const daysAhead = (n: number) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + n);
-    return d.toISOString().slice(0, 10);
-  };
-  const defaultWindows = [
-    { kind: "volunteer", enabled: true, regStart: daysAhead(-10), regEnd: daysAhead(14) },
-    { kind: "vendor", enabled: true, regStart: daysAhead(-10), regEnd: daysAhead(18) },
-    { kind: "donor", enabled: true, regStart: daysAhead(-10), regEnd: daysAhead(10) },
-  ];
-
   const isForce = Boolean(options?.force);
-  const eventConflict = isForce
-    ? "DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, image = EXCLUDED.image, event_date = EXCLUDED.event_date, location = EXCLUDED.location, total_seats = EXCLUDED.total_seats, windows = EXCLUDED.windows, category_id = EXCLUDED.category_id"
-    : "DO NOTHING";
 
-  await dbPool.query(
-    `INSERT INTO events (id, title, description, image, event_date, location, total_seats, windows, category_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (id) ${eventConflict}`,
-    [
-      1,
-      "Community Leadership Workshop",
-      "A hands-on workshop building confidence, public speaking, and civic leadership skills for women in the community.",
-      "",
-      daysAhead(21),
-      "Hyderabad",
-      45,
-      JSON.stringify(defaultWindows),
-      1,
-    ]
-  );
+  // 3. Events are user-created via Admin Center CMS; do not auto-seed dummy events.
+  // This prevents deleted events from being automatically restored on startup.
 
-  // 4. Default Blog Posts & Impact Stories (IDs: 1..10)
+  // 4. Default Impact Stories (IDs: 7..10) — used for "Our Impact" core pillars
   const blogPosts = [
-    { id: 1, section: "story", categoryId: 1, title: "She Found Her Voice", excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", content: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", coverImage: "", gallery: [], tags: [] },
-    { id: 2, section: "story", categoryId: 2, title: "A New Dawn for Priya", excerpt: "Access to education transformed one family's future across three generations.", content: "Access to education transformed one family's future across three generations.", coverImage: "", gallery: [], tags: [] },
-    { id: 3, section: "story", categoryId: 3, title: "Building Futures Together", excerpt: "How a community cooperative changed the economic landscape of an entire village.", content: "How a community cooperative changed the economic landscape of an entire village.", coverImage: "", gallery: [], tags: [] },
-    { id: 4, section: "story", categoryId: 4, title: "Health for All", excerpt: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", content: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", coverImage: "", gallery: [], tags: [] },
-    { id: 5, section: "story", categoryId: 1, title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [] },
-    { id: 6, section: "story", categoryId: 2, title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [] },
     {
       id: 7,
       section: "impact",
@@ -440,6 +404,14 @@ export async function initDb(): Promise<void> {
 
       if (hasTables && appliedVersion === schemaVersion) {
         await removeSuperadminRows(currentPool).catch(() => { });
+        await currentPool.query(
+          `DELETE FROM events WHERE id = 1 AND LOWER(title) = 'community leadership workshop' AND NOT EXISTS (SELECT 1 FROM event_reservations WHERE event_id = 1)`
+        ).catch(() => {});
+        await currentPool.query(`
+          DELETE FROM blog_posts 
+          WHERE (section = 'story' AND (id IN (1, 2, 3, 4, 5, 6) OR LOWER(TRIM(title)) IN ('she found her voice', 'a new dawn for priya', 'building futures together', 'health for all', 'first woman sarpanch', 'breaking the cycle')))
+             OR (section = 'event' AND id IN (11, 12));
+        `).catch(() => {});
         await syncAllSequences(currentPool).catch(() => { });
         isInitialized = true;
         globalRef._dbInitialized = true;
@@ -519,6 +491,11 @@ export async function initDb(): Promise<void> {
 
       // Seed all default data into database
       await seedAllData(currentPool);
+      await currentPool.query(`
+        DELETE FROM blog_posts 
+        WHERE (section = 'story' AND (id IN (1, 2, 3, 4, 5, 6) OR LOWER(TRIM(title)) IN ('she found her voice', 'a new dawn for priya', 'building futures together', 'health for all', 'first woman sarpanch', 'breaking the cycle')))
+           OR (section = 'event' AND id IN (11, 12));
+      `).catch(() => {});
       recordSchemaVersion(schemaVersion);
       try {
         await currentPool.query(

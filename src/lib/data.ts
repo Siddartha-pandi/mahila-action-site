@@ -194,37 +194,32 @@ export function resolveCategoryId(
   return found ? String(found.id) : String(catIdOrSlugOrName);
 }
 
-export const DEFAULT_EVENTS: EventItem[] = [
-  {
-    id: "evt_default_1",
-    title: "Community Leadership Workshop",
-    description: "A hands-on workshop building confidence, public speaking, and civic leadership skills for women in the community.",
-    image: "",
-    eventDate: daysFromNow(21),
-    location: "Hyderabad",
-    totalSeats: 45,
-    bookedSeats: 0,
-    availableSeats: 45,
-    maxVolunteers: 0,
-    windows: [
-      { kind: "volunteer", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(14) },
-      { kind: "vendor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(18) },
-      { kind: "donor", enabled: true, regStart: daysFromNow(-10), regEnd: daysFromNow(10) },
-    ],
-    categoryId: "1",
-    published: true,
-    createdAt: new Date().toISOString(),
-  },
-];
+export const DEFAULT_EVENTS: EventItem[] = [];
+
+const DUMMY_STORY_TITLES = new Set([
+  "she found her voice",
+  "a new dawn for priya",
+  "building futures together",
+  "health for all",
+  "first woman sarpanch",
+  "breaking the cycle",
+]);
+
+export function isDummyBlogPost(p: any): boolean {
+  if (!p) return false;
+  const idStr = String(p.id ?? "");
+  const titleLower = String(p.title ?? "").trim().toLowerCase();
+  const section = String(p.section ?? "");
+
+  if (section === "story") {
+    if (["1", "2", "3", "4", "5", "6"].includes(idStr)) return true;
+    if (DUMMY_STORY_TITLES.has(titleLower)) return true;
+  }
+  if (section === "event" && (idStr === "11" || idStr === "12")) return true;
+  return false;
+}
 
 export const DEFAULT_BLOG_POSTS: BlogPost[] = [
-  { id: "1", section: "story", categoryId: "1", title: "She Found Her Voice", excerpt: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", content: "What started as a small workshop became a journey of confidence, leadership, and self-belief.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 5 * 86400000).toISOString() },
-  { id: "2", section: "story", categoryId: "2", title: "A New Dawn for Priya", excerpt: "Access to education transformed one family's future across three generations.", content: "Access to education transformed one family's future across three generations.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 4 * 86400000).toISOString() },
-  { id: "3", section: "story", categoryId: "3", title: "Building Futures Together", excerpt: "How a community cooperative changed the economic landscape of an entire village.", content: "How a community cooperative changed the economic landscape of an entire village.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 3 * 86400000).toISOString() },
-  { id: "4", section: "story", categoryId: "4", title: "Health for All", excerpt: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", content: "Mobile health camps reached 2,000 women in remote areas with life-saving screenings.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 2 * 86400000).toISOString() },
-  { id: "5", section: "story", categoryId: "1", title: "First Woman Sarpanch", excerpt: "Asha Devi became the first female elected leader in her village after years of advocacy.", content: "Asha Devi became the first female elected leader in her village after years of advocacy.", coverImage: "", gallery: [], tags: [], createdAt: new Date(Date.now() - 1 * 86400000).toISOString() },
-  { id: "6", section: "story", categoryId: "2", title: "Breaking the Cycle", excerpt: "Four sisters all graduated high school — the first in their family's history.", content: "Four sisters all graduated high school — the first in their family's history.", coverImage: "", gallery: [], tags: [], createdAt: new Date().toISOString() },
-
   {
     id: "7",
     section: "impact",
@@ -575,11 +570,13 @@ export function saveLocalSiteData(patch: Partial<SiteData>, silent = false) {
     const deletedIds = getDeletedEventIds();
     const rawEvents = patch.events ?? current.events ?? DEFAULT_EVENTS;
     const cleanEvents = rawEvents.filter((e) => !isDeletedEventId(e.id, deletedIds));
+    const rawBlogPosts = patch.blogPosts ?? current.blogPosts ?? DEFAULT_BLOG_POSTS;
+    const cleanBlogPosts = rawBlogPosts.filter((p) => !isDummyBlogPost(p));
 
     const updated = {
       events: cleanEvents,
       categories: patch.categories ?? current.categories ?? DEFAULT_CATEGORIES,
-      blogPosts: patch.blogPosts ?? current.blogPosts ?? DEFAULT_BLOG_POSTS,
+      blogPosts: cleanBlogPosts,
       councilors: patch.councilors ?? current.councilors ?? DEFAULT_COUNCILORS,
       timeline: patch.timeline ?? current.timeline ?? DEFAULT_TIMELINE,
       contact: patch.contact ?? current.contact ?? DEFAULT_CONTACT,
@@ -609,7 +606,7 @@ export async function loadSiteData(): Promise<SiteData> {
 
   let events = (local.events ?? DEFAULT_EVENTS).filter((e) => !isDeletedEventId(e.id, deletedIds));
   let categories = local.categories ?? DEFAULT_CATEGORIES;
-  let blogPosts = (local.blogPosts ?? DEFAULT_BLOG_POSTS).filter((p) => !(p.section === "event" && (String(p.id) === "11" || String(p.id) === "12")));
+  let blogPosts = (local.blogPosts ?? DEFAULT_BLOG_POSTS).filter((p) => !isDummyBlogPost(p));
   let councilors = local.councilors ?? DEFAULT_COUNCILORS;
   let timeline = local.timeline ?? DEFAULT_TIMELINE;
   let contact = local.contact ?? DEFAULT_CONTACT;
@@ -631,100 +628,118 @@ export async function loadSiteData(): Promise<SiteData> {
     const timelineRows: any[] = Array.isArray(timelineRes.data) ? timelineRes.data : timelineRes.data?.data ?? [];
     const contactRow: any = contactRes.data?.email ? contactRes.data : contactRes.data?.data ?? null;
 
-    if (Array.isArray(eventRows) && eventRows.length > 0) {
-      // Rows returned directly from database are active and not deleted
-      eventRows.forEach((r: any) => unrecordDeletedEventId(r.id));
-      const freshDeletedIds = getDeletedEventIds();
-      events = eventRows
-        .filter((r: any) => !isDeletedEventId(r.id, freshDeletedIds))
-        .map((r: any) => {
-          const totalSeats = Number(r.total_seats ?? r.totalSeats ?? 0);
-          const bookedSeats = Number(r.booked_seats ?? r.bookedSeats ?? 0);
-          const availableSeats =
-            r.available_seats !== undefined
-              ? Number(r.available_seats)
-              : r.availableSeats !== undefined
-              ? Number(r.availableSeats)
-              : totalSeats > 0
-              ? Math.max(0, totalSeats - bookedSeats)
-              : 0;
-          return {
-            id: String(r.id),
-            title: r.title,
-            description: r.description || "",
-            image: mediaUrl(r.image),
-            eventDate: r.event_date || r.eventDate || "",
-            location: r.location || "",
-            totalSeats,
-            bookedSeats,
-            availableSeats,
-            attendeeCount: Number(r.attendee_count ?? r.attendeeCount ?? 0),
-            maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
-            volunteerCount: Number(r.volunteer_count ?? r.volunteerCount ?? 0),
-            remainingVolunteers:
-              r.remaining_volunteers !== undefined
-                ? Number(r.remaining_volunteers)
-                : Number(r.max_volunteers ?? r.maxVolunteers ?? 0) > 0
-                ? Math.max(0, Number(r.max_volunteers ?? r.maxVolunteers ?? 0) - Number(r.volunteer_count ?? r.volunteerCount ?? 0))
-                : 0,
-            windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
-            categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
-            published: r.published !== false && r.published !== 0 && r.published !== "false",
-            createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-          };
-        });
+    if (Array.isArray(eventRows)) {
+      if (eventRows.length === 0) {
+        events = [];
+      } else {
+        // Rows returned directly from database are active and not deleted
+        eventRows.forEach((r: any) => unrecordDeletedEventId(r.id));
+        const freshDeletedIds = getDeletedEventIds();
+        events = eventRows
+          .filter((r: any) => !isDeletedEventId(r.id, freshDeletedIds))
+          .map((r: any) => {
+            const totalSeats = Number(r.total_seats ?? r.totalSeats ?? 0);
+            const bookedSeats = Number(r.booked_seats ?? r.bookedSeats ?? 0);
+            const availableSeats =
+              r.available_seats !== undefined
+                ? Number(r.available_seats)
+                : r.availableSeats !== undefined
+                ? Number(r.availableSeats)
+                : totalSeats > 0
+                ? Math.max(0, totalSeats - bookedSeats)
+                : 0;
+            return {
+              id: String(r.id),
+              title: r.title,
+              description: r.description || "",
+              image: mediaUrl(r.image),
+              eventDate: r.event_date || r.eventDate || "",
+              location: r.location || "",
+              totalSeats,
+              bookedSeats,
+              availableSeats,
+              attendeeCount: Number(r.attendee_count ?? r.attendeeCount ?? 0),
+              maxVolunteers: Number(r.max_volunteers ?? r.maxVolunteers ?? 0),
+              volunteerCount: Number(r.volunteer_count ?? r.volunteerCount ?? 0),
+              remainingVolunteers:
+                r.remaining_volunteers !== undefined
+                  ? Number(r.remaining_volunteers)
+                  : Number(r.max_volunteers ?? r.maxVolunteers ?? 0) > 0
+                  ? Math.max(0, Number(r.max_volunteers ?? r.maxVolunteers ?? 0) - Number(r.volunteer_count ?? r.volunteerCount ?? 0))
+                  : 0,
+              windows: Array.isArray(r.windows) ? r.windows : typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : [],
+              categoryId: resolveCategoryId(categories, r.category_id ?? r.categoryId),
+              published: r.published !== false && r.published !== 0 && r.published !== "false",
+              createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+            };
+          });
+      }
     }
 
     if (Array.isArray(catRows) && catRows.length > 0) {
       categories = catRows.map((r: any) => ({ id: String(r.id), name: r.name }));
     }
 
-    if (Array.isArray(postRows) && postRows.length > 0) {
-      blogPosts = postRows.filter((r: any) => !(r.section === "event" && (String(r.id) === "11" || String(r.id) === "12"))).map((r: any) => {
-        let catId = resolveCategoryId(categories, r.category_id ?? r.categoryId);
-        if (r.section === "impact" && (!catId || catId === "null")) {
-          const lower = (r.title || "").toLowerCase();
-          if (lower.includes("women") || lower.includes("leadership") || String(r.id) === "7") catId = "1";
-          else if (lower.includes("education") || lower.includes("learning") || String(r.id) === "8") catId = "2";
-          else if (lower.includes("economic") || lower.includes("livelihood") || lower.includes("skills") || String(r.id) === "9") catId = "3";
-          else if (lower.includes("health") || lower.includes("wellbeing") || lower.includes("dignity") || String(r.id) === "10") catId = "4";
-        }
-        return {
-          id: String(r.id),
-          section: r.section,
-          categoryId: catId,
+    if (Array.isArray(postRows)) {
+      if (postRows.length === 0) {
+        blogPosts = [];
+      } else {
+        blogPosts = postRows
+          .filter((r: any) => !isDummyBlogPost(r))
+          .map((r: any) => {
+            let catId = resolveCategoryId(categories, r.category_id ?? r.categoryId);
+            if (r.section === "impact" && (!catId || catId === "null")) {
+              const lower = (r.title || "").toLowerCase();
+              if (lower.includes("women") || lower.includes("leadership") || String(r.id) === "7") catId = "1";
+              else if (lower.includes("education") || lower.includes("learning") || String(r.id) === "8") catId = "2";
+              else if (lower.includes("economic") || lower.includes("livelihood") || lower.includes("skills") || String(r.id) === "9") catId = "3";
+              else if (lower.includes("health") || lower.includes("wellbeing") || lower.includes("dignity") || String(r.id) === "10") catId = "4";
+            }
+            return {
+              id: String(r.id),
+              section: r.section,
+              categoryId: catId,
+              title: r.title,
+              excerpt: r.excerpt || "",
+              content: r.content || "",
+              coverImage: mediaUrl(r.cover_image || r.coverImage),
+              gallery: mediaUrls(r.gallery),
+              tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
+              published: r.published !== false && r.published !== 0 && r.published !== "false",
+              createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+            };
+          });
+      }
+    }
+
+    if (Array.isArray(councilorRows)) {
+      if (councilorRows.length === 0) {
+        councilors = [];
+      } else {
+        councilors = councilorRows.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          role: r.role || "",
+          bio: r.bio || "",
+          image: mediaUrl(r.image),
+          order: Number(r.order_index ?? r.order ?? 0),
+        }));
+      }
+    }
+
+    if (Array.isArray(timelineRows)) {
+      if (timelineRows.length === 0) {
+        timeline = [];
+      } else {
+        timeline = timelineRows.map((r: any) => ({
+          id: r.id,
+          year: r.year,
           title: r.title,
-          excerpt: r.excerpt || "",
-          content: r.content || "",
-          coverImage: mediaUrl(r.cover_image || r.coverImage),
-          gallery: mediaUrls(r.gallery),
-          tags: Array.isArray(r.tags) ? r.tags : typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : [],
-          published: r.published !== false && r.published !== 0 && r.published !== "false",
-          createdAt: r.created_at || r.createdAt || new Date().toISOString(),
-        };
-      });
-    }
-
-    if (Array.isArray(councilorRows) && councilorRows.length > 0) {
-      councilors = councilorRows.map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        role: r.role || "",
-        bio: r.bio || "",
-        image: mediaUrl(r.image),
-        order: Number(r.order_index ?? r.order ?? 0),
-      }));
-    }
-
-    if (Array.isArray(timelineRows) && timelineRows.length > 0) {
-      timeline = timelineRows.map((r: any) => ({
-        id: r.id,
-        year: r.year,
-        title: r.title,
-        description: r.description || "",
-        image: mediaUrl(r.image),
-        order: Number(r.order_index ?? r.order ?? 0),
-      }));
+          description: r.description || "",
+          image: mediaUrl(r.image),
+          order: Number(r.order_index ?? r.order ?? 0),
+        }));
+      }
     }
 
     if (contactRow?.email) {

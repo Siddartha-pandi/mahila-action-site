@@ -37,10 +37,16 @@ export async function POST(req: NextRequest) {
       [tokenHash, expires, user.id]
     );
 
-    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
-    const proto = req.headers.get("x-forwarded-proto") || req.nextUrl.protocol.replace(":", "");
-    const origin = `${proto}://${host}`;
-    const resetLink = `${origin}/?modal=volunteer&kind=reset&id=${rawToken}`;
+    let origin = (process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
+    if (!origin) {
+      const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+      const proto = forwardedProto || req.nextUrl.protocol.replace(":", "") || "http";
+      const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+      const host = forwardedHost || req.headers.get("host") || req.nextUrl.host;
+      origin = `${proto}://${host}`;
+    }
+
+    const resetLink = `${origin}/?modal=volunteer&kind=reset&id=${rawToken}&token=${rawToken}`;
 
     try {
       const result = await sendPasswordResetEmail(user.email, resetLink);

@@ -175,17 +175,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
     const targetId = id;
-    const isNum = /^\d+$/.test(targetId);
-    let res;
-    if (isNum) {
-      res = await queryDb("DELETE FROM events WHERE id = $1 RETURNING id", [parseInt(targetId, 10)]);
+    let numId: number | null = null;
+    if (/^\d+$/.test(targetId)) {
+      numId = parseInt(targetId, 10);
     } else {
-      const rawNum = targetId.replace(/^evt_/, "");
-      if (/^\d+$/.test(rawNum)) {
-        res = await queryDb("DELETE FROM events WHERE id = $1 RETURNING id", [parseInt(rawNum, 10)]);
-      } else {
-        res = await queryDb("DELETE FROM events WHERE id::text = $1 RETURNING id", [targetId]);
+      const match = targetId.match(/^(?:evt_)?(?:default_)?(\d+)$/);
+      if (match) {
+        numId = parseInt(match[1], 10);
       }
+    }
+
+    if (numId !== null) {
+      await queryDb("DELETE FROM events WHERE id = $1 RETURNING id", [numId]);
+    } else {
+      await queryDb("DELETE FROM events WHERE id::text = $1 RETURNING id", [targetId]);
+    }
+    // Also remove by ID 1 if targetId was evt_default_1 or default_1
+    if (targetId === "evt_default_1" || targetId === "default_1") {
+      await queryDb("DELETE FROM events WHERE id = 1").catch(() => {});
     }
     return NextResponse.json({ ok: true, id: targetId });
   } catch (err: any) {
