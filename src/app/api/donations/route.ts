@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { queryDb } from "@/lib/db";
 import { generateReceiptToken, verifyAdminPermission } from "@/lib/auth";
 import { sendDonationReceiptEmail, sendDonationAlertToAdmin } from "@/lib/email";
@@ -67,17 +68,62 @@ export async function POST(req: NextRequest) {
 
     const cleanPan = body.pan_number ? String(body.pan_number).trim().toUpperCase() : null;
     const cleanAddress = body.address ? String(body.address).trim() : null;
+    const ALLOWED_ONLINE_METHODS = new Set(["upi", "razorpay"]);
+    const ALLOWED_OFFLINE_METHODS = new Set(["cash", "cheque", "demand_draft", "bank_transfer", "upi"]);
     const cleanMethod = body.payment_method
       ? String(body.payment_method).trim().toLowerCase()
       : isOffline
       ? "cash"
       : "upi";
+
+    if (isOffline ? !ALLOWED_OFFLINE_METHODS.has(cleanMethod) : !ALLOWED_ONLINE_METHODS.has(cleanMethod)) {
+      return NextResponse.json({ error: "Unsupported payment method." }, { status: 400 });
+    }
+
     const cleanTxId = body.transaction_id ? String(body.transaction_id).trim() : null;
 
     if (!isOffline && cleanMethod === "upi") {
       const utrErr = validateUtr(cleanTxId, true);
       if (utrErr) {
         return NextResponse.json({ error: utrErr }, { status: 400 });
+      }
+    }
+
+    // Never trust client-claimed Razorpay payment completion without verifying the HMAC signature.
+    if (!isOffline && cleanMethod === "razorpay") {
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      if (!keySecret) {
+        if (process.env.NODE_ENV === "production") {
+          return NextResponse.json(
+            { error: "Payment gateway verification is not configured." },
+            { status: 503 }
+          );
+        }
+      } else {
+        const orderId = String(body.razorpay_order_id || "").trim();
+        const paymentId = String(body.razorpay_payment_id || cleanTxId || "").trim();
+        const signature = String(body.razorpay_signature || "").trim();
+        if (!orderId || !paymentId || !signature) {
+          return NextResponse.json(
+            { error: "Missing Razorpay order ID, payment ID, or signature." },
+            { status: 400 }
+          );
+        }
+        const expectedSig = crypto
+          .createHmac("sha256", keySecret)
+          .update(`${orderId}|${paymentId}`)
+          .digest("hex");
+        let sigOk = false;
+        try {
+          sigOk =
+            expectedSig.length === signature.length &&
+            crypto.timingSafeEqual(Buffer.from(expectedSig), Buffer.from(signature));
+        } catch {
+          sigOk = false;
+        }
+        if (!sigOk) {
+          return NextResponse.json({ error: "Invalid Razorpay payment signature." }, { status: 400 });
+        }
       }
     }
 
@@ -213,6 +259,12 @@ export async function POST(req: NextRequest) {
       status: donationStatus,
     }, { status: 201 });
   } catch (err: any) {
+    if (err?.code === "23505") {
+      return NextResponse.json(
+        { error: "This UPI Reference / UTR Number has already been recorded. Duplicate submissions are not accepted." },
+        { status: 409 }
+      );
+    }
     console.error("POST /api/donations error:", err);
     return NextResponse.json({ error: "Could not save submission." }, { status: 500 });
   }

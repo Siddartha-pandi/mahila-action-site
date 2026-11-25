@@ -144,5 +144,13 @@ CREATE TABLE IF NOT EXISTS site_settings (
   value TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS donations_transaction_id_unique
+  ON donations (LOWER(transaction_id))
+  WHERE transaction_id IS NOT NULL AND transaction_id != '';
+CREATE INDEX IF NOT EXISTS donations_email_idx ON donations (LOWER(email));
+CREATE INDEX IF NOT EXISTS donations_created_at_idx ON donations (created_at DESC);
+CREATE INDEX IF NOT EXISTS event_reservations_email_idx ON event_reservations (LOWER(email));
+CREATE INDEX IF NOT EXISTS event_reservations_event_id_idx ON event_reservations (event_id);
 `;
 

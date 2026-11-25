@@ -53,7 +53,15 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Fallback: Test / Demo mode when credentials have not yet been placed in .env
+    if (process.env.NODE_ENV === "production") {
+      console.error("CRITICAL: Razorpay order creation failed because RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is not configured.");
+      return NextResponse.json(
+        { error: "Payment gateway is not configured for live transactions." },
+        { status: 503 }
+      );
+    }
+
+    // Fallback: Test / Demo mode in local development when credentials have not yet been placed in .env
     const simulatedOrderId = `order_test_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     return NextResponse.json({
       ok: true,

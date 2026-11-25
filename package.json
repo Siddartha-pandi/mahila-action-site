@@ -12,11 +12,8 @@
     "dev:webpack": "next dev --webpack",
     "predev:turbo": "node src/scripts/clean-cache.js",
     "dev:turbo": "next dev --turbo",
-    "prebuild": "node src/scripts/clean-cache.js",
     "build": "next build --webpack",
-    "prebuild:webpack": "node src/scripts/clean-cache.js",
     "build:webpack": "next build --webpack",
-    "prestart": "node src/scripts/clean-cache.js",
     "start": "next start",
     "seed": "npx tsx src/scripts/seed-postgres.ts",
     "seed:force": "npx tsx src/scripts/seed-postgres.ts --force",
@@ -123,5 +120,8 @@
     "react": "$react",
     "react-dom": "$react-dom",
     "nodemailer": "^10.3.1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
   }
 }

@@ -131,6 +131,14 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    if (typeof objectKey !== "string" || !objectKey.startsWith("uploads/") || objectKey.includes("..")) {
+      return NextResponse.json({ error: "Invalid objectKey." }, { status: 400 });
+    }
+    const numericReservedId = Number(reservedId);
+    if (!Number.isInteger(numericReservedId) || numericReservedId <= 0) {
+      return NextResponse.json({ error: "Invalid reservedId." }, { status: 400 });
+    }
+
     let mimeType = (rawMime || "image/jpeg").toLowerCase();
     if (mimeType === "image/jpg") mimeType = "image/jpeg";
 
@@ -158,22 +166,10 @@ export async function PATCH(req: NextRequest) {
           object_key, bucket_name, visibility,
           url, url_hash, thumbnail_url, media_type, metadata
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        ON CONFLICT (id) DO UPDATE SET
-          uuid = EXCLUDED.uuid,
-          filename = EXCLUDED.filename,
-          mime_type = EXCLUDED.mime_type,
-          byte_size = EXCLUDED.byte_size,
-          object_key = EXCLUDED.object_key,
-          bucket_name = EXCLUDED.bucket_name,
-          visibility = EXCLUDED.visibility,
-          url = EXCLUDED.url,
-          url_hash = EXCLUDED.url_hash,
-          thumbnail_url = EXCLUDED.thumbnail_url,
-          media_type = EXCLUDED.media_type,
-          metadata = EXCLUDED.metadata
+        ON CONFLICT (id) DO NOTHING
         RETURNING id, uuid, filename, mime_type, byte_size, object_key, bucket_name, visibility, url, media_type, created_at`,
         [
-          reservedId,
+          numericReservedId,
           uuid,
           storageFilename || `image-${uuid.slice(0, 8)}.jpg`,
           mimeType,
@@ -188,6 +184,11 @@ export async function PATCH(req: NextRequest) {
           JSON.stringify(metadata),
         ]
       );
+      if (dbRes.rows.length === 0) {
+        const err: any = new Error("ID conflict");
+        err.code = "23505";
+        throw err;
+      }
     } catch (insertErr: any) {
       if (insertErr?.code === "23505") {
         const retryId = await getNextSafeSequenceId("media", "id");

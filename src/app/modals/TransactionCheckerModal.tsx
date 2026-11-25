@@ -29,7 +29,7 @@ export function TransactionCheckerModal({
       transactionId?: string;
       status: string;
       createdAt: string;
-      receiptUrl: string;
+      receiptUrl?: string;
     };
   } | null>(null);
 
@@ -187,14 +187,20 @@ export function TransactionCheckerModal({
                 )}
               </div>
 
-              <a
-                href={result.donation.receiptUrl}
-                target="_blank"
-                rel="noreferrer"
-                className={`${inter()} w-full bg-[#993925] text-white text-[14px] font-semibold py-2.5 rounded-xl hover:bg-[#802f1e] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow`}
-              >
-                <Printer size={16} /> View &amp; Print 80G Receipt <ExternalLink size={14} />
-              </a>
+              {result.donation.receiptUrl ? (
+                <a
+                  href={result.donation.receiptUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`${inter()} w-full bg-[#993925] text-white text-[14px] font-semibold py-2.5 rounded-xl hover:bg-[#802f1e] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow`}
+                >
+                  <Printer size={16} /> View &amp; Print 80G Receipt <ExternalLink size={14} />
+                </a>
+              ) : (
+                <p className="text-[11px] text-[#6e625d] bg-white/80 border border-[#a65a4a]/15 rounded-xl px-3 py-2 text-center">
+                  For donor privacy, full 80G receipts can be downloaded from your confirmation email or by signing in to your donor account.
+                </p>
+              )}
             </div>
           )}
 

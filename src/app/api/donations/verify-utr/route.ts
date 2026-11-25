@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { validateUtr } from "@/lib/utrValidation";
-import { generateReceiptToken } from "@/lib/auth";
+import { generateReceiptToken, getAdminFromRequest, getUserSessionFromRequest } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,6 +36,18 @@ export async function GET(req: NextRequest) {
         d.receipt_number ||
         `MA-REC-${new Date(d.created_at).getFullYear()}-${String(d.id).padStart(4, "0")}`;
 
+      // Only issue a signed receipt download URL to an authenticated admin or the donor themselves.
+      // Unauthenticated callers can verify transaction existence without enumerating donor PII/PAN.
+      const [admin, userSession] = await Promise.all([
+        getAdminFromRequest(req),
+        getUserSessionFromRequest(req),
+      ]);
+      const isOwner =
+        Boolean(userSession?.email) &&
+        Boolean(d.email) &&
+        userSession!.email.toLowerCase().trim() === String(d.email).toLowerCase().trim();
+      const canDownloadReceipt = Boolean(admin) || isOwner;
+
       return NextResponse.json({
         ok: true,
         found: true,
@@ -49,10 +61,12 @@ export async function GET(req: NextRequest) {
           campaignName: d.campaign_name || "Community Empowerment",
           donorName: maskedName,
           paymentMethod: String(d.payment_method || "UPI").toUpperCase(),
-          transactionId: d.transaction_id,
+          transactionId: canDownloadReceipt ? d.transaction_id : undefined,
           status: d.status || "Completed",
           createdAt: d.created_at,
-          receiptUrl: `/api/donations/${d.id}/receipt?token=${generateReceiptToken(d.id)}`,
+          ...(canDownloadReceipt
+            ? { receiptUrl: `/api/donations/${d.id}/receipt?token=${generateReceiptToken(d.id)}` }
+            : {}),
         },
       });
     }

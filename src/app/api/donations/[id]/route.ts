@@ -25,6 +25,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const { id } = await params;
+    if (!/^\d+$/.test(String(id || "").trim())) {
+      return NextResponse.json({ error: "Invalid donation ID." }, { status: 400 });
+    }
     const res = await queryDb("SELECT * FROM donations WHERE id = $1", [id]);
     if (res.rows.length === 0) {
       return NextResponse.json({ error: "Donation record not found" }, { status: 404 });
@@ -44,6 +47,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const { id } = await params;
+    if (!/^\d+$/.test(String(id || "").trim())) {
+      return NextResponse.json({ error: "Invalid donation ID." }, { status: 400 });
+    }
     const {
       status,
       amount,
@@ -133,6 +139,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     values.push(id);
     const res = await queryDb(`UPDATE donations SET ${updates.join(", ")} WHERE id = $${idx} RETURNING *`, values);
+    if (res.rows.length === 0) {
+      return NextResponse.json({ error: "Donation record not found" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true, donation: res.rows[0] });
   } catch (err: any) {
     console.error("PATCH /api/donations/[id] error:", err);
@@ -152,7 +161,13 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
-    await queryDb("DELETE FROM donations WHERE id = $1", [id]);
+    if (!/^\d+$/.test(String(id || "").trim())) {
+      return NextResponse.json({ error: "Invalid donation ID." }, { status: 400 });
+    }
+    const res = await queryDb("DELETE FROM donations WHERE id = $1 RETURNING id", [id]);
+    if (res.rows.length === 0) {
+      return NextResponse.json({ error: "Donation record not found" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true, id });
   } catch (err: any) {
     console.error("DELETE /api/donations/[id] error:", err);
