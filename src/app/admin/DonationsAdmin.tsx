@@ -37,6 +37,7 @@ import {
 import { api } from "../../lib/api";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { addToTrash } from "../../lib/recycleBin";
+import { buildCsvContent } from "../../lib/csv";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { CAMPAIGNS, Campaign, formatLakh } from "../constants/campaigns";
@@ -550,21 +551,21 @@ export function DonationsAdmin() {
       "Notes",
     ];
     const rows = dataToExport.map((item) => [
-      `"${(item.data.receipt_number || `MA-REC-${new Date(item.createdAt).getFullYear()}-${item.id}`).replace(/"/g, '""')}"`,
-      `"${new Date(item.createdAt).toLocaleString("en-IN")}"`,
-      `"${(item.data.anonymous ? "Anonymous" : item.data.name || "").replace(/"/g, '""')}"`,
+      item.data.receipt_number || `MA-REC-${new Date(item.createdAt).getFullYear()}-${item.id}`,
+      new Date(item.createdAt).toLocaleString("en-IN"),
+      item.data.anonymous ? "Anonymous" : item.data.name || "",
       Number(item.data.amount) || 0,
-      `"${isOfflineItem(item) ? "Offline" : "Online"}"`,
-      `"${(item.data.donation_type || "one-time").replace(/"/g, '""')}"`,
-      `"${(item.data.payment_method || "UPI").toUpperCase().replace(/"/g, '""')}"`,
-      `"${(item.data.transaction_id || "").replace(/"/g, '""')}"`,
-      `"${(item.data.anonymous ? "" : item.data.email || "").replace(/"/g, '""')}"`,
-      `"${(item.data.phone || "").replace(/"/g, '""')}"`,
-      `"${(item.data.campaign_name || item.data.event_name || "General Support").replace(/"/g, '""')}"`,
-      `"${(item.data.notes || "").replace(/"/g, '""')}"`,
+      isOfflineItem(item) ? "Offline" : "Online",
+      item.data.donation_type || "one-time",
+      (item.data.payment_method || "UPI").toUpperCase(),
+      item.data.transaction_id || "",
+      item.data.anonymous ? "" : item.data.email || "",
+      item.data.phone || "",
+      item.data.campaign_name || item.data.event_name || "General Support",
+      item.data.notes || "",
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const csvContent = buildCsvContent(headers, rows);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -879,13 +880,12 @@ export function DonationsAdmin() {
                   <th className="py-3.5 px-4">Campaign / Cause</th>
                   <th className="py-3.5 px-4 text-right">Amount (₹)</th>
                   <th className="py-3.5 px-4">Payment Method</th>
-                  <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4">Date</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#a65a4a]/10">
-                {paginatedItems.map((item) => {
+                {paginatedItems.map((item, idx) => {
                   const isAnon = isItemAnon(item);
                   const isSelected = selectedIds.has(String(item.id));
                   const rNum =
@@ -896,7 +896,7 @@ export function DonationsAdmin() {
 
                   return (
                     <tr
-                      key={item.id}
+                      key={`${item.id}_${idx}`}
                       onClick={() => toggleSelect(String(item.id))}
                       className={`transition-colors cursor-pointer ${
                         isSelected ? "bg-amber-50/80 hover:bg-amber-100/60" : "hover:bg-[#a65a4a]/5"
@@ -962,42 +962,7 @@ export function DonationsAdmin() {
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
-                        {canEdit ? (
-                          <select
-                            value={item.status || "New"}
-                            onChange={(e) => handleStatusChange(item, e.target.value as SubmissionItem["status"])}
-                            className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer outline-none ${
-                              item.status === "Completed"
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                : item.status === "Contacted"
-                                ? "bg-purple-50 text-purple-800 border-purple-300"
-                                : item.status === "Rejected"
-                                ? "bg-rose-50 text-rose-800 border-rose-300"
-                                : "bg-blue-50 text-blue-800 border-blue-300"
-                            }`}
-                          >
-                            <option value="New">⏳ New</option>
-                            <option value="Completed">✅ Completed</option>
-                            <option value="Contacted">💬 Contacted</option>
-                            <option value="Rejected">❌ Rejected</option>
-                          </select>
-                        ) : (
-                          <span
-                            className={`inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${
-                              item.status === "Completed"
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                                : item.status === "Contacted"
-                                ? "bg-purple-50 text-purple-800 border-purple-300"
-                                : item.status === "Rejected"
-                                ? "bg-rose-50 text-rose-800 border-rose-300"
-                                : "bg-blue-50 text-blue-800 border-blue-300"
-                            }`}
-                          >
-                            {item.status || "New"}
-                          </span>
-                        )}
-                      </td>
+
 
                       <td className="py-3.5 px-4 text-[#1e1e1e]/60 whitespace-nowrap text-[12px]">
                         {new Date(item.createdAt).toLocaleDateString("en-US", {
@@ -1010,7 +975,7 @@ export function DonationsAdmin() {
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <a
-                            href={`/api/donations/${item.id}/receipt`}
+                            href={`/api/donations/${item.id}/receipt${item.data?.receipt_token ? `?token=${encodeURIComponent(item.data.receipt_token)}` : ""}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1.5 text-gray-500 hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 rounded-lg transition-colors inline-block"
@@ -1172,26 +1137,7 @@ export function DonationsAdmin() {
                 </span>
               </div>
 
-              <div className="pt-3 border-t border-gray-100">
-                <span className="text-gray-500 block text-[11px] uppercase font-bold mb-1.5">Change Status</span>
-                <div className="flex gap-2">
-                  {(["New", "Contacted", "Completed", "Rejected"] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      disabled={!canEdit}
-                      onClick={() => handleStatusChange(selectedDonation, st)}
-                      className={`flex-1 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer border ${
-                        (selectedDonation.status || "New") === st
-                          ? "bg-[#a65a4a] text-white border-[#a65a4a]"
-                          : "bg-white text-gray-700 border-gray-300 hover:border-[#a65a4a]"
-                      } disabled:opacity-40 disabled:cursor-not-allowed`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
+
             </div>
 
             <div className="bg-[#faf7f3] p-4 border-t border-gray-100 flex items-center justify-end gap-2">
@@ -1202,7 +1148,7 @@ export function DonationsAdmin() {
                 Close
               </button>
               <a
-                href={`/api/donations/${selectedDonation.id}/receipt`}
+                href={`/api/donations/${selectedDonation.id}/receipt${selectedDonation.data?.receipt_token ? `?token=${encodeURIComponent(selectedDonation.data.receipt_token)}` : ""}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold bg-[#a65a4a] text-white hover:bg-[#993925] transition-colors cursor-pointer"

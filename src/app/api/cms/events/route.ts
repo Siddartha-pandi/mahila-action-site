@@ -7,6 +7,19 @@ import { ensureMediaUrl } from "@/lib/mediaServer";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function safeParseJsonArray(val: unknown): any[] {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function GET(req: NextRequest) {
   try {
     const result = await queryDb(
@@ -56,7 +69,7 @@ export async function GET(req: NextRequest) {
           categoryId: r.category_id != null ? String(r.category_id) : r.categoryId != null ? String(r.categoryId) : null,
           published: r.published !== false && r.published !== 0 && r.published !== "false",
           createdAt: r.created_at || r.createdAt || "",
-          windows: typeof r.windows === "string" ? JSON.parse(r.windows || "[]") : r.windows || [],
+          windows: safeParseJsonArray(r.windows),
         };
       }),
       {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 import { sendVolunteerConfirmationEmail, sendVolunteerAlertToAdmin } from "@/lib/email";
 
@@ -84,21 +84,23 @@ export async function POST(req: NextRequest) {
       // Look up max_volunteers for this event in the CMS. If set (> 0), count
       // current volunteer sign-ups and block if the cap is already reached.
       const eventRow = await queryDb(
-        "SELECT max_volunteers FROM events WHERE LOWER(title) = LOWER($1) LIMIT 1",
+        "SELECT id, title, max_volunteers FROM events WHERE LOWER(title) = LOWER($1) LIMIT 1",
         [evt.trim()]
       );
-      const maxVol = Number(eventRow.rows[0]?.max_volunteers ?? 0);
+      const matchedEvent = eventRow.rows[0];
+      const numericEventId = matchedEvent?.id ?? null;
+      const maxVol = Number(matchedEvent?.max_volunteers ?? 0);
 
       if (maxVol > 0) {
         const countRow = await queryDb(
           `SELECT COUNT(*) AS cnt FROM event_reservations
-           WHERE LOWER(event_name) = LOWER($1)
+           WHERE (event_id = $1 OR LOWER(event_name) = LOWER($2))
              AND volunteer_commitment IS NOT NULL
              AND volunteer_commitment != ''
              AND volunteer_commitment != 'none'
              AND volunteer_commitment != 'attendee'
              AND volunteer_commitment != 'vendor'`,
-          [evt.trim()]
+          [numericEventId ?? -1, evt.trim()]
         );
         const currentCount = Number(countRow.rows[0]?.cnt ?? 0);
 
@@ -120,9 +122,10 @@ export async function POST(req: NextRequest) {
         phone: c?.phone ? normalizePhone(c.phone) : "",
       }));
       const insertRes = await queryDb(
-        `INSERT INTO event_reservations (event_name, name, email, phone, seats, volunteer_commitment, companions)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        `INSERT INTO event_reservations (event_id, event_name, name, email, phone, seats, volunteer_commitment, companions)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
         [
+          numericEventId,
           evt,
           body.name.trim(),
           String(body.email).trim(),
@@ -160,8 +163,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "submissions", "view");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const result = await queryDb(

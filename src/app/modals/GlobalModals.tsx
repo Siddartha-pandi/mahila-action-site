@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useLocation } from "react-router";
 import { upcomingOrOpenEvents, findCategory, findImpactPost, DEFAULT_BLOG_POSTS, type RegKind } from "@/lib/data";
 import { BlogDetailModal } from "./BlogDetailModal";
@@ -26,6 +27,15 @@ export function GlobalModals() {
   const profile = useUserProfile();
   const { modal, modalId, modalKind, closeModal, setModalKind } = useModal();
   const attendEvents = upcomingOrOpenEvents(siteData.events);
+
+  useEffect(() => {
+    if (!modal || modal === "impact" || modal === "story") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [modal, closeModal]);
 
   // Single gate for every protected modal. Because these modals are addressed
   // by URL, checking here covers buttons, deep links, shared links and the back

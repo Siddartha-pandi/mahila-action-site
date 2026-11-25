@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { marked } from "marked";
 import { type BlogPost } from "@/lib/data";
+import { sanitizeRichHtml } from "@/lib/sanitizeHtml";
 import { fraunces, inter } from "../components/shared/styleHelpers";
 import { Badge } from "../components/ui/Badge";
 import { SafeImage } from "../components/SafeImage";
@@ -15,8 +16,8 @@ function isLikelyHtml(s: string) {
 
 function toRichHtml(raw: string) {
   if (!raw) return "";
-  if (isLikelyHtml(raw)) return raw;
-  return marked.parse(raw) as string;
+  const html = isLikelyHtml(raw) ? raw : (marked.parse(raw) as string);
+  return sanitizeRichHtml(html);
 }
 
 export function BlogDetailModal({

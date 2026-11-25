@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { saveAllContent, type ContentMap } from "@/lib/content";
 import { type SiteData, saveLocalSiteData } from "@/lib/data";
@@ -11,6 +11,7 @@ import {
   clearAdminSession,
   hasPermission,
   getRoleById,
+  syncRolesFromServer,
   type AdminUser,
   type AdminModule,
   UNAUTHENTICATED_ADMIN_USER,
@@ -78,13 +79,17 @@ export function AdminPage({
   onContentSaved,
   siteData,
   onSiteDataChange,
+  onRefreshSiteData,
 }: {
   onExit: (targetPage?: Page) => void;
   onContentSaved: (c: ContentMap) => void;
   siteData: SiteData;
-  onSiteDataChange: (d: SiteData) => void;
+  onSiteDataChange: (d: SiteData | ((prev: SiteData) => SiteData)) => void;
+  onRefreshSiteData?: () => void;
 }) {
   const existing = useContent();
+  const onRefreshSiteDataRef = useRef(onRefreshSiteData);
+  onRefreshSiteDataRef.current = onRefreshSiteData;
   const [loggedIn, setLoggedIn] = useState<boolean | null>(() => {
     if (typeof window !== "undefined" && sessionStorage.getItem("admin_jwt")) {
       return true;
@@ -169,6 +174,10 @@ export function AdminPage({
   }, [draft, existing]);
 
   useEffect(() => {
+    setDraft({ ...existing });
+  }, [existing]);
+
+  useEffect(() => {
     let mounted = true;
     let fallbackTimer: NodeJS.Timeout | null = null;
 
@@ -180,11 +189,16 @@ export function AdminPage({
       }
       setLoggedIn(isLoggedIn);
       if (isLoggedIn) {
-        setDraft({ ...existing });
+        onRefreshSiteDataRef.current?.();
         if (sessionUser?.email) {
           setCurrentAdminSession(sessionUser.email, sessionUser.role);
         }
         setCurrentAdminUser(getCurrentAdminSession());
+        syncRolesFromServer()
+          .then(() => {
+            if (mounted) setCurrentAdminUser(getCurrentAdminSession());
+          })
+          .catch(() => {});
         if (typeof window !== "undefined" && sessionStorage.getItem("admin_just_logged_in")) {
           sessionStorage.removeItem("admin_just_logged_in");
           setActiveSection("adminCenter");
@@ -366,11 +380,13 @@ export function AdminPage({
     );
   }
 
-  function updateSiteData(patch: Partial<SiteData>) {
-    const next = { ...siteData, ...patch };
-    onSiteDataChange(next);
-    // Silently save in local site data cache so drafts survive reloads or focus triggers
-    saveLocalSiteData(patch, true);
+  function updateSiteData(patchOrUpdater: Partial<SiteData> | ((prev: SiteData) => Partial<SiteData>)) {
+    onSiteDataChange((prev) => {
+      const patch = typeof patchOrUpdater === "function" ? patchOrUpdater(prev) : patchOrUpdater;
+      // Silently save in local site data cache so drafts survive reloads or focus triggers
+      saveLocalSiteData(patch, true);
+      return { ...prev, ...patch };
+    });
   }
 
   return (
@@ -514,45 +530,94 @@ export function AdminPage({
                 <ContentTypeBuilderAdmin />
               )}
               {activeSection === "events" && (
-                <EventsAdmin events={siteData.events} categories={siteData.categories} onChange={(events) => updateSiteData({ events })} />
+                <EventsAdmin
+                  key="events"
+                  events={siteData.events}
+                  categories={siteData.categories}
+                  onChange={(events) =>
+                    updateSiteData((prev) => ({
+                      events: typeof events === "function" ? events(prev.events) : events,
+                    }))
+                  }
+                />
               )}
               {activeSection === "stories" && (
                 <BlogPostsAdmin
+                  key="story"
                   section="story"
                   posts={siteData.blogPosts}
                   categories={siteData.categories}
-                  onChange={(blogPosts) => updateSiteData({ blogPosts })}
+                  onChange={(blogPosts) =>
+                    updateSiteData((prev) => ({
+                      blogPosts: typeof blogPosts === "function" ? blogPosts(prev.blogPosts) : blogPosts,
+                    }))
+                  }
                 />
               )}
               {activeSection === "eventsBlog" && (
                 <BlogPostsAdmin
+                  key="event"
                   section="event"
                   posts={siteData.blogPosts}
                   categories={siteData.categories}
-                  onChange={(blogPosts) => updateSiteData({ blogPosts })}
+                  onChange={(blogPosts) =>
+                    updateSiteData((prev) => ({
+                      blogPosts: typeof blogPosts === "function" ? blogPosts(prev.blogPosts) : blogPosts,
+                    }))
+                  }
                 />
               )}
               {activeSection === "impactStories" && (
                 <BlogPostsAdmin
+                  key="impact"
                   section="impact"
                   posts={siteData.blogPosts}
                   categories={siteData.categories}
-                  onChange={(blogPosts) => updateSiteData({ blogPosts })}
+                  onChange={(blogPosts) =>
+                    updateSiteData((prev) => ({
+                      blogPosts: typeof blogPosts === "function" ? blogPosts(prev.blogPosts) : blogPosts,
+                    }))
+                  }
                 />
               )}
               {activeSection === "categories" && (
                 <CategoriesAdmin
+                  key="categories"
                   categories={siteData.categories}
                   posts={siteData.blogPosts}
-                  onCategoriesChange={(categories) => updateSiteData({ categories })}
-                  onPostsChange={(blogPosts) => updateSiteData({ blogPosts })}
+                  onCategoriesChange={(categories) =>
+                    updateSiteData((prev) => ({
+                      categories: typeof categories === "function" ? categories(prev.categories) : categories,
+                    }))
+                  }
+                  onPostsChange={(blogPosts) =>
+                    updateSiteData((prev) => ({
+                      blogPosts: typeof blogPosts === "function" ? blogPosts(prev.blogPosts) : blogPosts,
+                    }))
+                  }
                 />
               )}
               {activeSection === "councilors" && (
-                <CouncilorsAdmin councilors={siteData.councilors} onChange={(councilors) => updateSiteData({ councilors })} />
+                <CouncilorsAdmin
+                  key="councilors"
+                  councilors={siteData.councilors}
+                  onChange={(councilors) =>
+                    updateSiteData((prev) => ({
+                      councilors: typeof councilors === "function" ? councilors(prev.councilors) : councilors,
+                    }))
+                  }
+                />
               )}
               {activeSection === "timeline" && (
-                <TimelineAdmin timeline={siteData.timeline} onChange={(timeline) => updateSiteData({ timeline })} />
+                <TimelineAdmin
+                  key="timeline"
+                  timeline={siteData.timeline}
+                  onChange={(timeline) =>
+                    updateSiteData((prev) => ({
+                      timeline: typeof timeline === "function" ? timeline(prev.timeline) : timeline,
+                    }))
+                  }
+                />
               )}
               {activeSection === "contact" && (
                 <ContactAdmin contact={siteData.contact} onChange={(contact) => updateSiteData({ contact })} />

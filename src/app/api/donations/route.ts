@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest } from "@/lib/auth";
+import { generateReceiptToken, verifyAdminPermission } from "@/lib/auth";
 import { sendDonationReceiptEmail, sendDonationAlertToAdmin } from "@/lib/email";
 import {
   firstError,
@@ -20,13 +20,33 @@ export const revalidate = 0;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const isOffline =
+    const requestedOffline =
       body.is_offline === true ||
       body.is_offline === 1 ||
       body.is_offline === "true" ||
       ["cash", "cheque", "demand_draft", "bank_transfer"].includes(
         String(body.payment_method || "").trim().toLowerCase()
       );
+
+    const requestedAdminFields =
+      requestedOffline ||
+      Boolean(body.status) ||
+      Boolean(body.created_at) ||
+      Boolean(body.date);
+
+    let isAdminAuthorized = false;
+    if (requestedAdminFields) {
+      const adminAuth = await verifyAdminPermission(req, "donations", "edit");
+      isAdminAuthorized = adminAuth.authorized;
+      if (requestedOffline && !isAdminAuthorized) {
+        return NextResponse.json(
+          { error: "Administrator permission is required to record offline donations." },
+          { status: 403 }
+        );
+      }
+    }
+
+    const isOffline = isAdminAuthorized && requestedOffline;
 
     const donationType = body.donation_type || "one-time";
 
@@ -81,8 +101,23 @@ export async function POST(req: NextRequest) {
     }
     const cleanNotes = body.notes ? String(body.notes).trim() : null;
     const cleanPhone = body.phone ? normalizePhone(body.phone) : null;
-    const donationStatus = body.status ? String(body.status).trim() : isOffline ? "Completed" : "New";
-    const customDate = body.created_at || body.date ? new Date(body.created_at || body.date) : new Date();
+    const allowedStatuses = new Set(["New", "Contacted", "Completed", "Rejected"]);
+    const rawStatus = body.status ? String(body.status).trim() : "";
+    const donationStatus =
+      isAdminAuthorized && allowedStatuses.has(rawStatus)
+        ? rawStatus
+        : isOffline
+        ? "Completed"
+        : "New";
+
+    let customDate = new Date();
+    if (isAdminAuthorized && (body.created_at || body.date)) {
+      const parsedDate = new Date(body.created_at || body.date);
+      if (isNaN(parsedDate.getTime())) {
+        return NextResponse.json({ error: "Invalid donation date." }, { status: 400 });
+      }
+      customDate = parsedDate;
+    }
 
     // donations.id is SERIAL — let the sequence assign it.
     const insertRes = await queryDb(
@@ -160,10 +195,14 @@ export async function POST(req: NextRequest) {
       address: cleanAddress || undefined,
     }).catch((err) => console.error("sendDonationAlertToAdmin failed:", err));
 
+    const receiptToken = generateReceiptToken(id);
+
     return NextResponse.json({
       ok: true,
       id,
       receipt_number: receiptNumber,
+      receipt_token: receiptToken,
+      receipt_url: `/api/donations/${id}/receipt?token=${receiptToken}`,
       amount: Number(body.amount),
       name: body.name,
       email: body.email,
@@ -180,12 +219,18 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const admin = await getAdminFromRequest(req);
-  if (!admin) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const auth = await verifyAdminPermission(req, "donations", "view");
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
 
   try {
     const result = await queryDb("SELECT * FROM donations ORDER BY created_at DESC");
-    return NextResponse.json(result.rows);
+    const rows = result.rows.map((row: any) => ({
+      ...row,
+      receipt_token: generateReceiptToken(row.id),
+    }));
+    return NextResponse.json(rows);
   } catch (err: any) {
     console.error("GET /api/donations error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

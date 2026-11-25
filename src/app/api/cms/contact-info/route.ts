@@ -11,12 +11,12 @@ export const revalidate = 0;
 const CONTACT_JSON_PATH = path.join(process.cwd(), "src", "data", "contact.json");
 
 const DEFAULT_CONTACT_DATA = {
-  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "contact@mahilaaction.org",
+  email: process.env.NEXT_PUBLIC_CONTACT_EMAIL || "mahilaaction.vsk@gmail.com",
   emailNote: "We reply within 24 hours",
   phone: "+91 70955 48387",
   phoneNote: "Mon – Sat, 9 AM – 6 PM IST",
   address: "Visakhapatnam, Andhra Pradesh",
-  addressNote: "India – 500 001",
+  addressNote: "India – 530 001",
   hours: "Mon – Fri",
   hoursNote: "9:00 AM – 5:30 PM IST",
 };

@@ -531,6 +531,7 @@ export async function loadUserSubmissions(email?: string, phone?: string): Promi
               payment_method: row.payment_method,
               transaction_id: row.transaction_id,
               receipt_number: row.receipt_number,
+              receipt_token: row.receipt_token,
             },
             createdAt: row.created_at || new Date().toISOString(),
             status: (row.status as SubmissionItem["status"]) || "Completed",
@@ -780,7 +781,7 @@ export function deleteSubmission(id: string) {
 
 /** What a public form submission reports back — `error` carries the server's own
  *  wording, so a rejected duplicate can say why rather than "try again". */
-export type SaveResult = { ok: boolean; error?: string; id?: string | number; receipt_number?: string; data?: any };
+export type SaveResult = { ok: boolean; error?: string; id?: string | number; receipt_number?: string; receipt_token?: string; data?: any };
 
 /**
  * Post, then mirror locally only if the server accepted it. The mirror used to
@@ -795,13 +796,14 @@ async function submitForm(type: SubmissionItem["type"], path: string, payload: a
       ...payload,
       id: res.data?.id,
       receipt_number: res.data?.receipt_number,
+      receipt_token: res.data?.receipt_token,
     });
     notifySubmissionsChanged();
 
     // Immediately reflect reserved seats on the cached event so available seats update in real time
     if (type === "reservation" && (payload.event_name || payload.event_id)) {
       try {
-        const rawSite = localStorage.getItem("mahila_site_data_v2");
+        const rawSite = localStorage.getItem("mahila_site_data");
         if (rawSite) {
           const site = JSON.parse(rawSite);
           const seats = Number(payload.seats) || 1;
@@ -821,7 +823,7 @@ async function submitForm(type: SubmissionItem["type"], path: string, payload: a
           });
           if (modified) {
             site.events = updatedEvents;
-            localStorage.setItem("mahila_site_data_v2", JSON.stringify(site));
+            localStorage.setItem("mahila_site_data", JSON.stringify(site));
             if (typeof window !== "undefined") {
               window.dispatchEvent(new Event("mahila_sitedata_changed"));
               try {
@@ -837,7 +839,13 @@ async function submitForm(type: SubmissionItem["type"], path: string, payload: a
       } catch {}
     }
 
-    return { ok: true, id: res.data?.id, receipt_number: res.data?.receipt_number, data: res.data };
+    return {
+      ok: true,
+      id: res.data?.id,
+      receipt_number: res.data?.receipt_number,
+      receipt_token: res.data?.receipt_token,
+      data: res.data,
+    };
   }
   if (res.status === 0) {
     return { ok: false, error: "Can't reach the server right now — please check your connection and try again." };
@@ -966,6 +974,13 @@ export function saveUserSession(session: VolunteerAccountProfile | null) {
   }
   window.dispatchEvent(new Event("mahila_user_session_changed"));
   window.dispatchEvent(new Event("storage"));
+}
+
+export async function signOutVolunteer() {
+  saveUserSession(null);
+  try {
+    await api.post("/api/volunteer-auth/logout");
+  } catch {}
 }
 
 /**

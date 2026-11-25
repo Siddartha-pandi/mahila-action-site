@@ -1,24 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
 import { getDonationConfig, numberToWordsInINR } from "@/lib/donationConfig";
-import { getAdminFromRequest, verifyReceiptToken } from "@/lib/auth";
+import { verifyAdminPermission, verifyReceiptToken, getUserSessionFromRequest } from "@/lib/auth";
+
+function esc(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const token = req.nextUrl.searchParams.get("token") || "";
-    const admin = await getAdminFromRequest(req);
-
-    // Require either administrator session or cryptographically signed receipt token
-    if (!admin && !verifyReceiptToken(id, token)) {
-      return NextResponse.json(
-        {
-          error:
-            "Access forbidden: A valid receipt authorization token or administrator authentication is required to access official tax receipts.",
-        },
-        { status: 403 }
-      );
+    if (!/^\d+$/.test(String(id || "").trim())) {
+      return NextResponse.json({ error: "Invalid donation receipt ID." }, { status: 400 });
     }
+
+    const token = req.nextUrl.searchParams.get("token") || "";
+    const hasValidToken = verifyReceiptToken(id, token);
+
+    // Fast-path: valid signed token (e.g. email link)
+    if (!hasValidToken) {
+      const adminCheck = await verifyAdminPermission(req, "donations", "view");
+
+      if (!adminCheck.authorized) {
+        // Last resort: allow the authenticated donor who owns this receipt
+        const userSession = await getUserSessionFromRequest(req);
+        if (!userSession?.email) {
+          return NextResponse.json(
+            {
+              error:
+                "Access forbidden: A valid receipt authorization token or administrator authentication is required to access official tax receipts.",
+            },
+            { status: 403 }
+          );
+        }
+
+        // Verify the donation belongs to this user before revealing it
+        const ownerCheck = await queryDb(
+          "SELECT email FROM donations WHERE id = $1",
+          [id]
+        );
+        if (ownerCheck.rows.length === 0) {
+          return new NextResponse("Donation record not found.", { status: 404 });
+        }
+        const donationEmail = (ownerCheck.rows[0].email || "").toLowerCase().trim();
+        const sessionEmail = userSession.email.toLowerCase().trim();
+        if (!donationEmail || donationEmail !== sessionEmail) {
+          return NextResponse.json(
+            { error: "Access forbidden: You are not authorised to view this receipt." },
+            { status: 403 }
+          );
+        }
+      }
+    }
+
     const res = await queryDb("SELECT * FROM donations WHERE id = $1", [id]);
     if (res.rows.length === 0) {
       return new NextResponse("Donation record not found.", { status: 404 });
@@ -65,7 +104,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Donation Receipt - ${receiptNum}</title>
+  <title>Donation Receipt - ${esc(receiptNum)}</title>
   <style>
     @page {
       size: A4 portrait;
@@ -267,51 +306,51 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     <div class="receipt-card">
       <div class="header">
         <div>
-          <h1 class="ngo-title">${config.ngo.name}</h1>
-          <p class="ngo-sub">Registration No: <strong>${config.ngo.regNumber}</strong></p>
-          <p class="ngo-sub">${config.ngo.address}</p>
-          <p class="ngo-sub">Email: ${config.ngo.email} | Phone: ${config.ngo.phone}</p>
+          <h1 class="ngo-title">${esc(config.ngo.name)}</h1>
+          <p class="ngo-sub">Registration No: <strong>${esc(config.ngo.regNumber)}</strong></p>
+          <p class="ngo-sub">${esc(config.ngo.address)}</p>
+          <p class="ngo-sub">Email: ${esc(config.ngo.email)} | Phone: ${esc(config.ngo.phone)}</p>
         </div>
       </div>
 
       <div class="title-bar">Official Donation Receipt</div>
 
       <div class="meta-grid">
-        <div class="meta-item"><strong>Receipt Number:</strong> <span style="font-family: monospace; font-weight: 700; color: #993925;">${receiptNum}</span></div>
-        <div class="meta-item"><strong>Date of Issue:</strong> ${dateFormatted}</div>
-        <div class="meta-item"><strong>Payment Mode:</strong> ${(donation.payment_method || "UPI").toUpperCase()}</div>
-        <div class="meta-item"><strong>UTR / Reference ID:</strong> <span style="font-family: monospace;">${donation.transaction_id || (String(donation.payment_method).toLowerCase() === 'cash' ? 'Physical Cash' : 'Direct Transfer')}</span></div>
+        <div class="meta-item"><strong>Receipt Number:</strong> <span style="font-family: monospace; font-weight: 700; color: #993925;">${esc(receiptNum)}</span></div>
+        <div class="meta-item"><strong>Date of Issue:</strong> ${esc(dateFormatted)}</div>
+        <div class="meta-item"><strong>Payment Mode:</strong> ${esc((donation.payment_method || "UPI").toUpperCase())}</div>
+        <div class="meta-item"><strong>UTR / Reference ID:</strong> <span style="font-family: monospace;">${esc(donation.transaction_id || (String(donation.payment_method).toLowerCase() === 'cash' ? 'Physical Cash' : 'Direct Transfer'))}</span></div>
       </div>
 
       <table class="donor-table">
         <tr>
           <th>Donor Full Name</th>
-          <td><strong>${donation.name || "Anonymous Supporter"}</strong></td>
+          <td><strong>${esc(donation.anonymous ? "Anonymous Supporter" : donation.name || "Anonymous Supporter")}</strong></td>
         </tr>
         <tr>
           <th>Phone & Email</th>
-          <td>${donation.phone || "N/A"} &bull; ${donation.email || "N/A"}</td>
+          <td>${esc(donation.anonymous ? "Protected" : donation.phone || "N/A")} &bull; ${esc(donation.anonymous ? "Protected" : donation.email || "N/A")}</td>
         </tr>
         ${donation.pan_number ? `
         <tr>
           <th>PAN Number</th>
-          <td style="font-family: monospace; font-weight: 700;">${donation.pan_number}</td>
+          <td style="font-family: monospace; font-weight: 700;">${esc(donation.pan_number)}</td>
         </tr>
         ` : ''}
         ${donation.address ? `
         <tr>
           <th>Address / Location</th>
-          <td>${donation.address}</td>
+          <td>${esc(donation.address)}</td>
         </tr>
         ` : ''}
         <tr>
           <th>Cause / Initiative</th>
-          <td><strong>${donation.campaign_name || donation.event_name || "General Empowerment Initiative"}</strong></td>
+          <td><strong>${esc(donation.campaign_name || donation.event_name || "General Empowerment Initiative")}</strong></td>
         </tr>
         ${donation.notes ? `
         <tr>
           <th>Collection Remarks</th>
-          <td><em>${donation.notes}</em></td>
+          <td><em>${esc(donation.notes)}</em></td>
         </tr>
         ` : ''}
       </table>
@@ -319,14 +358,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       <div class="amount-box">
         <div>
           <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #993925; margin-bottom: 2px;">Amount in Words:</div>
-          <div class="amount-words"><strong>${amountInWords}</strong></div>
+          <div class="amount-words"><strong>${esc(amountInWords)}</strong></div>
         </div>
-        <div class="amount-num">${formattedAmount}</div>
+        <div class="amount-num">${esc(formattedAmount)}</div>
       </div>
 
       <div class="exemption-clause">
         <strong>Acknowledgement & Record Notice:</strong><br>
-        We gratefully acknowledge your contribution to <strong>${config.ngo.name}</strong>. This receipt is computer generated and officially recorded in the Mahila Action books of account.
+        We gratefully acknowledge your contribution to <strong>${esc(config.ngo.name)}</strong>. This receipt is computer generated and officially recorded in the Mahila Action books of account.
       </div>
 
       <div class="sign-section">
@@ -337,7 +376,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         <div class="sign-box">
           <div class="sign-line"></div>
           <div class="sign-title">Authorized Signatory</div>
-          <div style="font-size: 11px; color: #888;">${config.ngo.name}</div>
+          <div style="font-size: 11px; color: #888;">${esc(config.ngo.name)}</div>
         </div>
       </div>
     </div>

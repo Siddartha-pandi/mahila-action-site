@@ -8,26 +8,43 @@ import { readCategoriesFile } from "@/lib/categories";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function safeParseJsonArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val.map(String).filter(Boolean);
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val || "[]");
+      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function serializeBlogPost(r: any) {
+  return {
+    ...r,
+    id: String(r.id),
+    coverImage: r.cover_image || r.coverImage || "",
+    categoryId: r.category_id != null ? String(r.category_id) : (r.categoryId != null ? String(r.categoryId) : null),
+    createdAt: r.created_at || r.createdAt || "",
+    published: r.published !== false && r.published !== 0 && r.published !== "false",
+    gallery: safeParseJsonArray(r.gallery),
+    tags: safeParseJsonArray(r.tags),
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const section = searchParams.get("section");
 
     const result = section
-      ? await queryDb("SELECT * FROM blog_posts WHERE section = $1 ORDER BY created_at DESC", [section])
-      : await queryDb("SELECT * FROM blog_posts ORDER BY created_at DESC");
+      ? await queryDb("SELECT * FROM blog_posts WHERE section = $1 ORDER BY created_at DESC", [section], { noCache: true })
+      : await queryDb("SELECT * FROM blog_posts ORDER BY created_at DESC", [], { noCache: true });
 
     return NextResponse.json(
-      result.rows.map((r: any) => ({
-        ...r,
-        id: String(r.id),
-        coverImage: r.cover_image || r.coverImage || "",
-        categoryId: r.category_id != null ? String(r.category_id) : (r.categoryId != null ? String(r.categoryId) : null),
-        createdAt: r.created_at || r.createdAt || "",
-        published: r.published !== false && r.published !== 0 && r.published !== "false",
-        gallery: typeof r.gallery === "string" ? JSON.parse(r.gallery || "[]") : r.gallery || [],
-        tags: typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : r.tags || [],
-      })),
+      result.rows.map(serializeBlogPost),
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -36,7 +53,7 @@ export async function GET(req: NextRequest) {
     );
   } catch (err: any) {
     console.error("GET /api/cms/blog-posts error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }
 
@@ -61,7 +78,7 @@ export async function POST(req: NextRequest) {
     // Resolve categoryId safely without ever passing NaN to PostgreSQL INTEGER
     let resolvedCategoryId: number | null = null;
     const rawCat = b.categoryId !== undefined ? b.categoryId : (b.category_id !== undefined ? b.category_id : null);
-    if (rawCat != null && rawCat !== "") {
+    if (rawCat != null && String(rawCat).trim() !== "") {
       if (typeof rawCat === "number" && !isNaN(rawCat)) {
         resolvedCategoryId = rawCat;
       } else if (!isNaN(Number(rawCat))) {
@@ -105,29 +122,31 @@ export async function POST(req: NextRequest) {
     }
 
     const published = b.published !== undefined ? (b.published !== false && b.published !== 0 && b.published !== "false") : true;
+    const tagsArray = Array.isArray(b.tags) ? b.tags.map(String) : [];
 
     // Determine existing post to update if applicable
     let existingPostId: number | null = null;
     if (b.id && !isNaN(Number(b.id))) {
-      const res = await queryDb("SELECT id FROM blog_posts WHERE id = $1 LIMIT 1", [Number(b.id)]);
+      const res = await queryDb("SELECT id FROM blog_posts WHERE id = $1 LIMIT 1", [Number(b.id)], { noCache: true });
       if (res.rows[0]?.id) {
         existingPostId = Number(res.rows[0].id);
       }
     }
-    if (!existingPostId && b.title) {
+    if (!existingPostId && section === "impact" && title) {
       const res = await queryDb(
         "SELECT id FROM blog_posts WHERE section = $1 AND LOWER(TRIM(title)) = LOWER(TRIM($2)) LIMIT 1",
-        [b.section || "story", b.title]
+        [section, title],
+        { noCache: true }
       );
       if (res.rows[0]?.id) {
         existingPostId = Number(res.rows[0].id);
       }
     }
 
-    let finalId: string | number;
+    let savedRow: any = null;
 
     if (existingPostId != null) {
-      await queryDb(
+      const res = await queryDb(
         `UPDATE blog_posts SET
            section = $1,
            category_id = $2,
@@ -138,39 +157,44 @@ export async function POST(req: NextRequest) {
            gallery = $7,
            tags = $8,
            published = $9
-         WHERE id = $10`,
+         WHERE id = $10
+         RETURNING *`,
         [
-          b.section || "story",
+          section,
           resolvedCategoryId,
-          b.title,
-          b.excerpt || null,
+          title,
+          b.excerpt ?? null,
           content,
           coverImage,
           JSON.stringify(galleryItems),
-          JSON.stringify(b.tags || []),
+          JSON.stringify(tagsArray),
           published,
           existingPostId,
         ]
       );
-      finalId = existingPostId;
+      savedRow = res.rows[0];
     } else {
       const res = await queryDb(
         `INSERT INTO blog_posts (section, category_id, title, excerpt, content, cover_image, gallery, tags, published)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
         [
-          b.section || "story",
+          section,
           resolvedCategoryId,
-          b.title,
-          b.excerpt || null,
+          title,
+          b.excerpt ?? null,
           content,
           coverImage,
           JSON.stringify(galleryItems),
-          JSON.stringify(b.tags || []),
+          JSON.stringify(tagsArray),
           published,
         ]
       );
-      finalId = res.rows[0]?.id;
+      savedRow = res.rows[0];
     }
+
+    const serialized = savedRow ? serializeBlogPost(savedRow) : null;
+    const finalId = savedRow?.id ?? existingPostId;
 
     return NextResponse.json({
       ok: true,
@@ -179,9 +203,10 @@ export async function POST(req: NextRequest) {
       coverImage,
       gallery: galleryItems,
       published,
+      post: serialized,
     });
   } catch (err: any) {
     console.error("POST /api/cms/blog-posts error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }

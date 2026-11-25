@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Calendar, MapPin, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -237,9 +237,6 @@ export function EventRegistrationModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting || !role) return;
-
-    const invalid = firstError(validateName(name), validateEmail(email), validatePhone(phone));
-    if (invalid) { toast.error(invalid); return; }
 
     // Last line of defence in the browser; the API rejects repeats too.
     if (registeredKeys.has(registrationKey(role, event.title))) {

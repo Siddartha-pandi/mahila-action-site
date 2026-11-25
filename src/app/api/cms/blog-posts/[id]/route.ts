@@ -8,16 +8,29 @@ import { readCategoriesFile } from "@/lib/categories";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function safeParseJsonArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val.map(String).filter(Boolean);
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val || "[]");
+      return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const numId = Number(id);
     const rawNum = id.replace(/^(post_|blog_|story_|impact_)/, "");
     const result = !isNaN(numId)
-      ? await queryDb("SELECT * FROM blog_posts WHERE id = $1", [numId])
+      ? await queryDb("SELECT * FROM blog_posts WHERE id = $1", [numId], { noCache: true })
       : !isNaN(Number(rawNum))
-      ? await queryDb("SELECT * FROM blog_posts WHERE id = $1", [Number(rawNum)])
-      : await queryDb("SELECT * FROM blog_posts WHERE id::text = $1 OR LOWER(TRIM(title)) = LOWER(TRIM($1)) LIMIT 1", [id]);
+      ? await queryDb("SELECT * FROM blog_posts WHERE id = $1", [Number(rawNum)], { noCache: true })
+      : await queryDb("SELECT * FROM blog_posts WHERE id::text = $1 OR LOWER(TRIM(title)) = LOWER(TRIM($1)) LIMIT 1", [id], { noCache: true });
 
     const r = result.rows[0];
     if (!r) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -28,12 +41,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       categoryId: r.category_id != null ? String(r.category_id) : (r.categoryId != null ? String(r.categoryId) : null),
       createdAt: r.created_at || r.createdAt || "",
       published: r.published !== false && r.published !== 0 && r.published !== "false",
-      gallery: typeof r.gallery === "string" ? JSON.parse(r.gallery || "[]") : r.gallery || [],
-      tags: typeof r.tags === "string" ? JSON.parse(r.tags || "[]") : r.tags || [],
+      gallery: safeParseJsonArray(r.gallery),
+      tags: safeParseJsonArray(r.tags),
     });
   } catch (err: any) {
     console.error("GET /api/cms/blog-posts/[id] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }
 
@@ -42,7 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const b = await req.json();
 
-    const checkRes = await queryDb("SELECT section FROM blog_posts WHERE id::text = $1", [id]);
+    const checkRes = await queryDb("SELECT section FROM blog_posts WHERE id::text = $1", [id], { noCache: true });
     const section = b.section || checkRes.rows[0]?.section || "story";
     const mod: AdminModule = section === "story" ? "stories" : section === "impact" ? "impactStories" : "eventsBlog";
 
@@ -50,17 +63,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!auth.authorized) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    const title = b.title;
-    const excerpt = b.excerpt;
+    const title = b.title !== undefined ? String(b.title).trim() : undefined;
+    const excerpt = b.excerpt !== undefined ? (b.excerpt ?? "") : undefined;
     const content = b.content !== undefined ? await ensureHtmlMediaUrls(b.content, "story-content") : undefined;
-    const rawCover = b.coverImage || b.cover_image;
+    const rawCover = b.coverImage !== undefined ? b.coverImage : b.cover_image;
     const coverImage = rawCover !== undefined ? await ensureMediaUrl(rawCover, "story-cover.png") : undefined;
 
     // Safely resolve categoryId
     let resolvedCategoryId: number | null | undefined = undefined;
     const rawCat = b.categoryId !== undefined ? b.categoryId : b.category_id;
     if (rawCat !== undefined) {
-      if (rawCat === null || rawCat === "") {
+      if (rawCat === null || String(rawCat).trim() === "") {
         resolvedCategoryId = null;
       } else if (typeof rawCat === "number" && !isNaN(rawCat)) {
         resolvedCategoryId = rawCat;
@@ -139,11 +152,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         resolvedCategoryId === null ? "__SET_NULL__" : "KEEP",
         resolvedCategoryId ?? null,
         title || null,
-        excerpt || null,
-        content || null,
-        coverImage || null,
-        gallery || null,
-        tags || null,
+        excerpt ?? null,
+        content ?? null,
+        coverImage ?? null,
+        gallery ?? null,
+        tags ?? null,
         published ?? null,
         targetPostId,
       ]
@@ -161,12 +174,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         id: String(updated.id),
         coverImage: updated.cover_image || updated.coverImage || "",
         categoryId: updated.category_id != null ? String(updated.category_id) : null,
+        createdAt: updated.created_at || updated.createdAt || "",
         published: updated.published !== false && updated.published !== 0 && updated.published !== "false",
+        gallery: safeParseJsonArray(updated.gallery),
+        tags: safeParseJsonArray(updated.tags),
       },
     });
   } catch (err: any) {
     console.error("PATCH /api/cms/blog-posts/[id] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: err?.message || "Internal server error" }, { status: 500 });
   }
 }
 

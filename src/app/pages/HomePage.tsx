@@ -44,7 +44,11 @@ export function HomePage({ setPage }: { setPage: (p: Page) => void }) {
 
   const storyPosts = [...siteData.blogPosts]
     .filter(p => p.section === "story" && p.published !== false)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .sort((a, b) => {
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+    })
     .slice(0, MAX_RAIL_ITEMS);
   const stories = storyPosts.map(p => ({ id: p.id, img: p.coverImage || "", title: p.title, excerpt: p.excerpt }));
 

@@ -6,7 +6,7 @@ import { LogIn, LogOut, User, CheckCircle, UserCheck, Heart, Plus, Calendar, Clo
 import { toast } from "sonner";
 import { canAccessAdminPanel } from "@/lib/permissions";
 import {
-  getSavedUserSession, saveUserSession, validateUserSession,
+  getSavedUserSession, saveUserSession, validateUserSession, signOutVolunteer,
   getUserSubmissions, loadUserSubmissions, savePermVolunteerRequest, getUserPermVolunteerRequestFromList,
   savePermVolunteerDeactivateRequest, getUserPermVolunteerDeactivateRequestFromList,
   getRegisteredRoleKeys, registrationKey, normalizeEventTitle,
@@ -118,8 +118,8 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
       .catch(() => setVolunteerCapInfo(null));
   }, [registeringEventId, siteData.events]);
 
-  function handleSignOut() {
-    saveUserSession(null);
+  async function handleSignOut() {
+    await signOutVolunteer();
     setProfile(null);
     setRegisteringEventId(null);
     toast.success("Signed out successfully");
@@ -157,7 +157,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         });
       } else if (sub.type === "reservation") {
         list.push({
-          id: sub.id,
+          id: `res_${sub.id}`,
           title: sub.data?.event_name || "Community Event",
           createdAt: sub.createdAt,
           typeLabel: sub.data?.volunteer_commitment ? "Volunteer" : "Attendee",
@@ -166,7 +166,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         });
       } else if (sub.type === "vendor") {
         list.push({
-          id: sub.id,
+          id: `ven_${sub.id}`,
           title: sub.data?.event_name || "Event Support",
           createdAt: sub.createdAt,
           typeLabel: "Vendor / Partner Application",
@@ -240,6 +240,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
         date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: s.status || "Completed",
         receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
+        receiptToken: s.data?.receipt_token || s.data?.receiptToken || "",
         paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
         transactionId: s.data?.transaction_id || s.data?.transactionId || "",
         createdAt: s.createdAt,
@@ -434,8 +435,8 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                 <div>
                   {registeredEventsList.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      {registeredEventsList.map((item) => (
-                        <div key={item.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-6 transition-all shadow-sm flex flex-col justify-between">
+                      {registeredEventsList.map((item, idx) => (
+                        <div key={`${item.id}_${idx}`} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-6 transition-all shadow-sm flex flex-col justify-between">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-3">
                               <span className="bg-[#a65a4a]/10 text-[#a65a4a] text-[12px] font-bold px-3 py-1 rounded-full">
@@ -516,7 +517,7 @@ export function AccountPage({ setPage }: { setPage: (p: Page) => void }) {
                               <Clock size={14} /> Date: {d.date}
                             </span>
                             <a
-                              href={`/api/donations/${d.id}/receipt`}
+                              href={`/api/donations/${d.id}/receipt${d.receiptToken ? `?token=${encodeURIComponent(d.receiptToken)}` : ""}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[12px] font-semibold transition-colors cursor-pointer w-full sm:w-auto"

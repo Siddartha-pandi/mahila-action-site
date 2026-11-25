@@ -409,8 +409,7 @@ export async function initDb(): Promise<void> {
         ).catch(() => {});
         await currentPool.query(`
           DELETE FROM blog_posts 
-          WHERE (section = 'story' AND (id IN (1, 2, 3, 4, 5, 6) OR LOWER(TRIM(title)) IN ('she found her voice', 'a new dawn for priya', 'building futures together', 'health for all', 'first woman sarpanch', 'breaking the cycle')))
-             OR (section = 'event' AND id IN (11, 12));
+          WHERE (section = 'story' AND (id IN (1, 2, 3, 4, 5, 6) OR LOWER(TRIM(title)) IN ('she found her voice', 'a new dawn for priya', 'building futures together', 'health for all', 'first woman sarpanch', 'breaking the cycle')));
         `).catch(() => {});
         await syncAllSequences(currentPool).catch(() => { });
         isInitialized = true;
@@ -493,8 +492,7 @@ export async function initDb(): Promise<void> {
       await seedAllData(currentPool);
       await currentPool.query(`
         DELETE FROM blog_posts 
-        WHERE (section = 'story' AND (id IN (1, 2, 3, 4, 5, 6) OR LOWER(TRIM(title)) IN ('she found her voice', 'a new dawn for priya', 'building futures together', 'health for all', 'first woman sarpanch', 'breaking the cycle')))
-           OR (section = 'event' AND id IN (11, 12));
+        WHERE (section = 'story' AND (id IN (1, 2, 3, 4, 5, 6) OR LOWER(TRIM(title)) IN ('she found her voice', 'a new dawn for priya', 'building futures together', 'health for all', 'first woman sarpanch', 'breaking the cycle')));
       `).catch(() => {});
       recordSchemaVersion(schemaVersion);
       try {

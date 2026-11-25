@@ -86,7 +86,7 @@ export function ContactPage() {
 
   const faqs = [
     { q: "How can I volunteer with Mahila Action?", a: "Fill out the contact form with your areas of interest and availability. Our team will reach out with suitable volunteering opportunities within 3–5 working days." },
-    { q: "Can I visit the office?", a: "Yes! Our Hyderabad office welcomes visitors. We recommend scheduling an appointment via phone or email to ensure the right team member is available to meet you." },
+    { q: "Can I visit the office?", a: "Yes! Our Visakhapatnam office welcomes visitors. We recommend scheduling an appointment via phone or email to ensure the right team member is available to meet you." },
     { q: "How do I partner with Mahila Action?", a: "We welcome partnerships from corporates, NGOs, and institutions. Reach out via the form or email us with your proposal and we'll respond within 48 hours." },
     { q: "Where does my donation go?", a: "100% of donations go directly to our programmes. We maintain full financial transparency — annual reports are available on request." },
   ];
@@ -283,9 +283,9 @@ export function ContactPage() {
               <div className="size-14 sm:size-16 bg-[#a65a4a] rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-7 sm:size-8"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
               </div>
-              <p className={`${fraunces()} text-[#1e1e1e] text-[20px] sm:text-[24px] font-semibold`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>Hyderabad, Telangana</p>
-              <p className={`${inter()} text-[#1e1e1e]/60 text-[13px] sm:text-[15px] mt-1`}>India – 500 001</p>
-              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className={`${inter()} inline-block mt-4 sm:mt-5 bg-[#a65a4a] text-[#f4efe7] text-[13px] sm:text-[14px] font-semibold px-6 sm:px-7 py-2.5 sm:py-3 rounded-full hover:bg-[#993925] transition-colors`}>
+              <p className={`${fraunces()} text-[#1e1e1e] text-[20px] sm:text-[24px] font-semibold`} style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}>{siteData.contact.address || "Visakhapatnam, Andhra Pradesh"}</p>
+              <p className={`${inter()} text-[#1e1e1e]/60 text-[13px] sm:text-[15px] mt-1`}>{siteData.contact.addressNote || "India – 530 001"}</p>
+              <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteData.contact.address || "Visakhapatnam, Andhra Pradesh")}`} target="_blank" rel="noopener noreferrer" className={`${inter()} inline-block mt-4 sm:mt-5 bg-[#a65a4a] text-[#f4efe7] text-[13px] sm:text-[14px] font-semibold px-6 sm:px-7 py-2.5 sm:py-3 rounded-full hover:bg-[#993925] transition-colors`}>
                 Open in Google Maps
               </a>
             </div>

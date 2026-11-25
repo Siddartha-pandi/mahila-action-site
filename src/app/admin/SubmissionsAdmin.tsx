@@ -30,6 +30,7 @@ import {
 } from "../../lib/backend";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { addToTrash } from "../../lib/recycleBin";
+import { buildCsvContent } from "../../lib/csv";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import { toast } from "sonner";
@@ -455,20 +456,20 @@ export function SubmissionsAdmin() {
         "Campaign",
       ];
       const rows = filtered.map((item) => [
-        `"${(item.data.receipt_number || `MA-REC-${new Date(item.createdAt).getFullYear()}-${item.id}`).replace(/"/g, '""')}"`,
-        `"${new Date(item.createdAt).toLocaleString("en-IN")}"`,
-        `"${(item.data.anonymous ? "Anonymous" : item.data.name || "").replace(/"/g, '""')}"`,
+        item.data.receipt_number || `MA-REC-${new Date(item.createdAt).getFullYear()}-${item.id}`,
+        new Date(item.createdAt).toLocaleString("en-IN"),
+        item.data.anonymous ? "Anonymous" : item.data.name || "",
         Number(item.data.amount) || 0,
-        `"${(item.data.donation_type || "one-time").replace(/"/g, '""')}"`,
-        `"${(item.data.payment_method || "UPI").toUpperCase().replace(/"/g, '""')}"`,
-        `"${(item.data.transaction_id || "").replace(/"/g, '""')}"`,
-        `"${(item.data.pan_number || "").replace(/"/g, '""')}"`,
-        `"${(item.data.address || "").replace(/"/g, '""')}"`,
-        `"${(item.data.anonymous ? "" : item.data.email || "").replace(/"/g, '""')}"`,
-        `"${(item.data.phone || "").replace(/"/g, '""')}"`,
-        `"${(item.data.campaign_name || item.data.event_name || "").replace(/"/g, '""')}"`,
+        item.data.donation_type || "one-time",
+        (item.data.payment_method || "UPI").toUpperCase(),
+        item.data.transaction_id || "",
+        item.data.pan_number || "",
+        item.data.address || "",
+        item.data.anonymous ? "" : item.data.email || "",
+        item.data.phone || "",
+        item.data.campaign_name || item.data.event_name || "",
       ]);
-      const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+      const csvContent = buildCsvContent(headers, rows);
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -485,20 +486,20 @@ export function SubmissionsAdmin() {
       ? ["ID", "Type", "Status", "Date", "Name/Contact", "Email", "Phone", "Details"]
       : ["ID", "Type", "Date", "Name/Contact", "Email", "Phone", "Details"];
     const rows = filtered.map((item) => {
-      const row = [item.id, categoryOf(item)];
+      const row: unknown[] = [item.id, categoryOf(item)];
       if (includeStatus) {
         row.push(isStatusEligible(categoryOf(item)) ? item.status : "N/A");
       }
       row.push(
         new Date(item.createdAt).toLocaleString(),
-        `"${(item.data.name || item.data.contact_name || "").replace(/"/g, '""')}"`,
-        `"${(item.data.email || "").replace(/"/g, '""')}"`,
-        `"${(item.data.phone || "").replace(/"/g, '""')}"`,
-        `"${JSON.stringify(item.data).replace(/"/g, '""')}"`
+        item.data.name || item.data.contact_name || "",
+        item.data.email || "",
+        item.data.phone || "",
+        JSON.stringify(item.data)
       );
       return row;
     });
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const csvContent = buildCsvContent(headers, rows);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1036,7 +1037,7 @@ export function SubmissionsAdmin() {
                           <div className="flex items-center justify-end gap-1">
                             {categoryOf(item) === "donation" && (
                               <a
-                                href={`/api/donations/${item.id}/receipt`}
+                                href={`/api/donations/${item.id}/receipt${item.data?.receipt_token ? `?token=${encodeURIComponent(item.data.receipt_token)}` : ""}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="p-1.5 text-[#1e1e1e]/40 hover:text-[#993925] rounded-lg hover:bg-[#993925]/10 transition-colors inline-block"
@@ -1250,7 +1251,7 @@ export function SubmissionsAdmin() {
                   )}
 
                   <a
-                    href={`/api/donations/${selectedItem.id}/receipt`}
+                    href={`/api/donations/${selectedItem.id}/receipt${selectedItem.data?.receipt_token ? `?token=${encodeURIComponent(selectedItem.data.receipt_token)}` : ""}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full mt-2 py-2 px-3 bg-[#993925] text-white rounded-lg text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-[#802f1e] transition-colors shadow-sm"

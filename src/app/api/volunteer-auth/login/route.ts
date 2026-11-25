@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { queryDb } from "@/lib/db";
-import { createAdminCookieHeader, getJwtSecret } from "@/lib/auth";
+import { createAdminCookieHeader, createUserCookieHeader, signAdminJwt } from "@/lib/auth";
+import { canAccessAdminPanel } from "@/lib/permissions";
+import { getServerRoles } from "@/lib/rolesServer";
 
 function toProfile(row: any) {
   return {
@@ -47,25 +48,25 @@ export async function POST(req: NextRequest) {
 
       if (isValidSuperadmin) {
         const adminPayload = { sub: "superadmin_env", email: envSuperadminEmail, role: "superadmin" };
-        const cookieHeader = createAdminCookieHeader(adminPayload);
-        const token = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
+        const token = signAdminJwt(adminPayload);
 
-        return NextResponse.json(
-          {
-            ok: true,
-            jwt: token,
-            profile: {
-              name: "Lead Super Admin",
-              email: envSuperadminEmail,
-              phone: "+91 XXXXXXXXXX",
-              skills: "Superadmin",
-              role: "superadmin",
-              permissions: null,
-              status: "Active",
-            },
+        const res = NextResponse.json({
+          ok: true,
+          jwt: token,
+          profile: {
+            id: "superadmin_env",
+            name: "Lead Super Admin",
+            email: envSuperadminEmail,
+            phone: "+91 XXXXXXXXXX",
+            skills: "Superadmin",
+            role: "superadmin",
+            permissions: null,
+            status: "Active",
           },
-          { headers: { "Set-Cookie": cookieHeader } }
-        );
+        });
+        res.headers.append("Set-Cookie", createAdminCookieHeader(adminPayload));
+        res.headers.append("Set-Cookie", createUserCookieHeader(adminPayload));
+        return res;
       } else {
         return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 });
       }
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     const result = await queryDb("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [
       normalizedEmail,
-    ]);
+    ], { noCache: true });
     const user = result.rows[0];
 
     if (!user) {
@@ -87,15 +88,28 @@ export async function POST(req: NextRequest) {
 
     const userRole = user.role || "user";
     const isActive = user.status === "Active" || !user.status;
-
-    let adminJwt: string | undefined;
-    let cookieHeader: string | undefined;
-
-    if (userRole !== "user" && isActive) {
-      const adminPayload = { sub: String(user.id), email: user.email, role: userRole };
-      cookieHeader = createAdminCookieHeader(adminPayload);
-      adminJwt = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
+    if (!isActive) {
+      return NextResponse.json(
+        { error: "Your account is inactive. Please contact the administrator." },
+        { status: 403 }
+      );
     }
+
+    const serverRoles = await getServerRoles();
+    let adminJwt: string | undefined;
+    let adminCookieHeader: string | undefined;
+
+    if (canAccessAdminPanel({ role: userRole, permissions: user.permissions }, serverRoles)) {
+      const adminPayload = { sub: String(user.id), email: user.email, role: userRole };
+      adminCookieHeader = createAdminCookieHeader(adminPayload);
+      adminJwt = signAdminJwt(adminPayload);
+    }
+
+    const userCookieHeader = createUserCookieHeader({
+      sub: String(user.id),
+      email: user.email,
+      role: userRole,
+    });
 
     const res = NextResponse.json({
       ok: true,
@@ -103,8 +117,9 @@ export async function POST(req: NextRequest) {
       profile: toProfile(user),
     });
 
-    if (cookieHeader) {
-      res.headers.set("Set-Cookie", cookieHeader);
+    res.headers.append("Set-Cookie", userCookieHeader);
+    if (adminCookieHeader) {
+      res.headers.append("Set-Cookie", adminCookieHeader);
     }
 
     return res;

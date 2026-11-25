@@ -47,8 +47,18 @@ export default function App() {
   const setPage = useCallback((p: Page) => navigate(PAGE_TO_PATH[p]), [navigate]);
 
   const pageRef = useRef(page);
+  const prevPageRef = useRef(page);
+  const hasLoadedSiteDataRef = useRef(false);
+  const refreshDataRef = useRef<((silent?: boolean) => Promise<void>) | null>(null);
+
   useEffect(() => {
+    const prev = prevPageRef.current;
+    prevPageRef.current = page;
     pageRef.current = page;
+    // Refresh immediately when navigating back from Admin Panel so newly saved DB entries appear without waiting for poll.
+    if (prev === "admin" && page !== "admin") {
+      refreshDataRef.current?.(false);
+    }
   }, [page]);
 
   const [content, setContent] = useState<ContentMap>(DEFAULTS);
@@ -71,8 +81,10 @@ export default function App() {
           if (JSON.stringify(prev) === JSON.stringify(freshContent)) return prev;
           return freshContent;
         });
-        // Do not overwrite siteData during background polling when the user is actively working inside Admin Panel
-        if (pageRef.current !== "admin") {
+        // Always hydrate initial load (and explicit refreshes) even on /admin;
+        // only suppress silent background polling while the user is actively editing in Admin Panel.
+        if (pageRef.current !== "admin" || !hasLoadedSiteDataRef.current || !silent) {
+          hasLoadedSiteDataRef.current = true;
           setSiteData((prev) => {
             if (JSON.stringify(prev) === JSON.stringify(freshSiteData)) return prev;
             return freshSiteData;
@@ -84,6 +96,7 @@ export default function App() {
         syncInProgress = false;
       }
     }
+    refreshDataRef.current = refreshData;
 
     // 1. Initial load
     refreshData(false);
@@ -203,6 +216,8 @@ export default function App() {
     if (slugId && !location.search.includes("modal=")) {
       if (first === "events" || first === "event") {
         navigate({ pathname: "/events", search: `?modal=reserve&id=${encodeURIComponent(slugId)}` }, { replace: true });
+      } else if (first === "eventblog" || first === "events-blog" || first === "eventsblog") {
+        navigate({ pathname: "/eventblog", search: `?modal=eventsBlog&id=${encodeURIComponent(slugId)}` }, { replace: true });
       } else if (first === "stories" || first === "story") {
         navigate({ pathname: "/stories", search: `?modal=story&id=${encodeURIComponent(slugId)}` }, { replace: true });
       } else if (first === "impact" || first === "impacts") {
@@ -246,6 +261,7 @@ export default function App() {
               onContentSaved={(updated) => setContent(updated)}
               siteData={siteData}
               onSiteDataChange={setSiteData}
+              onRefreshSiteData={() => refreshDataRef.current?.(false)}
             />
           </Suspense>
         </SiteDataContext.Provider>

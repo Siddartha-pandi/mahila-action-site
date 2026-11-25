@@ -17,7 +17,7 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
   const { openModal } = useModal();
   const siteData = useSiteData();
   const contact = siteData?.contact;
-  const email = contact?.email || "contact@mahilaction.org";
+  const email = contact?.email || "mahilaaction.vsk@gmail.com";
   const phone = contact?.phone || "+91 70955 48387";
   const userProfile = useUserProfile();
 
@@ -249,7 +249,10 @@ export function Footer({ setPage }: { setPage: (p: Page) => void }) {
                 ].map(({ label, icon }) => (
                   <button
                     key={label}
-                    aria-label={label}
+                    type="button"
+                    onClick={() => nav("contact")}
+                    title={`Connect with Mahila Action (${label})`}
+                    aria-label={`${label} — Contact Mahila Action`}
                     className="text-[#f4efe7]/80 hover:text-[#f4efe7] transition-colors cursor-pointer"
                   >
                     {icon}

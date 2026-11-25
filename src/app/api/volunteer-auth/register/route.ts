@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { nanoid } from "nanoid";
 import { queryDb } from "@/lib/db";
+import { createUserCookieHeader } from "@/lib/auth";
 import { sendWelcomeEmail } from "@/lib/email";
 import { firstError, normalizePhone, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 
@@ -52,11 +52,22 @@ export async function POST(req: NextRequest) {
       console.error("sendWelcomeEmail failed:", err)
     );
 
-    return NextResponse.json({
+    const userId = insertedId ? String(insertedId) : "";
+    const res = NextResponse.json({
       ok: true,
-      id: insertedId ? String(insertedId) : undefined,
-      profile: toProfile({ name: name.trim(), email: normalizedEmail, phone: normalizedPhone, skills }),
+      id: userId || undefined,
+      profile: {
+        id: userId || undefined,
+        ...toProfile({ name: name.trim(), email: normalizedEmail, phone: normalizedPhone, skills }),
+        role: "user",
+        status: "Active",
+      },
     }, { status: 201 });
+    res.headers.append(
+      "Set-Cookie",
+      createUserCookieHeader({ sub: userId || normalizedEmail, email: normalizedEmail, role: "user" })
+    );
+    return res;
   } catch (err: any) {
     if (String(err.message).includes("unique") || String(err.message).includes("UNIQUE")) {
       return NextResponse.json({ error: "An account with this email or phone number is already registered." }, { status: 409 });

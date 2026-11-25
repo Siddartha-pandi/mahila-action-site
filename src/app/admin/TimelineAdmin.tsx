@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import { AdminListEditor, ImageField, inputBase, labelBase } from "../adminWidgets";
@@ -10,113 +9,151 @@ import {
   deleteTimelineEntry,
 } from "../../lib/data";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
+import { upsertEntityByIds, useSerializedEntityEditor } from "../hooks/useSerializedEntityEditor";
 
 export function TimelineAdmin({
   timeline,
   onChange,
 }: {
   timeline: TimelineEntry[];
-  onChange: (next: TimelineEntry[]) => void;
+  onChange: (next: TimelineEntry[] | ((prev: TimelineEntry[]) => TimelineEntry[])) => void;
 }) {
   const sorted = [...timeline].sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
-  const [activeId, setActiveId] = useState<string | null>(sorted[0]?.id ? String(sorted[0].id) : null);
-  const active = timeline.find((t) => String(t.id) === String(activeId)) ?? sorted[0] ?? null;
+  const {
+    active,
+    activeId,
+    setActiveId,
+    activeEditorKey,
+    saving,
+    setSaving,
+    itemsRef,
+    activeIdRef,
+    clientKeyMapRef,
+    resolveId,
+    recordIdMigration,
+    applyLocalUpdate,
+    applyUpdater,
+    enqueueTask,
+  } = useSerializedEntityEditor<TimelineEntry>(sorted, onChange);
 
   const session = getCurrentAdminSession();
   const canEdit = hasPermission(session, "timeline", "edit");
   const canDelete = hasPermission(session, "timeline", "delete");
 
-  useEffect(() => {
-    if (!activeId && sorted.length > 0) {
-      setActiveId(String(sorted[0].id));
-    }
-  }, [sorted, activeId]);
-
   const activeIndex = active ? sorted.findIndex((t) => String(t.id) === String(active.id)) : -1;
-  const canMoveEarlier = canEdit && activeIndex > 0;
-  const canMoveLater = canEdit && activeIndex >= 0 && activeIndex < sorted.length - 1;
+  const canMoveEarlier = canEdit && !saving && activeIndex > 0;
+  const canMoveLater = canEdit && !saving && activeIndex >= 0 && activeIndex < sorted.length - 1;
+
+  function persistEntry(targetId: string, mode: "auto" | "explicit") {
+    return enqueueTask(targetId, async ({ canonicalId, stableKey }) => {
+      const matchIds = [targetId, canonicalId];
+      const latest = itemsRef.current.find((t) => matchIds.includes(String(t.id)));
+      if (!latest) return;
+
+      if (!latest.year?.trim() || !latest.title?.trim()) {
+        if (mode === "explicit") toast.error("Please enter both a year and milestone title.");
+        return;
+      }
+
+      const payload: TimelineEntry = { ...latest, id: canonicalId };
+      if (mode === "explicit") setSaving(true);
+      try {
+        const res = await saveTimelineEntry(payload);
+        if (res.ok) {
+          const savedId = String(res.id || payload.id);
+          recordIdMigration([targetId, canonicalId], savedId, stableKey);
+          const mergeIds = [targetId, canonicalId, savedId];
+          applyUpdater((prev) =>
+            upsertEntityByIds(prev, mergeIds, (cur) => {
+              const current = cur || payload;
+              return {
+                ...current,
+                id: savedId,
+                image:
+                  current.image === payload.image
+                    ? (res.entry?.image ?? current.image)
+                    : current.image,
+              };
+            })
+          );
+          if (mergeIds.includes(String(activeIdRef.current ?? ""))) {
+            setActiveId(savedId);
+          }
+          if (mode === "explicit") toast.success("Timeline entry saved!");
+        } else {
+          toast.error(res.error || "Failed to save timeline entry.");
+        }
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to save timeline entry.");
+      } finally {
+        if (mode === "explicit") setSaving(false);
+      }
+    });
+  }
 
   async function update(patch: Partial<TimelineEntry>, autoPersist = false) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
-    const updated = { ...active, ...patch };
-    onChange(timeline.map((t) => (String(t.id) === String(active.id) ? updated : t)));
-    if (autoPersist && updated.title?.trim() && updated.year?.trim()) {
-      try {
-        const res = await saveTimelineEntry(updated);
-        if (res.ok && res.entry) {
-          const savedId = res.id || String(active.id);
-          setActiveId(savedId);
-          onChange(timeline.map((t) => (String(t.id) === String(active.id) ? res.entry! : t)));
-        }
-      } catch (err) {
-        console.warn("Auto-persist timeline warning:", err);
-      }
+    const rawId = String(active.id);
+    const canonicalId = resolveId(rawId);
+    applyLocalUpdate([rawId, canonicalId], patch);
+    const nextTitle = patch.title !== undefined ? patch.title : active.title;
+    const nextYear = patch.year !== undefined ? patch.year : active.year;
+    if (autoPersist && nextTitle?.trim() && nextYear?.trim()) {
+      await persistEntry(canonicalId || rawId, "auto");
     }
   }
 
   function handleAdd() {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to add a milestone.");
     const t = newTimelineEntry(sorted.length);
-    const next = [...timeline, t];
-    onChange(next);
+    clientKeyMapRef.current.set(t.id, t.id);
+    applyUpdater((prev) => [...prev, t]);
     setActiveId(t.id);
   }
 
   async function handleDelete(id: string) {
     if (!canDelete) return toast.error("Permission denied: DELETE rights required for timeline.");
-    await deleteTimelineEntry(id);
-    const next = timeline.filter((t) => String(t.id) !== String(id));
-    const reindexed = next
+    const canonicalId = resolveId(id);
+    const removeIds = new Set([String(id), canonicalId]);
+    await deleteTimelineEntry(canonicalId);
+    const reindexed = itemsRef.current
+      .filter((t) => !removeIds.has(String(t.id)))
       .sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0))
       .map((item, idx) => ({ ...item, order: idx }));
-    onChange(reindexed);
+    applyUpdater(() => reindexed);
     await saveTimelineOrder(reindexed);
-    if (String(activeId) === String(id)) setActiveId(reindexed[0]?.id ?? null);
+    if (removeIds.has(String(activeIdRef.current ?? ""))) {
+      setActiveId(reindexed[0]?.id ? String(reindexed[0].id) : null);
+    }
     toast.success("Timeline milestone deleted successfully.");
   }
 
   async function handleSave() {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
-    if (!active.year?.trim() || !active.title?.trim()) {
-      return toast.error("Please enter both a year and milestone title.");
-    }
-    const res = await saveTimelineEntry(active);
-    if (res.ok) {
-      const savedId = res.id || String(active.id);
-      const saved = res.entry || { ...active, id: savedId };
-      setActiveId(savedId);
-      onChange(timeline.map((t) => (String(t.id) === String(active.id) ? saved : t)));
-      toast.success("Timeline entry saved!");
-    } else {
-      toast.error(res.error || "Failed to save timeline entry.");
-    }
+    const rawId = String(active.id);
+    await persistEntry(resolveId(rawId) || rawId, "explicit");
   }
 
   async function move(dir: -1 | 1) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for timeline.");
     if (!active) return;
-    const currentList = [...sorted];
+    const currentList = [...itemsRef.current].sort((a, b) => Number(a.order ?? 0) - Number(b.order ?? 0));
     const idx = currentList.findIndex((t) => String(t.id) === String(active.id));
     if (idx < 0) return;
     const targetIdx = idx + dir;
     if (targetIdx < 0 || targetIdx >= currentList.length) return;
 
-    // Reposition item in the list
     const [movedItem] = currentList.splice(idx, 1);
     currentList.splice(targetIdx, 0, movedItem);
 
-    // Re-index every item strictly: 0, 1, 2, 3...
     const reindexed = currentList.map((item, i) => ({
       ...item,
       order: i,
     }));
 
-    // Update UI state immediately
-    onChange(reindexed);
-
-    // Persist to backend and local storage
+    applyUpdater(() => reindexed);
     await saveTimelineOrder(reindexed);
 
     toast.success(`"${movedItem.year || "Milestone"}" moved ${dir === -1 ? "earlier" : "later"}!`);
@@ -125,7 +162,7 @@ export function TimelineAdmin({
   return (
     <AdminListEditor
       items={sorted}
-      activeId={activeId}
+      activeId={active?.id ? String(active.id) : activeId}
       onSelect={setActiveId}
       onAdd={canEdit ? handleAdd : undefined}
       onDelete={canDelete ? handleDelete : undefined}
@@ -180,17 +217,24 @@ export function TimelineAdmin({
             <label className={labelBase}>Milestone Title</label>
             <input value={active.title} onChange={(e) => update({ title: e.target.value })} className={inputBase} />
           </div>
-          <ImageField label="Milestone Photo" value={active.image} onChange={(v) => update({ image: v }, true)} title={active.title} />
+          <ImageField
+            key={`timeline-img-${activeEditorKey}`}
+            label="Milestone Photo"
+            value={active.image}
+            onChange={(v) => update({ image: v }, true)}
+            title={active.title}
+          />
           <div>
             <label className={labelBase}>Description</label>
             <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={4} className={`${inputBase} resize-y`} />
           </div>
           <button
+            type="button"
             onClick={handleSave}
-            disabled={!canEdit}
+            disabled={!canEdit || saving}
             className="w-fit bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Save Milestone
+            {saving ? "Saving..." : "Save Milestone"}
           </button>
         </div>
       )}

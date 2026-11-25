@@ -23,15 +23,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // Check environment superadmin
         const envSuperEmail = (process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase();
-        const envSuperPass = process.env.SUPERADMIN_PASSWORD;
+        const envSuperPass = (process.env.SUPERADMIN_PASSWORD || "").trim();
 
-        if (envSuperEmail && email === envSuperEmail && envSuperPass && password === envSuperPass) {
-          return {
-            id: "superadmin_env",
-            email: envSuperEmail,
-            name: "Super Admin",
-            role: "superadmin",
-          };
+        if (envSuperEmail && email === envSuperEmail && envSuperPass) {
+          const inputPass = password.trim();
+          let isSuperMatch = inputPass === envSuperPass;
+          if (!isSuperMatch && envSuperPass.startsWith("$2")) {
+            try {
+              isSuperMatch = bcrypt.compareSync(inputPass, envSuperPass);
+            } catch {}
+          }
+          if (isSuperMatch) {
+            return {
+              id: "superadmin_env",
+              email: envSuperEmail,
+              name: "Super Admin",
+              role: "superadmin",
+            };
+          }
         }
 
         // Check database users
@@ -82,8 +91,36 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as any).role || "admin";
+        let resolvedRole = (user as any).role as string | undefined;
+        let resolvedId = user.id;
+
+        if (!resolvedRole && user.email) {
+          const cleanEmail = user.email.trim().toLowerCase();
+          const envSuperEmail = (process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase();
+          if (envSuperEmail && cleanEmail === envSuperEmail) {
+            resolvedRole = "superadmin";
+            resolvedId = "superadmin_env";
+          } else {
+            try {
+              const dbRes = await queryDb(
+                "SELECT id, role, status FROM users WHERE LOWER(email) = $1 LIMIT 1",
+                [cleanEmail]
+              );
+              const dbUser = dbRes.rows[0];
+              if (dbUser && (!dbUser.status || dbUser.status === "Active")) {
+                resolvedId = String(dbUser.id);
+                resolvedRole = dbUser.role || "user";
+              } else {
+                resolvedRole = "user";
+              }
+            } catch {
+              resolvedRole = "user";
+            }
+          }
+        }
+
+        token.id = resolvedId;
+        token.role = resolvedRole || "user";
         token.email = user.email;
         token.name = user.name;
       }
@@ -92,7 +129,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = token.id as string;
-        (session.user as any).role = token.role as string;
+        (session.user as any).role = (token.role as string) || "user";
       }
       return session;
     },

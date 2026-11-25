@@ -88,6 +88,7 @@
 }
 
 @theme inline {
+  --breakpoint-xs: 24rem;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

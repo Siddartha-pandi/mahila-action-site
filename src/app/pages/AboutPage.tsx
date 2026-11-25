@@ -23,7 +23,7 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
   const councilors = siteData.councilors
     .slice()
     .sort((a, b) => a.order - b.order)
-    .map((c) => ({ img: c.image || "", role: c.role, name: c.name, story: c.bio }));
+    .map((c) => ({ id: c.id, img: c.image || "", role: c.role, name: c.name, story: c.bio }));
 
   const yearTabOptions = timeline.map((t) => ({ id: t.year, name: t.year }));
 
@@ -75,8 +75,8 @@ export function AboutPage({ setPage }: { setPage: (p: Page) => void }) {
             <SectionTitle text="The Advocates Leading the Way" center />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {councilors.map((c) => (
-              <CouncilorCard key={c.name} name={c.name} role={c.role} story={c.story} img={c.img} />
+            {councilors.map((c, idx) => (
+              <CouncilorCard key={`${c.id ?? c.name}_${idx}`} name={c.name} role={c.role} story={c.story} img={c.img} />
             ))}
           </div>
         </div>

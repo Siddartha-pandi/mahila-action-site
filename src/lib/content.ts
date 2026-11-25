@@ -118,32 +118,39 @@ export async function loadContent(): Promise<ContentMap> {
 
 // ── Save a single key ──────────────────────────────────────────────────────
 export async function saveContentKey(key: string, value: string): Promise<boolean> {
+  const res = await api.put(`/api/content/${encodeURIComponent(key)}`, { value });
+  if (!res.ok) {
+    console.warn("saveContentKey failed:", res.error);
+    return false;
+  }
+
   try {
     const cached = localStorage.getItem("mahila_site_content");
     const current = cached ? JSON.parse(cached) : { ...DEFAULTS };
     current[key] = value;
     localStorage.setItem("mahila_site_content", JSON.stringify(current));
   } catch (err) {
-    console.error("Failed to save content key locally:", err);
+    console.error("Failed to cache content key locally:", err);
   }
 
-  const res = await api.put(`/api/content/${encodeURIComponent(key)}`, { value });
   notifyContentChanged();
-  return true; // Returns true since local state was saved successfully
+  return true;
 }
 
 // ── Save all keys at once ─────────────────────────────────────────────────
 export async function saveAllContent(content: ContentMap): Promise<boolean> {
+  const res = await api.put("/api/content", content);
+  if (!res.ok) {
+    console.warn("saveAllContent failed:", res.error);
+    return false;
+  }
+
   try {
     localStorage.setItem("mahila_site_content", JSON.stringify(content));
   } catch (err) {
-    console.error("Failed to save all content locally:", err);
+    console.error("Failed to cache content locally:", err);
   }
 
-  const res = await api.put("/api/content", content);
-  if (!res.ok) {
-    console.warn("saveAllContent: API not updated (saved locally):", res.error);
-  }
   notifyContentChanged();
   return true;
 }

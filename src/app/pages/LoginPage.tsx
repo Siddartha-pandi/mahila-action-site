@@ -9,7 +9,7 @@ import {
   saveUserSession, getUserSubmissions, type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
-import { setCurrentAdminSession } from "@/lib/permissions";
+import { canAccessAdminPanel, setCurrentAdminSession } from "@/lib/permissions";
 import { imgHeroCard } from "../constants/images";
 import { PageBanner } from "../components/PageBanner";
 import { inter, fraunces, type Page } from "../components/shared/styleHelpers";
@@ -60,38 +60,27 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
 
     setAuthBusy(true);
     const lowerId = identifier.toLowerCase();
-    const lowerPass = password.toLowerCase().trim();
-
     const envSuperEmail = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_SUPERADMIN_EMAIL) || "";
-    const isAdminAttempt =
-      lowerId.includes("admin") || lowerId.includes("super") ||
-      (envSuperEmail && lowerId === envSuperEmail.toLowerCase()) ||
-      lowerId === "superadmin" || lowerId === "super admin" ||
-      lowerPass === "admin123" || lowerPass === "superadmin" || lowerPass === "admin";
 
-    if (isAdminAttempt) {
-      const adminRes = await signInAdmin(identifier, password);
-      if (adminRes.ok) {
-        let canonicalEmail = adminRes.email || identifier;
+    const result = await loginVolunteer(identifier, password);
+    if (result.ok && result.profile) {
+      setAuthBusy(false);
+      if (canAccessAdminPanel(result.profile)) {
+        let canonicalEmail = result.profile.email || identifier;
         if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-          canonicalEmail = adminRes.email || envSuperEmail || "superadmin";
+          canonicalEmail = result.profile.email || envSuperEmail || "superadmin";
         }
-        setCurrentAdminSession(canonicalEmail, adminRes.role);
+        setCurrentAdminSession(canonicalEmail, result.profile.role);
         try {
           localStorage.setItem("mahila_admin_active_tab", "adminCenter");
           sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
           sessionStorage.setItem("admin_just_logged_in", "1");
         } catch {}
-        setAuthBusy(false);
         toast.success("Signed in to Admin Panel!");
         setPage("admin");
         return;
       }
-    }
 
-    const result = await loginVolunteer(identifier, password);
-    if (result.ok && result.profile) {
-      setAuthBusy(false);
       saveUserSession(result.profile);
       setProfile(result.profile);
       toast.success(`Welcome back, ${result.profile.name}!`);
@@ -99,14 +88,15 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       return;
     }
 
-    const fallbackAdmin = await signInAdmin(identifier, password);
+    // Fallback for admin credentials if not returned by volunteer login
+    const adminRes = await signInAdmin(identifier, password);
     setAuthBusy(false);
-    if (fallbackAdmin.ok) {
-      let canonicalEmail = fallbackAdmin.email || identifier;
+    if (adminRes.ok) {
+      let canonicalEmail = adminRes.email || identifier;
       if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
-        canonicalEmail = fallbackAdmin.email || envSuperEmail || "superadmin";
+        canonicalEmail = adminRes.email || envSuperEmail || "superadmin";
       }
-      setCurrentAdminSession(canonicalEmail, fallbackAdmin.role);
+      setCurrentAdminSession(canonicalEmail, adminRes.role);
       try {
         localStorage.setItem("mahila_admin_active_tab", "adminCenter");
         sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
@@ -117,7 +107,7 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       return;
     }
 
-    toast.error(result.error || "Incorrect email or password");
+    toast.error(result.error || adminRes.error || "Incorrect email or password");
   }
 
   async function handleRegister(e: React.FormEvent) {

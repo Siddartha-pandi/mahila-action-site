@@ -8,14 +8,14 @@ import {
   UserCheck, Plus, UserPlus, FileText, ExternalLink,
 } from "lucide-react";
 import {
-  saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer,
+  saveVolunteer, signInAdmin, loginVolunteer, registerVolunteer, signOutVolunteer,
   requestVolunteerPasswordReset, resetVolunteerPassword,
   getUserSubmissions, loadUserSubmissions, getSavedUserSession, saveUserSession,
   type VolunteerAccountProfile, type SubmissionItem,
 } from "@/lib/backend";
 import { isEventOpen, findCategory, type EventItem } from "@/lib/data";
 import { firstError, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
-import { setCurrentAdminSession } from "@/lib/permissions";
+import { canAccessAdminPanel, setCurrentAdminSession } from "@/lib/permissions";
 import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination, consumeIntendedDestination } from "../hooks/useAuthGuard";
 import { useSiteData, type VolAuthStep, type VolunteerProfile } from "../context/SiteDataContext";
@@ -93,7 +93,8 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     };
   }, [profile, step, confirmed]);
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    await signOutVolunteer();
     setProfile(null);
     setStep("choice");
     setConfirmed(false);
@@ -128,6 +129,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     function resetTimer() {
       clearTimeout(timer);
       timer = setTimeout(() => {
+        void signOutVolunteer();
         setProfile(null);
         setStep("choice");
         setConfirmed(false);
@@ -151,45 +153,59 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     const identifier = loginEmail.trim();
     if (!identifier) return toast.error("Enter your email address or username");
     if (!loginPass.trim()) return toast.error("Enter your password");
-    const lowerId = identifier.toLowerCase();
 
-    const adminRes = await signInAdmin(identifier, loginPass);
-    if (adminRes.ok) {
-      setCurrentAdminSession(adminRes.email || identifier, adminRes.role);
-      try {
-        localStorage.setItem("mahila_admin_active_tab", "adminCenter");
-        sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
-        sessionStorage.setItem("admin_just_logged_in", "1");
-      } catch {}
-      setAuthBusy(false);
-      // An admin sign-in is not the visitor account a protected form wants, so
-      // drop any pending destination rather than bouncing them into it.
-      clearIntendedDestination();
-      handleClose();
-      navigate("/admin?tab=adminCenter");
-      toast.success("Signed in to Admin Panel!");
-      return;
-    }
+    setAuthBusy(true);
+    try {
+      const result = await loginVolunteer(identifier, loginPass);
+      if (result.ok && result.profile) {
+        if (canAccessAdminPanel(result.profile)) {
+          setCurrentAdminSession(result.profile.email || identifier, result.profile.role);
+          try {
+            localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+            sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+            sessionStorage.setItem("admin_just_logged_in", "1");
+          } catch {}
+          clearIntendedDestination();
+          handleClose();
+          navigate("/admin?tab=adminCenter");
+          toast.success("Signed in to Admin Panel!");
+          return;
+        }
 
-    const result = await loginVolunteer(identifier, loginPass);
-    setAuthBusy(false);
-    if (result.ok && result.profile) {
-      setProfile(result.profile);
-      saveUserSession(result.profile);
-      toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
-      const dest = consumeIntendedDestination();
-      if (dest) {
-        if (onClose) onClose();
-        navigate(dest);
-      } else {
-        handleClose();
-        navigate("/account");
+        setProfile(result.profile);
+        saveUserSession(result.profile);
+        toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
+        const dest = consumeIntendedDestination();
+        if (dest) {
+          if (onClose) onClose();
+          navigate(dest);
+        } else {
+          handleClose();
+          navigate("/account");
+        }
+        window.scrollTo({ top: 0 });
+        return;
       }
-      window.scrollTo({ top: 0 });
-      return;
-    }
 
-    toast.error(result.error || adminRes.error || "Incorrect email or password.");
+      const adminRes = await signInAdmin(identifier, loginPass);
+      if (adminRes.ok) {
+        setCurrentAdminSession(adminRes.email || identifier, adminRes.role);
+        try {
+          localStorage.setItem("mahila_admin_active_tab", "adminCenter");
+          sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
+          sessionStorage.setItem("admin_just_logged_in", "1");
+        } catch {}
+        clearIntendedDestination();
+        handleClose();
+        navigate("/admin?tab=adminCenter");
+        toast.success("Signed in to Admin Panel!");
+        return;
+      }
+
+      toast.error(result.error || adminRes.error || "Incorrect email or password.");
+    } finally {
+      setAuthBusy(false);
+    }
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -418,7 +434,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
         });
       } else if (sub.type === "reservation") {
         list.push({
-          id: sub.id,
+          id: `res_${sub.id}`,
           title: sub.data?.event_name || "Community Event",
           date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
           typeLabel: "Seat Reservation",
@@ -428,7 +444,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
         });
       } else if (sub.type === "vendor") {
         list.push({
-          id: sub.id,
+          id: `ven_${sub.id}`,
           title: sub.data?.event_name || "Event Support",
           date: new Date(sub.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
           typeLabel: "Vendor / Partner Application",
@@ -463,6 +479,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
         date: new Date(s.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: s.status || "Completed",
         receiptNumber: s.data?.receipt_number || s.data?.receiptNumber || `MA-REC-${s.id}`,
+        receiptToken: s.data?.receipt_token || s.data?.receiptToken || "",
         paymentMethod: String(s.data?.payment_method || s.data?.paymentMethod || "UPI").toUpperCase(),
         transactionId: s.data?.transaction_id || s.data?.transactionId || "",
         createdAt: s.createdAt,
@@ -602,7 +619,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
               </div>
               <div>
                 <label className={labelCls}>Password *</label>
-                <input value={reg.password} onChange={e => setReg(r => ({ ...r, password: e.target.value }))} placeholder="Min. 6 characters" type="password" className={inputCls} />
+                <input value={reg.password} onChange={e => setReg(r => ({ ...r, password: e.target.value }))} placeholder="Min. 8 characters" type="password" className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>Your Skills / Areas of Interest</label>
@@ -700,7 +717,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                 </div>
               ) : (
                 <p className="font-['Inter',sans-serif] text-[#1e1e1e]/65 text-[13px] leading-relaxed -mt-1">
-                  Choose a new password for your account. It needs to be at least 6 characters.
+                  Choose a new password for your account. It needs to be at least 8 characters.
                 </p>
               )}
               <div>
@@ -825,8 +842,8 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                 <div>
                   {registeredEventsList.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {registeredEventsList.map((item) => (
-                        <div key={item.id} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-5 transition-all shadow-sm flex flex-col justify-between">
+                      {registeredEventsList.map((item, idx) => (
+                        <div key={`${item.id}_${idx}`} className="bg-white border-2 border-[#a65a4a]/20 hover:border-[#a65a4a] rounded-2xl p-5 transition-all shadow-sm flex flex-col justify-between">
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <span className="bg-[#a65a4a]/10 text-[#a65a4a] text-[11px] font-bold px-2.5 py-1 rounded-full">
@@ -891,7 +908,7 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
                           <div className="border-t border-[#a65a4a]/10 pt-3 mt-4 flex items-center justify-between text-[12px] text-[#1e1e1e]/50 font-['Inter',sans-serif]">
                             <span className="flex items-center gap-1"><Clock size={12} /> {d.date}</span>
                             <a
-                              href={`/api/donations/${d.id}/receipt`}
+                              href={`/api/donations/${d.id}/receipt${d.receiptToken ? `?token=${encodeURIComponent(d.receiptToken)}` : ""}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#a65a4a]/10 hover:bg-[#a65a4a] text-[#a65a4a] hover:text-white text-[11px] font-semibold transition-colors cursor-pointer"

@@ -199,28 +199,45 @@ const STORAGE_KEYS = {
 
 // ── Helper Functions ────────────────────────────────────────────────────────
 
+export function mergeRolesWithDefaults(rawRoles: any): AdminRole[] {
+  if (!Array.isArray(rawRoles) || rawRoles.length === 0) return DEFAULT_ROLES;
+  const merged = rawRoles
+    .filter((r: any) => r && typeof r.id === "string" && r.id.trim())
+    .map((r: AdminRole) => {
+      const sys = DEFAULT_ROLES.find((dr) => dr.id === r.id);
+      if (sys?.isSystem) {
+        return {
+          ...sys,
+          ...r,
+          isSystem: true,
+          permissions:
+            r.id === "superadmin"
+              ? { ...FULL_PERMISSIONS }
+              : {
+                  ...sys.permissions,
+                  ...(r.permissions || {}),
+                },
+        };
+      }
+      return r;
+    });
+  for (const sys of DEFAULT_ROLES) {
+    if (!merged.some((r) => r.id === sys.id)) {
+      merged.push(sys);
+    }
+  }
+  return merged;
+}
+
 export function getStoredRoles(): AdminRole[] {
   try {
+    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      return DEFAULT_ROLES;
+    }
     const raw = localStorage.getItem(STORAGE_KEYS.ROLES);
     if (!raw) return DEFAULT_ROLES;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      // Merge system roles with defaults so new modules (e.g. trash) are populated
-      return parsed.map((r: AdminRole) => {
-        const sys = DEFAULT_ROLES.find((dr) => dr.id === r.id);
-        if (sys?.isSystem) {
-          return {
-            ...r,
-            permissions: {
-              ...sys.permissions,
-              ...r.permissions,
-            },
-          };
-        }
-        return r;
-      });
-    }
-    return DEFAULT_ROLES;
+    return mergeRolesWithDefaults(parsed);
   } catch {
     return DEFAULT_ROLES;
   }
@@ -228,9 +245,59 @@ export function getStoredRoles(): AdminRole[] {
 
 export function saveStoredRoles(roles: AdminRole[]) {
   try {
-    localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(roles));
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(roles));
+    }
   } catch (e) {
     console.error("Failed to save roles:", e);
+  }
+}
+
+export async function syncRolesFromServer(): Promise<AdminRole[]> {
+  if (typeof window === "undefined") return DEFAULT_ROLES;
+  try {
+    const token = sessionStorage.getItem("admin_jwt") || "";
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch("/api/admin/roles", { credentials: "include", headers, cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data?.roles)) {
+        const merged = mergeRolesWithDefaults(data.roles);
+        saveStoredRoles(merged);
+        return merged;
+      }
+    }
+  } catch {}
+  return getStoredRoles();
+}
+
+export async function saveRolesToServer(roles: AdminRole[]): Promise<{ ok: boolean; roles?: AdminRole[]; error?: string }> {
+  const merged = mergeRolesWithDefaults(roles);
+  saveStoredRoles(merged);
+  if (typeof window === "undefined") return { ok: true, roles: merged };
+  try {
+    const token = sessionStorage.getItem("admin_jwt") || "";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch("/api/admin/roles", {
+      method: "PUT",
+      credentials: "include",
+      headers,
+      body: JSON.stringify({ roles: merged }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data?.error || "Failed to persist roles on server." };
+    }
+    if (Array.isArray(data?.roles)) {
+      const serverMerged = mergeRolesWithDefaults(data.roles);
+      saveStoredRoles(serverMerged);
+      return { ok: true, roles: serverMerged };
+    }
+    return { ok: true, roles: merged };
+  } catch {
+    return { ok: false, error: "Network error while saving roles to server." };
   }
 }
 
@@ -359,11 +426,11 @@ export function deleteRole(roleId: string): boolean {
   return true;
 }
 
-export function getRoleById(roleId: string): AdminRole {
-  const roles = getStoredRoles();
+export function getRoleById(roleId: string, rolesOverride?: AdminRole[]): AdminRole {
+  const roles = rolesOverride && rolesOverride.length > 0 ? rolesOverride : getStoredRoles();
   const found = roles.find(r => r.id === roleId);
   if (found) return found;
-  return DEFAULT_ROLES.find(r => r.id === "user") || DEFAULT_ROLES[0];
+  return roles.find(r => r.id === "user") || DEFAULT_ROLES.find(r => r.id === "user") || DEFAULT_ROLES[0];
 }
 
 // ── Active Session Management ────────────────────────────────────────────────
@@ -471,7 +538,8 @@ export function clearAdminSession() {
 export function hasPermission(
   roleIdOrUser: string | AdminUser | any | undefined | null,
   module: AdminModule,
-  action: PermissionAction
+  action: PermissionAction,
+  rolesOverride?: AdminRole[]
 ): boolean {
   if (!roleIdOrUser) return false;
 
@@ -479,7 +547,7 @@ export function hasPermission(
   if (roleId === "superadmin") return true;
 
   if (module === "adminCenter") {
-    return roleId !== "user" && roleId !== "guest";
+    return Boolean(roleId && roleId !== "user" && roleId !== "guest");
   }
 
   // Check custom individual user permission override if provided on user object
@@ -505,7 +573,7 @@ export function hasPermission(
   }
 
   // Fallback to role-level matrix permission
-  const role = getRoleById(roleId);
+  const role = getRoleById(roleId, rolesOverride);
   const modulePerms = role.permissions?.[module];
   if (!modulePerms) {
     if (module === "donations") {
@@ -529,7 +597,8 @@ export function hasPermission(
  * or if the user has custom permission overrides enabled in Role Management.
  */
 export function canAccessAdminPanel(
-  userOrRole?: { role?: string; roleId?: string; permissions?: any } | string | null
+  userOrRole?: { role?: string; roleId?: string; permissions?: any } | string | null,
+  rolesOverride?: AdminRole[]
 ): boolean {
   if (!userOrRole) return false;
   const role = typeof userOrRole === "string" ? userOrRole : (userOrRole.role || userOrRole.roleId || "");
@@ -557,12 +626,12 @@ export function canAccessAdminPanel(
   }
 
   // Check custom created role permissions from Role Management
-  const roleObj = getRoleById(normRole);
+  const roleObj = getRoleById(normRole, rolesOverride);
   if (roleObj && roleObj.permissions) {
     return Object.values(roleObj.permissions).some((m: any) => m && (m.view || m.edit || m.delete));
   }
 
-  return true;
+  return false;
 }
 
 

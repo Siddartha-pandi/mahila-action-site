@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClearAdminCookieHeader } from "@/lib/auth";
+import { createClearAdminCookieHeader, createClearUserCookieHeader } from "@/lib/auth";
 
 export async function POST() {
-  const cookieHeader = createClearAdminCookieHeader();
-  return NextResponse.json({ ok: true }, { headers: { "Set-Cookie": cookieHeader } });
+  const res = NextResponse.json({ ok: true });
+  res.headers.append("Set-Cookie", createClearAdminCookieHeader());
+  res.headers.append("Set-Cookie", createClearUserCookieHeader());
+  return res;
 }

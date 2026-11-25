@@ -48,6 +48,7 @@ export function PaymentModal({
   onSuccess: (result: {
     receiptNumber?: string;
     donationId?: string | number;
+    receiptToken?: string;
     transactionId?: string;
     paymentMethod: string;
   }) => void;
@@ -125,6 +126,14 @@ export function PaymentModal({
     return () => clearTimeout(timer);
   }, [utrNumber]);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !confirming) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose, confirming]);
+
   function copyToClipboard(text: string, label: string) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(text);
@@ -182,6 +191,7 @@ export function PaymentModal({
       onSuccess({
         receiptNumber: res.receipt_number || `MA-REC-${new Date().getFullYear()}-${String(res.id || 1).padStart(4, "0")}`,
         donationId: res.id,
+        receiptToken: res.receipt_token || res.data?.receipt_token,
         transactionId: txId,
         paymentMethod: "UPI",
       });

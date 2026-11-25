@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { getAdminFromRequest, verifyAdminPermission } from "@/lib/auth";
+import { verifyAdminPermission } from "@/lib/auth";
 import { sendPermVolunteerAcknowledgementEmail, sendPermVolunteerAlertToAdmin } from "@/lib/email";
 import { LIMITS, firstError, normalizePhone, validateEmail, validateName, validatePhone, validateText } from "@/lib/validation";
 
@@ -72,8 +72,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const auth = await verifyAdminPermission(req, "submissions", "view");
   if (!auth.authorized) {
-    const admin = await getAdminFromRequest(req);
-    if (!admin) return NextResponse.json({ error: auth.error || "Not authenticated" }, { status: auth.status || 401 });
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   try {

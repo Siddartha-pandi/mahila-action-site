@@ -16,9 +16,6 @@ seed:
 build:
 	$(NPM) run build
 
-start:
-	$(NPM) run start
-
 # Clean Cache
 clean:
 	$(NPM) run clean:all

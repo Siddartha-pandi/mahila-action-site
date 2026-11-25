@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { queryDb } from "@/lib/db";
-import { createAdminCookieHeader, getJwtSecret } from "@/lib/auth";
+import { createAdminCookieHeader, createUserCookieHeader, signAdminJwt } from "@/lib/auth";
+import { canAccessAdminPanel } from "@/lib/permissions";
+import { getServerRoles } from "@/lib/rolesServer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,26 +36,30 @@ export async function POST(req: NextRequest) {
 
       if (isValidSuperadmin) {
         const adminPayload = { sub: "superadmin_env", email: envSuperadminEmail || "superadmin", role: "superadmin" };
-        const cookieHeader = createAdminCookieHeader(adminPayload);
-        const token = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
-
-        return NextResponse.json(
-          { ok: true, email: envSuperadminEmail || "superadmin", role: "superadmin", jwt: token },
-          { headers: { "Set-Cookie": cookieHeader } }
-        );
+        const token = signAdminJwt(adminPayload);
+        const res = NextResponse.json({
+          ok: true,
+          email: envSuperadminEmail || "superadmin",
+          role: "superadmin",
+          jwt: token,
+        });
+        res.headers.append("Set-Cookie", createAdminCookieHeader(adminPayload));
+        res.headers.append("Set-Cookie", createUserCookieHeader(adminPayload));
+        return res;
       } else {
         return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
       }
     }
 
-    // 2. Database Admin / Staff / Custom Role Accounts Check
+    // 2. Database Admin / Staff / Custom Role / Permitted User Accounts Check
     const result = await queryDb(
-      "SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND role != 'user'",
+      "SELECT * FROM users WHERE LOWER(email) = LOWER($1)",
       [normalizedEmail]
     );
     const user = result.rows[0];
 
-    if (!user) {
+    const serverRoles = await getServerRoles();
+    if (!user || !canAccessAdminPanel({ role: user.role, permissions: user.permissions }, serverRoles)) {
       return NextResponse.json({ error: "Invalid email or password, or user account does not have admin panel access." }, { status: 401 });
     }
 
@@ -67,14 +72,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
 
-    const adminPayload = { sub: user.id, email: user.email, role: user.role };
-    const cookieHeader = createAdminCookieHeader(adminPayload);
-    const token = jwt.sign(adminPayload, getJwtSecret(), { expiresIn: "12h" });
-
-    return NextResponse.json(
-      { ok: true, email: user.email, role: user.role, jwt: token },
-      { headers: { "Set-Cookie": cookieHeader } }
-    );
+    const adminPayload = { sub: String(user.id), email: user.email, role: user.role || "user" };
+    const token = signAdminJwt(adminPayload);
+    const res = NextResponse.json({
+      ok: true,
+      email: user.email,
+      role: user.role || "user",
+      jwt: token,
+    });
+    res.headers.append("Set-Cookie", createAdminCookieHeader(adminPayload));
+    res.headers.append("Set-Cookie", createUserCookieHeader(adminPayload));
+    return res;
   } catch (err: any) {
     console.error("Admin login error:", err);
     return NextResponse.json({ error: "Invalid credentials or login failed." }, { status: 500 });

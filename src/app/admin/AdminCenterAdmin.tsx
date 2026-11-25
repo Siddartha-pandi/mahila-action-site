@@ -33,9 +33,11 @@ import {
 import {
   type AdminUser,
   getRoleById,
-  getStoredAdminUsers,
   getStoredRoles,
+  hasPermission,
+  syncRolesFromServer,
 } from "@/lib/permissions";
+import { api } from "@/lib/api";
 import { getTrashItems } from "@/lib/recycleBin";
 import { CAMPAIGNS, type Campaign } from "../constants/campaigns";
 import { categoryOf } from "./SubmissionsAdmin";
@@ -57,10 +59,16 @@ export function AdminCenterAdmin({
   const [loading, setLoading] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>(CAMPAIGNS);
   const [trashCount, setTrashCount] = useState<number>(() => getTrashItems().length);
+  const [userMetrics, setUserMetrics] = useState<{ totalUsers: number | null; activeUsers: number | null; totalRoles: number }>(() => ({
+    totalUsers: null,
+    activeUsers: null,
+    totalRoles: getStoredRoles().length,
+  }));
 
   const role = getRoleById(currentAdminUser?.roleId);
+  const canViewRoles = hasPermission(currentAdminUser, "roles", "view");
 
-  // Sync latest submissions and campaigns continuously in background
+  // Sync latest submissions, campaigns, roles, and DB members in background
   const refreshData = useCallback(async (silent = true) => {
     if (!silent) setLoading(true);
     try {
@@ -75,12 +83,27 @@ export function AdminCenterAdmin({
           setCampaigns(campData);
         }
       }
+
+      const [serverRoles, membersRes] = await Promise.all([
+        syncRolesFromServer().catch(() => getStoredRoles()),
+        canViewRoles ? api.get<any[]>("/api/members").catch(() => null) : Promise.resolve(null),
+      ]);
+
+      setUserMetrics((prev) => {
+        const hasMembers = Boolean(membersRes?.ok && Array.isArray(membersRes.data));
+        const rows = hasMembers ? (membersRes!.data as any[]) : null;
+        return {
+          totalUsers: rows ? rows.length : prev.totalUsers,
+          activeUsers: rows ? rows.filter((u) => !u.status || u.status === "Active").length : prev.activeUsers,
+          totalRoles: Array.isArray(serverRoles) ? serverRoles.length : prev.totalRoles,
+        };
+      });
     } catch (err) {
       console.warn("Failed to refresh admin center data:", err);
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [canViewRoles]);
 
   useEffect(() => {
     refreshData(false);
@@ -194,17 +217,6 @@ export function AdminCenterAdmin({
       categories,
     };
   }, [siteData]);
-
-  // Admin users & roles count
-  const userMetrics = useMemo(() => {
-    const users = getStoredAdminUsers();
-    const roles = getStoredRoles();
-    return {
-      totalUsers: users.length,
-      activeUsers: users.filter((u) => u.status === "Active").length,
-      totalRoles: roles.length,
-    };
-  }, []);
 
   // Latest 6 submissions
   const recentSubmissions = useMemo(() => {
@@ -503,7 +515,7 @@ export function AdminCenterAdmin({
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {recentSubmissions.map((item) => {
+                {recentSubmissions.map((item, idx) => {
                   const cat = categoryOf(item);
                   const isPending =
                     !item.status || item.status.toLowerCase() === "pending" || item.status.toLowerCase() === "new";
@@ -511,7 +523,7 @@ export function AdminCenterAdmin({
                   const displayContact = item.data?.email || item.data?.phone || "No contact info";
                   return (
                     <div
-                      key={item.id}
+                      key={`${item.type || "sub"}_${item.id}_${idx}`}
                       onClick={() => onSelectSection("submissions")}
                       className="py-3 flex items-center justify-between gap-3 hover:bg-gray-50/80 px-2 rounded-xl transition-colors cursor-pointer"
                     >
@@ -586,13 +598,13 @@ export function AdminCenterAdmin({
               <p className="text-[13px] text-[#1e1e1e]/40 py-4 text-center">No upcoming events listed.</p>
             ) : (
               <div className="space-y-3">
-                {upcomingEvents.map((ev) => {
+                {upcomingEvents.map((ev, idx) => {
                   const percent = ev.totalSeats
                     ? Math.min(100, Math.round(((ev.bookedSeats || 0) / ev.totalSeats) * 100))
                     : 0;
                   return (
                     <div
-                      key={ev.id}
+                      key={`event_${ev.id || idx}_${idx}`}
                       onClick={() => onSelectSection("events")}
                       className="p-3 rounded-xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/20 transition-all cursor-pointer"
                     >
@@ -650,7 +662,7 @@ export function AdminCenterAdmin({
                   <Users className="w-3.5 h-3.5 text-blue-600" /> User Accounts
                 </span>
                 <span className="font-semibold text-[#1e1e1e]">
-                  {userMetrics.activeUsers} Active
+                  {userMetrics.activeUsers !== null ? `${userMetrics.activeUsers} Active` : "Protected"}
                 </span>
               </div>
 

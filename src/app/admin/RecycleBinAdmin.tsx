@@ -159,15 +159,19 @@ export function RecycleBinAdmin() {
     });
   };
 
-  const handleBatchRestore = () => {
+  const handleBatchRestore = async () => {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to restore items.");
     const targets = items.filter((item) => selectedTrashKeys.has(`${item.type}_${item.id}`));
     if (!targets.length) return;
     let count = 0;
-    targets.forEach((item) => {
-      if (restoreTrashItem(item)) count++;
-    });
-    toast.success(`Restored ${count} item(s) successfully!`);
+    for (const item of targets) {
+      if (await restoreTrashItem(item)) count++;
+    }
+    if (count > 0) {
+      toast.success(`Restored ${count} item(s) successfully!`);
+    } else {
+      toast.error("Failed to restore selected item(s).");
+    }
     setSelectedTrashKeys(new Set());
     reload();
   };

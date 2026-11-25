@@ -15,6 +15,7 @@ export interface StoryCardProps {
   ctaText?: string;
   className?: string;
   galleryCount?: number;
+  isDraft?: boolean;
 }
 
 export function StoryCard({
@@ -26,6 +27,7 @@ export function StoryCard({
   ctaText = "Read Story →",
   className = "",
   galleryCount,
+  isDraft = false,
 }: StoryCardProps) {
   const imgSrc = coverImage || fallbackImage;
 
@@ -50,6 +52,12 @@ export function StoryCard({
         ) : (
           <div className="size-full flex flex-col items-center justify-center bg-gradient-to-br from-[#8a4233] to-[#5a2a20] text-[#f4efe7]/80 gap-2 select-none">
             <BookOpen size={32} className="opacity-75" />
+          </div>
+        )}
+
+        {isDraft && (
+          <div className="absolute top-3 left-3 bg-amber-500/95 backdrop-blur-md text-white text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-md border border-amber-300/60 pointer-events-none select-none z-10">
+            Draft
           </div>
         )}
 

@@ -46,11 +46,19 @@ export function ImageField({
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
   const [localVal, setLocalVal] = useState<string | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const titleRef = useRef(title);
+  titleRef.current = title;
+  const prevValueRef = useRef(value);
 
   const safeVal = localVal !== null ? localVal : typeof value === "string" ? value : "";
 
   useEffect(() => {
-    if (value && localVal && value === localVal) {
+    if (prevValueRef.current !== value) {
+      prevValueRef.current = value;
+      setLocalVal(null);
+    } else if (value && localVal && value === localVal) {
       setLocalVal(null);
     }
   }, [value, localVal]);
@@ -66,14 +74,14 @@ export function ImageField({
     }
     setUploading(true);
     try {
-      const url = await uploadMediaToDb(file, file.name, title);
+      const url = await uploadMediaToDb(file, file.name, titleRef.current);
       setLocalVal(url);
       if (url.startsWith("data:")) {
         toast.warning("Image could not be saved to media table (saved locally).");
       } else {
         toast.success("Image saved successfully!");
       }
-      onChange(url);
+      onChangeRef.current(url);
     } catch (err: any) {
       toast.error(err?.message || "Failed to upload image");
     } finally {
@@ -429,10 +437,11 @@ export function ImageField({
             setCropSrc(null);
             setUploading(true);
             try {
+              const currentTitle = titleRef.current;
               const url = await uploadMediaToDb(
                 cropped,
-                `${title ? title + "-cropped" : "cropped"}.png`,
-                title
+                `${currentTitle ? currentTitle + "-cropped" : "cropped"}.png`,
+                currentTitle
               );
               setLocalVal(url);
               if (url.startsWith("data:")) {
@@ -440,7 +449,7 @@ export function ImageField({
               } else {
                 toast.success("Cropped image saved to media library!");
               }
-              onChange(url);
+              onChangeRef.current(url);
             } catch (err: any) {
               toast.error(err?.message || "Failed to upload cropped image");
             } finally {
@@ -477,6 +486,12 @@ export function GalleryField({
   const [uploadCount, setUploadCount] = useState(0);
 
   const safeList = Array.isArray(value) ? value : [];
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const safeListRef = useRef(safeList);
+  safeListRef.current = safeList;
+  const titleRef = useRef(title);
+  titleRef.current = title;
 
   async function processFiles(files: File[]) {
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));
@@ -487,9 +502,11 @@ export function GalleryField({
     setUploading(true);
     setUploadCount(imageFiles.length);
     try {
+      const currentTitle = titleRef.current;
+      const baseCount = safeListRef.current.length;
       const uploaded = await Promise.all(
         imageFiles.map((f, idx) =>
-          uploadMediaToDb(f, f.name, title ? `${title}-${safeList.length + idx + 1}` : f.name)
+          uploadMediaToDb(f, f.name, currentTitle ? `${currentTitle}-${baseCount + idx + 1}` : f.name)
         )
       );
       const hasFallback = uploaded.some((u) => u.startsWith("data:"));
@@ -500,7 +517,7 @@ export function GalleryField({
           `${uploaded.length} image${uploaded.length > 1 ? "s" : ""} saved successfully!`
         );
       }
-      onChange([...safeList, ...uploaded]);
+      onChangeRef.current([...safeListRef.current, ...uploaded]);
     } catch (err: any) {
       toast.error(err?.message || "Failed to upload gallery images");
     } finally {
@@ -812,10 +829,11 @@ export function GalleryField({
             if (targetIndex === null) return;
             setUploading(true);
             try {
+              const currentTitle = titleRef.current;
               const url = await uploadMediaToDb(
                 cropped,
-                `${title ? title + "-cropped" : "gallery-cropped"}.png`,
-                title
+                `${currentTitle ? currentTitle + "-cropped" : "gallery-cropped"}.png`,
+                currentTitle
               );
               if (url.startsWith("data:")) {
                 toast.warning("Cropped image could not be saved to media table (saved locally).");
@@ -824,11 +842,11 @@ export function GalleryField({
               }
               if (targetIndex === -1) {
                 // New URL image added via crop
-                onChange([...safeList, url]);
+                onChangeRef.current([...safeListRef.current, url]);
                 setUrlDraft("");
                 setShowUrlDrawer(false);
               } else {
-                onChange(safeList.map((v, idx) => (idx === targetIndex ? url : v)));
+                onChangeRef.current(safeListRef.current.map((v, idx) => (idx === targetIndex ? url : v)));
               }
             } catch (err: any) {
               toast.error(err?.message || "Failed to upload cropped image");

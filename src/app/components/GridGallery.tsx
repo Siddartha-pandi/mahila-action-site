@@ -75,8 +75,6 @@ export function GridGallery({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  if (total === 0) return null;
-
   // Mosaic chunks of 7 (1 large left, 2 stacked right, 4 bottom)
   const mosaicChunks = useMemo(() => {
     const chunks: { topHero: number; topStack: number[]; bottomRow: number[] }[] = [];
@@ -93,6 +91,8 @@ export function GridGallery({
     }
     return chunks;
   }, [total]);
+
+  if (total === 0) return null;
 
   return (
     <section className={`mt-12 sm:mt-16 pt-8 border-t border-[#a65a4a]/15 ${className}`}>

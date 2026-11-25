@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
 
       let extraRaised = index === 0 ? unassignedRaised : 0;
       for (const [key, total] of Object.entries(donationTotals)) {
-        if (key.includes(cNameKey) || cNameKey.includes(key) || key === cIdKey) {
+        if (key === cNameKey || key === cIdKey) {
           extraRaised += total;
         }
       }

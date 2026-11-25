@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { findCategory, type BlogPost } from "@/lib/data";
+import { findCategory } from "@/lib/data";
+import { useAdminMode } from "../hooks/useAdminMode";
 import { BlogDetailModal } from "../modals/BlogDetailModal";
 import { imgAboutBanner } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
@@ -20,26 +21,18 @@ export function EventsBlogPage({ setPage }: { setPage?: (p: Page) => void }) {
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    try {
-      const hasAdmin = Boolean(
-        localStorage.getItem("admin_jwt") ||
-        localStorage.getItem("mahila_admin_active_session_v1") ||
-        document.cookie.includes("mahila_admin=") ||
-        new URLSearchParams(window.location.search).get("admin") === "1" ||
-        new URLSearchParams(window.location.search).get("admin") === "true"
-      );
-      if (hasAdmin) setIsAdmin(true);
-    } catch {}
-  }, []);
+  const isAdmin = useAdminMode();
 
   // Filter raw blog posts for section "event"
   const rawEventPosts = useMemo(() => {
+    const toTime = (d?: string) => {
+      if (!d) return 0;
+      const t = new Date(d).getTime();
+      return Number.isNaN(t) ? 0 : t;
+    };
     return [...siteData.blogPosts]
       .filter((p) => p.section === "event" && (isAdmin ? true : p.published !== false))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt));
   }, [siteData.blogPosts, isAdmin]);
 
   const eventPosts = useMemo(() => {
@@ -67,14 +60,23 @@ export function EventsBlogPage({ setPage }: { setPage?: (p: Page) => void }) {
       // Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchTitle = post.title.toLowerCase().includes(q);
+        const matchTitle = (post.title || "").toLowerCase().includes(q);
         const matchExcerpt = post.excerpt?.toLowerCase().includes(q);
-        return matchTitle || matchExcerpt;
+        const matchTags = Array.isArray(post.tags) && post.tags.some((t) => String(t).toLowerCase().includes(q));
+        return matchTitle || matchExcerpt || matchTags;
       }
 
       return true;
     });
   }, [eventPosts, activeCategory, searchQuery, siteData.categories]);
+
+  useEffect(() => {
+    setActiveIndex((i) => {
+      if (i === null) return null;
+      if (filteredPosts.length === 0) return null;
+      return i >= filteredPosts.length ? filteredPosts.length - 1 : i;
+    });
+  }, [filteredPosts.length]);
 
   function navigatePost(dir: -1 | 1) {
     setActiveIndex((i) => {
@@ -167,22 +169,39 @@ export function EventsBlogPage({ setPage }: { setPage?: (p: Page) => void }) {
                   excerpt={post.excerpt}
                   coverImage={post.coverImage}
                   galleryCount={Array.isArray(post.gallery) ? post.gallery.length : 0}
+                  isDraft={post.published === false}
                   onClick={() => setActiveIndex(i)}
                   ctaText="View Event Story & Photos →"
                 />
               ))}
             </div>
           ) : (
-            <EmptyState
-              title={searchQuery ? "No matching event stories" : "Something Big Is Cooking!"}
-              description={
-                searchQuery
-                  ? `No stories matched "${searchQuery}". Try a different keyword or reset filters.`
-                  : activeCategory === ALL
-                  ? "No past event stories have been published yet. Check back soon!"
-                  : "No event stories in this category yet. Check back soon!"
-              }
-            />
+            <div className="space-y-4">
+              <EmptyState
+                title={searchQuery ? "No matching event stories" : "Something Big Is Cooking!"}
+                description={
+                  searchQuery
+                    ? `No stories matched "${searchQuery}". Try a different keyword or reset filters.`
+                    : activeCategory === ALL
+                    ? "No past event stories have been published yet. Check back soon!"
+                    : "No event stories in this category yet. Check back soon!"
+                }
+              />
+              {(activeCategory !== ALL || searchQuery.trim()) && (
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveCategory(ALL);
+                      setSearchQuery("");
+                    }}
+                    className={`${inter()} px-5 py-2 rounded-full border border-[#a65a4a]/30 text-[#a65a4a] text-xs font-semibold hover:bg-[#a65a4a]/10 transition-colors cursor-pointer`}
+                  >
+                    Show All Event Stories
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── Upcoming Events Callout Banner ── */}
@@ -223,7 +242,7 @@ export function EventsBlogPage({ setPage }: { setPage?: (p: Page) => void }) {
       {activeIndex !== null && filteredPosts[activeIndex] && (
         <BlogDetailModal
           post={filteredPosts[activeIndex]}
-          categoryLabel="Events Blog"
+          categoryLabel={findCategory(siteData.categories, filteredPosts[activeIndex].categoryId)?.name ?? "Events Blog"}
           onClose={() => setActiveIndex(null)}
           onNavigate={navigatePost}
         />

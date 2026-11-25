@@ -40,11 +40,20 @@ export async function urlToDataUrl(url: string): Promise<string | null> {
 
   const isExternal = trimmed.startsWith("http://") || trimmed.startsWith("https://");
 
+  const getProxyHeaders = (): Record<string, string> => {
+    try {
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("admin_jwt") : null;
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    } catch {
+      return {};
+    }
+  };
+
   // 1. Try our server-side proxy first for external URLs to eliminate browser CORS taint
   if (isExternal) {
     try {
       const proxyUrl = `/api/media/proxy?url=${encodeURIComponent(trimmed)}&format=dataurl`;
-      const res = await fetch(proxyUrl);
+      const res = await fetch(proxyUrl, { credentials: "include", headers: getProxyHeaders() });
       if (res.ok) {
         const json = await res.json();
         if (json?.dataUrl && typeof json.dataUrl === "string") {
@@ -78,7 +87,7 @@ export async function urlToDataUrl(url: string): Promise<string | null> {
   if (isExternal) {
     try {
       const proxyUrl = `/api/media/proxy?url=${encodeURIComponent(trimmed)}`;
-      const res = await fetch(proxyUrl);
+      const res = await fetch(proxyUrl, { credentials: "include", headers: getProxyHeaders() });
       if (res.ok) {
         const blob = await res.blob();
         return await new Promise<string>((resolve, reject) => {

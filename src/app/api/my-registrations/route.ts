@@ -1,17 +1,53 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
+import {
+  generateReceiptToken,
+  getUserSessionFromRequest,
+  verifyAdminPermission,
+} from "@/lib/auth";
+
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/my-registrations?email=...&phone=...
  *
- * Returns all event registrations (reservations + volunteer sign-ups) for a
- * given user identified by email or phone. No admin token required — the data
- * is scoped to the requesting user's own records only.
+ * Returns event registrations, permanent volunteer requests, and sanitized donation
+ * records for the authenticated user (scoped strictly to their account's DB email/phone),
+ * or for an authorized submissions admin inspecting a user's records.
  */
 export async function GET(req: NextRequest) {
+  const userSess = await getUserSessionFromRequest(req);
+  const adminCheck = await verifyAdminPermission(req, "submissions", "view");
+
+  if (!userSess && !adminCheck.authorized) {
+    return NextResponse.json(
+      { error: "Authentication required to view registrations." },
+      { status: 401 }
+    );
+  }
+
   const { searchParams } = new URL(req.url);
-  const email = (searchParams.get("email") || "").trim();
-  const phone = (searchParams.get("phone") || "").trim();
+  let email = (searchParams.get("email") || "").trim();
+  let phone = (searchParams.get("phone") || "").trim();
+
+  if (!adminCheck.authorized && userSess) {
+    // Scope non-admin requests strictly to the authenticated user's own DB record.
+    let dbEmail = userSess.email;
+    let dbPhone = "";
+    try {
+      const userRes =
+        userSess.sub && /^\d+$/.test(String(userSess.sub))
+          ? await queryDb("SELECT email, phone FROM users WHERE id = $1 LIMIT 1", [userSess.sub], { noCache: true })
+          : await queryDb("SELECT email, phone FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [userSess.email], { noCache: true });
+
+      if (userRes.rows.length > 0) {
+        dbEmail = userRes.rows[0].email || dbEmail;
+        dbPhone = userRes.rows[0].phone || "";
+      }
+    } catch {}
+    email = String(dbEmail || "").trim();
+    phone = String(dbPhone || "").trim();
+  }
 
   if (!email && !phone) {
     return NextResponse.json({ error: "email or phone is required" }, { status: 400 });
@@ -74,13 +110,16 @@ export async function GET(req: NextRequest) {
       ...row,
       pan_number: row.pan_number ? `${String(row.pan_number).slice(0, 2)}******${String(row.pan_number).slice(-2)}` : null,
       address: row.address ? "Address on file" : null,
+      receipt_token: generateReceiptToken(row.id),
     }));
 
     const allRows = [...result.rows, ...permResult.rows, ...sanitizedDonations].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
-    return NextResponse.json(allRows);
+    return NextResponse.json(allRows, {
+      headers: { "Cache-Control": "no-store" },
+    });
 
   } catch (err: any) {
     console.error("GET /api/my-registrations error:", err);

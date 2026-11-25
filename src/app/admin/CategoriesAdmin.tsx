@@ -22,8 +22,8 @@ export function CategoriesAdmin({
 }: {
   categories: Category[];
   posts: BlogPost[];
-  onCategoriesChange: (next: Category[]) => void;
-  onPostsChange: (next: BlogPost[]) => void;
+  onCategoriesChange: (next: Category[] | ((prev: Category[]) => Category[])) => void;
+  onPostsChange: (next: BlogPost[] | ((prev: BlogPost[]) => BlogPost[])) => void;
 }) {
   const [nameDraft, setNameDraft] = useState<Record<string, string>>({});
   const [removing, setRemoving] = useState<Category | null>(null);
@@ -45,8 +45,10 @@ export function CategoriesAdmin({
     if (saved.ok === false) {
       return toast.error(saved.error || "Failed to create category");
     }
-    const finalCat = saved || cat;
-    onCategoriesChange([...categories, finalCat]);
+    const finalCat: Category = { id: String(saved.id || cat.id), name: saved.name || cat.name };
+    onCategoriesChange((prev) =>
+      prev.some((x) => String(x.id) === finalCat.id) ? prev.map((x) => (String(x.id) === finalCat.id ? finalCat : x)) : [...prev, finalCat]
+    );
     toast.success(`Category #${finalCat.id} created!`);
   }
 

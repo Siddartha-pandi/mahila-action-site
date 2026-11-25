@@ -25,6 +25,8 @@ import {
   getRoleById,
   saveRole,
   deleteRole,
+  syncRolesFromServer,
+  saveRolesToServer,
   getCurrentAdminSession,
   setCurrentAdminSession,
   hasPermission,
@@ -84,6 +86,7 @@ export function RolesAdmin({
 
   useEffect(() => {
     fetchDbUsers();
+    syncRolesFromServer().then((serverRoles) => setRoles(serverRoles)).catch(() => {});
   }, []);
 
   function refreshData() {
@@ -180,7 +183,7 @@ export function RolesAdmin({
 
   // ── Role Matrix Handlers ──────────────────────────────────────────────────
 
-  function handleTogglePermission(roleId: string, module: AdminModule, action: "view" | "edit" | "delete") {
+  async function handleTogglePermission(roleId: string, module: AdminModule, action: "view" | "edit" | "delete") {
     if (!canEditRoles) return toast.error("You do not have permission to modify roles.");
     if (roleId === "superadmin") {
       return toast.error("Super Admin permissions are locked to full access for security.");
@@ -209,16 +212,30 @@ export function RolesAdmin({
     };
 
     saveRole(updatedRole);
-    toast.success(`Updated ${targetRole.name} → ${MODULE_LABELS[module]} [${action.toUpperCase()}]`);
+    const updatedList = roles.map((r) => (r.id === updatedRole.id ? updatedRole : r));
+    setRoles(updatedList);
+    const serverRes = await saveRolesToServer(updatedList);
+    if (serverRes.ok) {
+      toast.success(`Updated ${targetRole.name} → ${MODULE_LABELS[module]} [${action.toUpperCase()}]`);
+    } else {
+      toast.error(serverRes.error || "Updated locally, but failed to persist role matrix on server.");
+    }
     refreshData();
   }
 
-  function handleSaveCustomRole(e: React.FormEvent) {
+  async function handleSaveCustomRole(e: React.FormEvent) {
     e.preventDefault();
     if (!editingRole?.name) return toast.error("Role name is required.");
 
     try {
       saveRole(editingRole);
+      const nextRoles = roles.some((r) => r.id === editingRole.id)
+        ? roles.map((r) => (r.id === editingRole.id ? editingRole : r))
+        : [...roles, editingRole];
+      const serverRes = await saveRolesToServer(nextRoles);
+      if (!serverRes.ok) {
+        return toast.error(serverRes.error || "Failed to persist role on server.");
+      }
       toast.success(`Saved role "${editingRole.name}"`);
       setShowRoleModal(false);
       setEditingRole(null);
@@ -228,7 +245,7 @@ export function RolesAdmin({
     }
   }
 
-  function handleDeleteCustomRole(role: AdminRole) {
+  async function handleDeleteCustomRole(role: AdminRole) {
     if (!canDeleteRoles) return toast.error("You do not have permission to delete roles.");
     if (role.isSystem) return toast.error("System roles (Super Admin, Admin, User) cannot be deleted.");
 
@@ -241,6 +258,11 @@ export function RolesAdmin({
 
     try {
       deleteRole(role.id);
+      const nextRoles = roles.filter((r) => r.id !== role.id);
+      const serverRes = await saveRolesToServer(nextRoles);
+      if (!serverRes.ok) {
+        return toast.error(serverRes.error || "Failed to delete role on server.");
+      }
       toast.success(`Role ${role.name} deleted.`);
       refreshData();
     } catch (err: any) {
@@ -976,13 +998,17 @@ export function RolesAdmin({
                           const modPerm = userPerms[modKey] || { view: false, edit: false, delete: false };
 
                           const updateModPerm = (action: "view" | "edit" | "delete", val: boolean) => {
+                            const updatedMod =
+                              action === "view" && !val
+                                ? { view: false, edit: false, delete: false }
+                                : {
+                                    ...modPerm,
+                                    [action]: val,
+                                    view: val && (action === "edit" || action === "delete") ? true : modPerm.view,
+                                  };
                             const nextPerms = {
                               ...userPerms,
-                              [modKey]: {
-                                ...modPerm,
-                                [action]: val,
-                                view: val && (action === "edit" || action === "delete") ? true : (!val && action === "view" ? false : modPerm.view),
-                              },
+                              [modKey]: updatedMod,
                             };
                             setEditingUser((prev: any) => ({ ...prev, permissions: nextPerms }));
                           };

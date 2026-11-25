@@ -1,24 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { isEventOpen, saveEvent, findCategory, type EventItem } from "@/lib/data";
+import { useAdminMode } from "../hooks/useAdminMode";
 import { toast } from "sonner";
 import { Shield } from "lucide-react";
 import { BlogDetailModal } from "../modals/BlogDetailModal";
-import {
-  imgAboutBanner,
-  imgGal1,
-  imgGal2,
-  imgGal3,
-  imgStory1,
-  imgStory2,
-  imgStory3,
-  imgImpact1,
-  imgImpact2,
-  imgImpact3,
-  imgHeroCard,
-  imgTakeAction,
-} from "../constants/images";
+import { imgAboutBanner } from "../constants/images";
 import { useSiteData } from "../context/SiteDataContext";
 import { useModal } from "../hooks/useModal";
 import { EventCard } from "../components/EventCard";
@@ -30,14 +18,6 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { inter, scrollToTop, type Page } from "../components/shared/styleHelpers";
 
 const ALL = "All";
-
-const SAMPLE_EVENT_GALLERIES: string[][] = [
-  [imgGal1, imgGal2, imgGal3, imgStory1, imgImpact1, imgStory2, imgImpact3].filter(Boolean),
-  [imgStory2, imgStory3, imgImpact2, imgImpact3, imgHeroCard, imgTakeAction, imgGal1].filter(Boolean),
-  [imgGal1, imgGal2, imgImpact1, imgImpact2, imgImpact3, imgStory1, imgStory3].filter(Boolean),
-];
-
-const SAMPLE_EVENT_COVERS: string[] = [imgStory1, imgImpact2, imgHeroCard].filter(Boolean);
 
 /** Upcoming events first (soonest first), then past ones (most recent first). */
 function sortForDisplay(events: EventItem[], now = new Date()): EventItem[] {
@@ -59,20 +39,7 @@ export function EventsPage({ setPage }: { setPage?: (p: Page) => void } = {}) {
   const { openModal } = useModal();
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    try {
-      const hasAdmin = Boolean(
-        localStorage.getItem("admin_jwt") ||
-        localStorage.getItem("mahila_admin_active_session_v1") ||
-        document.cookie.includes("mahila_admin=") ||
-        new URLSearchParams(window.location.search).get("admin") === "1" ||
-        new URLSearchParams(window.location.search).get("admin") === "true"
-      );
-      if (hasAdmin) setIsAdmin(true);
-    } catch {}
-  }, []);
+  const isAdmin = useAdminMode();
 
   async function handleTogglePublish(ev: EventItem, published: boolean) {
     if ((ev.published !== false) === published) return;
@@ -112,19 +79,17 @@ export function EventsPage({ setPage }: { setPage?: (p: Page) => void } = {}) {
 
   const rawEventPosts = [...siteData.blogPosts]
     .filter((p) => p.section === "event" && (isAdmin ? true : p.published !== false))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => {
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+    });
 
-  const eventPosts = rawEventPosts.map((p, idx) => {
-    const hasGallery = Array.isArray(p.gallery) && p.gallery.length > 0;
-    const fallbackGallery = SAMPLE_EVENT_GALLERIES[idx % SAMPLE_EVENT_GALLERIES.length] || [];
-    const fallbackCover = SAMPLE_EVENT_COVERS[idx % SAMPLE_EVENT_COVERS.length] || "";
-
-    return {
-      ...p,
-      coverImage: p.coverImage || fallbackCover,
-      gallery: hasGallery ? p.gallery : fallbackGallery,
-    };
-  });
+  const eventPosts = rawEventPosts.map((p) => ({
+    ...p,
+    coverImage: p.coverImage || "",
+    gallery: Array.isArray(p.gallery) ? p.gallery : [],
+  }));
 
   function handleReserve(ev: EventItem) {
     if (isEventOpen(ev)) openModal("reserve", { id: String(ev.id) });
@@ -243,6 +208,7 @@ export function EventsPage({ setPage }: { setPage?: (p: Page) => void } = {}) {
                   excerpt={p.excerpt}
                   coverImage={p.coverImage}
                   galleryCount={Array.isArray(p.gallery) ? p.gallery.length : 0}
+                  isDraft={p.published === false}
                   onClick={() => setActiveIndex(i)}
                   ctaText="Read More →"
                 />
@@ -260,7 +226,7 @@ export function EventsPage({ setPage }: { setPage?: (p: Page) => void } = {}) {
       {activeIndex !== null && eventPosts[activeIndex] && (
         <BlogDetailModal
           post={eventPosts[activeIndex]}
-          categoryLabel="Events Blog"
+          categoryLabel={findCategory(siteData.categories, eventPosts[activeIndex].categoryId)?.name ?? "Events Blog"}
           onClose={() => setActiveIndex(null)}
           onNavigate={navigatePost}
         />

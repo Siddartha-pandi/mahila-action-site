@@ -61,6 +61,7 @@ export function DonationFormCard({
   const [successData, setSuccessData] = useState<{
     receiptNumber?: string;
     donationId?: string | number;
+    receiptToken?: string;
     transactionId?: string;
     paymentMethod?: string;
   }>({});
@@ -92,6 +93,7 @@ export function DonationFormCard({
   function handlePaymentSuccess(result: {
     receiptNumber?: string;
     donationId?: string | number;
+    receiptToken?: string;
     transactionId?: string;
     paymentMethod: string;
   }) {
@@ -117,7 +119,8 @@ export function DonationFormCard({
 
   function handleOpenReceipt() {
     if (successData.donationId) {
-      window.open(`/api/donations/${successData.donationId}/receipt`, "_blank");
+      const qs = successData.receiptToken ? `?token=${encodeURIComponent(successData.receiptToken)}` : "";
+      window.open(`/api/donations/${successData.donationId}/receipt${qs}`, "_blank");
     } else {
       window.print();
     }

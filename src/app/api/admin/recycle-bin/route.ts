@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await queryDb(
-      "SELECT id, item_type, item_id, title, subtitle, data, deleted_by, deleted_at FROM recycle_bin ORDER BY deleted_at DESC"
+      "SELECT id, item_type, item_id, title, subtitle, data, deleted_by, deleted_at FROM recycle_bin ORDER BY deleted_at DESC",
+      [],
+      { noCache: true }
     );
 
     const items = res.rows.map((row: any) => {

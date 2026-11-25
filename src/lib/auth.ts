@@ -4,9 +4,19 @@ import { NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { queryDb } from "./db";
 import { AdminModule, PermissionAction, MODULE_LABELS, hasPermission } from "./permissions";
+import { getServerRoles } from "./rolesServer";
 import { auth as authJsSession } from "@/auth";
 
 const COOKIE_NAME = "mahila_admin";
+const USER_COOKIE_NAME = "mahila_user";
+
+function isCookieSecure(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.COOKIE_SECURE === "true" ||
+    (process.env.FRONTEND_URL?.startsWith("https://") ?? false)
+  );
+}
 
 /**
  * Retrieves the cryptographic secret used for JWT signing and verification.
@@ -59,6 +69,14 @@ export interface AdminPayload {
   sub: string;
   email: string;
   role?: string;
+  tokenType?: "admin" | "user";
+}
+
+export interface UserSessionPayload {
+  sub: string;
+  email: string;
+  role?: string;
+  tokenType?: "user" | "admin";
 }
 
 export interface AdminAuthResult {
@@ -69,14 +87,15 @@ export interface AdminAuthResult {
 }
 
 export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPayload | null> {
-  // Check Auth.js session first
+  // Check Auth.js session first (only accept non-"user" privileged roles)
   try {
     const authSession = await authJsSession();
-    if (authSession?.user?.email) {
+    const authRole = (authSession?.user as any)?.role;
+    if (authSession?.user?.email && authRole && authRole !== "user" && authRole !== "guest") {
       return {
-        sub: (authSession.user as any).id || authSession.user.email,
+        sub: String((authSession.user as any).id || authSession.user.email),
         email: authSession.user.email,
-        role: (authSession.user as any).role || "admin",
+        role: String(authRole),
       };
     }
   } catch {}
@@ -103,16 +122,60 @@ export async function getAdminFromRequest(req?: NextRequest): Promise<AdminPaylo
 
   const secret = getJwtSecret();
 
-  // Every candidate must survive signature verification.
+  // Every candidate must survive signature verification and carry a non-user session.
   for (const token of candidates) {
     if (!token || token === "session" || token === "admin_authenticated") {
       continue;
     }
     try {
-      return jwt.verify(token, secret) as AdminPayload;
+      const decoded = jwt.verify(token, secret) as AdminPayload;
+      if (!decoded || decoded.tokenType === "user") {
+        continue;
+      }
+      if (!decoded.email || (decoded.tokenType !== "admin" && (!decoded.role || decoded.role === "user" || decoded.role === "guest"))) {
+        continue;
+      }
+      return {
+        sub: String(decoded.sub ?? ""),
+        email: decoded.email,
+        role: decoded.role || "admin",
+        tokenType: decoded.tokenType,
+      };
     } catch {
       // try the next candidate
     }
+  }
+
+  return null;
+}
+
+export async function getUserSessionFromRequest(req?: NextRequest): Promise<UserSessionPayload | null> {
+  try {
+    const token = req
+      ? req.cookies.get(USER_COOKIE_NAME)?.value
+      : (await cookies()).get(USER_COOKIE_NAME)?.value;
+
+    if (token) {
+      const decoded = jwt.verify(token, getJwtSecret()) as UserSessionPayload;
+      if (decoded?.email && decoded.tokenType === "user") {
+        return {
+          sub: String(decoded.sub ?? ""),
+          email: decoded.email,
+          role: decoded.role || "user",
+          tokenType: "user",
+        };
+      }
+    }
+  } catch {}
+
+  const admin = await getAdminFromRequest(req);
+  if (admin?.email) {
+    return {
+      sub: String(admin.sub ?? ""),
+      email: admin.email,
+      role: admin.role || "admin",
+      tokenType: "admin",
+    };
   }
 
   return null;
@@ -129,33 +192,45 @@ export async function verifyAdminPermission(
   }
 
   const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
-  const isSuperadmin =
-    admin.role === "superadmin" ||
-    admin.sub === "superadmin_env" ||
+  const isEnvSuperadmin =
+    String(admin.sub) === "superadmin_env" &&
     Boolean(envSuperadminEmail && admin.email.toLowerCase().trim() === envSuperadminEmail);
 
-  if (isSuperadmin) {
+  if (isEnvSuperadmin) {
     return { authorized: true, admin: { ...admin, role: "superadmin" } };
   }
 
   let userRole = admin.role || "user";
   let userPerms: any = null;
 
-  if (admin.sub && /^\d+$/.test(String(admin.sub))) {
-    try {
-      const userRes = await queryDb("SELECT role, permissions, status FROM users WHERE id = $1", [admin.sub]);
-      if (userRes.rows.length > 0) {
-        const row = userRes.rows[0];
-        if (row.status && row.status !== "Active") {
-          return { authorized: false, status: 403, error: "Account is inactive." };
-        }
-        userRole = row.role || userRole;
-        userPerms = row.permissions;
+  const isNumericSub = Boolean(admin.sub && /^\d+$/.test(String(admin.sub)));
+  try {
+    const userRes = isNumericSub
+      ? await queryDb("SELECT id, email, role, permissions, status FROM users WHERE id = $1 LIMIT 1", [admin.sub], { noCache: true })
+      : await queryDb("SELECT id, email, role, permissions, status FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [admin.email], { noCache: true });
+
+    if (userRes.rows.length > 0) {
+      const row = userRes.rows[0];
+      if (row.status && row.status !== "Active") {
+        return { authorized: false, status: 403, error: "Account is inactive." };
       }
-    } catch {}
+      userRole = row.role || "user";
+      userPerms = row.permissions;
+    } else if (isNumericSub) {
+      return { authorized: false, status: 401, error: "Account no longer exists." };
+    }
+  } catch {}
+
+  const isSuperadmin =
+    userRole === "superadmin" ||
+    Boolean(envSuperadminEmail && admin.email.toLowerCase().trim() === envSuperadminEmail);
+
+  if (isSuperadmin) {
+    return { authorized: true, admin: { ...admin, role: "superadmin" } };
   }
 
-  if (!hasPermission({ roleId: userRole, permissions: userPerms }, module, action)) {
+  const serverRoles = await getServerRoles();
+  if (!hasPermission({ roleId: userRole, permissions: userPerms }, module, action, serverRoles)) {
     return {
       authorized: false,
       status: 403,
@@ -166,19 +241,32 @@ export async function verifyAdminPermission(
   return { authorized: true, admin: { ...admin, role: userRole } };
 }
 
+export function signAdminJwt(payload: AdminPayload): string {
+  return jwt.sign(
+    { sub: String(payload.sub), email: payload.email, role: payload.role, tokenType: "admin" as const },
+    getJwtSecret(),
+    { expiresIn: "12h" }
+  );
+}
+
 export function createAdminCookieHeader(payload: AdminPayload): string {
-  const token = jwt.sign(payload, getJwtSecret(), { expiresIn: "12h" });
-  const isProduction =
-    process.env.NODE_ENV === "production" ||
-    process.env.COOKIE_SECURE === "true" ||
-    (process.env.FRONTEND_URL?.startsWith("https://") ?? false);
-  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax${isProduction ? "; Secure" : ""}`;
+  const token = signAdminJwt(payload);
+  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${12 * 60 * 60}${isCookieSecure() ? "; Secure" : ""}`;
 }
 
 export function createClearAdminCookieHeader(): string {
-  const isProduction =
-    process.env.NODE_ENV === "production" ||
-    process.env.COOKIE_SECURE === "true" ||
-    (process.env.FRONTEND_URL?.startsWith("https://") ?? false);
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isProduction ? "; Secure" : ""}`;
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isCookieSecure() ? "; Secure" : ""}`;
+}
+
+export function createUserCookieHeader(payload: UserSessionPayload): string {
+  const token = jwt.sign(
+    { sub: String(payload.sub), email: payload.email, role: payload.role || "user", tokenType: "user" as const },
+    getJwtSecret(),
+    { expiresIn: "7d" }
+  );
+  return `${USER_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${isCookieSecure() ? "; Secure" : ""}`;
+}
+
+export function createClearUserCookieHeader(): string {
+  return `${USER_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${isCookieSecure() ? "; Secure" : ""}`;
 }

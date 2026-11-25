@@ -4,9 +4,11 @@ import { AdminListEditor, ImageField, inputBase, labelBase } from "../adminWidge
 import { EventItem, RegKind, Category, isEventOpen, newEvent, saveEvent, deleteEvent, findCategory } from "../../lib/data";
 import { getCurrentAdminSession, hasPermission } from "../../lib/permissions";
 import { getSubmissions, loadSubmissions, SubmissionItem } from "../../lib/backend";
+import { buildCsvContent } from "../../lib/csv";
 import { categoryOf } from "./SubmissionsAdmin";
 import { Pagination } from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
+import { upsertEntityByIds, useSerializedEntityEditor } from "../hooks/useSerializedEntityEditor";
 import {
   Users,
   Calendar,
@@ -248,15 +250,15 @@ function EventDetailRegistrationsView({
 
     const headers = ["Member Name", "Email", "Phone", "Role", "Seats", "Date", "Status"];
     const rows = selectedList.map((p) => [
-      `"${p.name.replace(/"/g, '""')}"`,
-      `"${p.email.replace(/"/g, '""')}"`,
-      `"${(p.phone || "").replace(/"/g, '""')}"`,
-      `"${p.role}"`,
+      p.name,
+      p.email,
+      p.phone || "",
+      p.role,
       p.seats,
-      `"${new Date(p.date).toLocaleString()}"`,
-      `"${p.status}"`,
+      new Date(p.date).toLocaleString(),
+      p.status,
     ]);
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const csvContent = buildCsvContent(headers, rows);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -585,8 +587,8 @@ export function EventsOverviewTable({
   canDelete: boolean;
   onSelectEvent: (id: string) => void;
   onEditEvent: (id: string) => void;
-  onTogglePublish: (ev: EventItem, publish: boolean) => void;
-  onDeleteEvent: (id: string) => void;
+  onTogglePublish: (ev: EventItem, publish: boolean) => Promise<unknown> | void;
+  onDeleteEvent: (id: string) => Promise<unknown> | void;
 }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
@@ -612,21 +614,35 @@ export function EventsOverviewTable({
     });
   };
 
-  const handleBatchPublish = (publish: boolean) => {
+  const handleBatchPublish = async (publish: boolean) => {
     const targets = events.filter(e => selectedEventIds.has(String(e.id)));
     if (!targets.length) return;
-    targets.forEach(ev => onTogglePublish(ev, publish));
-    toast.success(`${publish ? "Published" : "Unpublished"} ${targets.length} event(s)`);
+    let count = 0;
+    for (const ev of targets) {
+      const ok = await onTogglePublish(ev, publish);
+      if (ok !== false) count++;
+    }
+    if (count > 0) {
+      toast.success(`${publish ? "Published" : "Unpublished"} ${count} event(s)`);
+    }
     setSelectedEventIds(new Set());
   };
 
-  const handleBatchDelete = () => {
+  const handleBatchDelete = async () => {
     if (!canDelete) return toast.error("Permission denied to delete events.");
     const targets = events.filter(e => selectedEventIds.has(String(e.id)));
     if (!targets.length) return;
     if (!confirm(`Are you sure you want to move ${targets.length} event(s) to the Recycle Bin?`)) return;
-    targets.forEach(ev => onDeleteEvent(String(ev.id)));
-    toast.success(`Moved ${targets.length} event(s) to Recycle Bin`);
+    let count = 0;
+    for (const ev of targets) {
+      const ok = await onDeleteEvent(String(ev.id));
+      if (ok !== false) count++;
+    }
+    if (count > 0) {
+      toast.success(`Moved ${count} event(s) to Recycle Bin`);
+    } else {
+      toast.error("Failed to delete selected event(s).");
+    }
     setSelectedEventIds(new Set());
   };
 
@@ -1062,10 +1078,26 @@ export function EventsAdmin({
 }: {
   events: EventItem[];
   categories: Category[];
-  onChange: (next: EventItem[]) => void;
+  onChange: (next: EventItem[] | ((prev: EventItem[]) => EventItem[])) => void;
 }) {
   const [viewMode, setViewMode] = useState<"overview" | "event_detail" | "editor">("overview");
-  const [activeId, setActiveId] = useState<string | null>(events[0]?.id ? String(events[0].id) : null);
+  const {
+    active,
+    activeId,
+    setActiveId,
+    activeEditorKey,
+    saving,
+    setSaving,
+    itemsRef,
+    activeIdRef,
+    clientKeyMapRef,
+    resolveId,
+    recordIdMigration,
+    applyLocalUpdate,
+    applyUpdater,
+    enqueueTask,
+  } = useSerializedEntityEditor<EventItem>(events, onChange);
+
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -1076,14 +1108,6 @@ export function EventsAdmin({
   const [memberSearch, setMemberSearch] = useState("");
 
   const [submissions, setSubmissions] = useState<SubmissionItem[]>(() => getSubmissions());
-
-  const active = events.find((e) => String(e.id) === String(activeId)) ?? events[0] ?? null;
-
-  useEffect(() => {
-    if (!activeId && events.length > 0) {
-      setActiveId(String(events[0].id));
-    }
-  }, [events, activeId]);
 
   const session = getCurrentAdminSession();
   const canEdit = hasPermission(session, "events", "edit");
@@ -1114,17 +1138,140 @@ export function EventsAdmin({
     };
   }, []);
 
+  function persistEvent(
+    targetId: string,
+    options: { mode: "auto" | "explicit" | "publish"; forcePublished?: boolean }
+  ) {
+    return enqueueTask(targetId, async ({ canonicalId, stableKey }) => {
+      const matchIds = [targetId, canonicalId];
+      const latest = itemsRef.current.find((e) => matchIds.includes(String(e.id)));
+      if (!latest) return;
+
+      const payload: EventItem = {
+        ...latest,
+        id: canonicalId,
+        ...(options.forcePublished !== undefined ? { published: options.forcePublished } : {}),
+      };
+
+      if (!payload.title?.trim()) {
+        if (options.mode === "explicit") toast.error("Event title cannot be empty.");
+        return;
+      }
+
+      if (options.mode === "explicit") {
+        const todayStr = localTodayStr();
+        if (payload.eventDate && payload.eventDate < todayStr) {
+          toast.error("Event date cannot be in the past. Please choose today or a future date.");
+          return;
+        }
+        for (const w of payload.windows) {
+          if (w.enabled && w.regEnd && w.regEnd < todayStr) {
+            toast.error(`Registration closing date for "${KIND_LABEL[w.kind]}" registrations cannot be in the past.`);
+            return;
+          }
+        }
+        const currentStats = getEventStats(payload, submissions);
+        if (currentStats.attendeeSeats > 0 && Number(payload.totalSeats) < currentStats.attendeeSeats) {
+          toast.error(
+            `Total capacity (${payload.totalSeats}) cannot be lower than the ${currentStats.attendeeSeats} already registered seats.`
+          );
+          return;
+        }
+      }
+
+      if (options.mode !== "auto") setSaving(true);
+      const oldTitle = payload.title;
+      try {
+        const result = await saveEvent(payload);
+        if (result.ok) {
+          const savedId = String(result.id || payload.id);
+          recordIdMigration([targetId, canonicalId], savedId, stableKey);
+
+          const mergeIds = [targetId, canonicalId, savedId];
+          const currentStats = getEventStats(payload, submissions);
+          applyUpdater((prev) =>
+            upsertEntityByIds(prev, mergeIds, (cur) => {
+              const current = cur || payload;
+              const finalTotalSeats = Number(current.totalSeats) || 0;
+              return {
+                ...current,
+                id: savedId,
+                image:
+                  current.image === payload.image
+                    ? (result.event?.image ?? current.image)
+                    : current.image,
+                maxVolunteers: result.event?.maxVolunteers ?? current.maxVolunteers,
+                volunteerCount: result.event?.volunteerCount ?? current.volunteerCount,
+                remainingVolunteers: result.event?.remainingVolunteers ?? current.remainingVolunteers,
+                bookedSeats: result.event?.bookedSeats ?? currentStats.attendeeSeats,
+                availableSeats:
+                  result.event?.availableSeats ?? Math.max(0, finalTotalSeats - currentStats.attendeeSeats),
+              };
+            })
+          );
+
+          if (mergeIds.includes(String(activeIdRef.current ?? ""))) {
+            setActiveId(savedId);
+          }
+
+          if (options.mode === "explicit") {
+            // Synchronize in-memory & localStorage submissions so registered members stay linked
+            setSubmissions((prev) => {
+              const next = prev.map((sub) => {
+                const d = sub.data;
+                const subId = d?.event_id != null ? String(d.event_id).replace(/^evt_/, "") : "";
+                const targetNumId = String(savedId).replace(/^evt_/, "");
+                const matchesId = Boolean(subId && targetNumId && subId === targetNumId);
+                const matchesTitle = String(d?.event_name || "").trim().toLowerCase() === oldTitle.trim().toLowerCase();
+                if (matchesId || matchesTitle) {
+                  return { ...sub, data: { ...d, event_name: payload.title, event_id: savedId } };
+                }
+                return sub;
+              });
+              try {
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("mahila_submissions_v2", JSON.stringify(next));
+                }
+              } catch {}
+              return next;
+            });
+
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("mahila_sitedata_changed"));
+            }
+            toast.success("Event saved successfully!");
+          } else if (options.mode === "publish") {
+            const isPub = payload.published !== false;
+            if (isPub) {
+              toast.success(`"${payload.title}" is now Published and live on the website!`);
+            } else {
+              toast.success(`"${payload.title}" is now Unpublished (Draft) and hidden from the website.`);
+            }
+          }
+        } else {
+          toast.error(
+            result.error ||
+              (options.mode === "publish"
+                ? "Failed to update event publication status."
+                : "Failed to save event. Check your permissions and inputs.")
+          );
+        }
+      } catch (err: any) {
+        toast.error(err?.message || "Failed to save event.");
+      } finally {
+        if (options.mode !== "auto") setSaving(false);
+      }
+    });
+  }
+
   async function update(patch: Partial<EventItem>, autoPersist = false) {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required for Events.");
     if (!active) return;
-    const updated = { ...active, ...patch };
-    onChange(events.map((e) => (String(e.id) === String(active.id) ? updated : e)));
-    if (autoPersist && updated.title?.trim()) {
-      try {
-        await saveEvent(updated);
-      } catch (err) {
-        console.warn("Auto-persist event warning:", err);
-      }
+    const rawId = String(active.id);
+    const canonicalId = resolveId(rawId);
+    applyLocalUpdate([rawId, canonicalId], patch);
+    if (autoPersist && (patch.title !== undefined ? patch.title : active.title)?.trim()) {
+      await persistEvent(canonicalId || rawId, { mode: "auto" });
     }
   }
 
@@ -1150,90 +1297,30 @@ export function EventsAdmin({
   function handleAdd() {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to create Events.");
     const ev = newEvent();
-    onChange([...events, ev]);
+    clientKeyMapRef.current.set(ev.id, ev.id);
+    applyUpdater((prev) => [...prev, ev]);
     setActiveId(ev.id);
     setViewMode("editor");
   }
 
   async function handleDelete(id: string) {
     if (!canDelete) return toast.error("Permission denied: DELETE rights required for Events.");
-    await deleteEvent(id);
-    const next = events.filter((e) => String(e.id) !== String(id));
-    onChange(next);
-    if (activeId === id) setActiveId(next[0]?.id ?? null);
+    const canonicalId = resolveId(id);
+    const removeIds = new Set([String(id), canonicalId]);
+    await deleteEvent(canonicalId);
+    const remaining = itemsRef.current.filter((e) => !removeIds.has(String(e.id)));
+    applyUpdater(() => remaining);
+    if (removeIds.has(String(activeIdRef.current ?? ""))) {
+      setActiveId(remaining[0]?.id ? String(remaining[0].id) : null);
+    }
     toast.success("Event deleted successfully.");
   }
 
   async function handleSave() {
     if (!canEdit) return toast.error("Permission denied: EDIT rights required to save Events.");
     if (!active) return;
-    if (!active.title?.trim()) {
-      return toast.error("Event title cannot be empty.");
-    }
-
-    const todayStr = localTodayStr(); // e.g. "2026-08-05" in local timezone
-
-    // Validate: event date must not be in the past (compare YYYY-MM-DD strings directly
-    // to avoid UTC conversion errors for timezones ahead of UTC like IST).
-    if (active.eventDate && active.eventDate < todayStr) {
-      return toast.error("Event date cannot be in the past. Please choose today or a future date.");
-    }
-
-    // Validate: registration window end dates must not be in the past
-    for (const w of active.windows) {
-      if (w.enabled && w.regEnd && w.regEnd < todayStr) {
-        return toast.error(`Registration closing date for "${KIND_LABEL[w.kind]}" registrations cannot be in the past.`);
-      }
-    }
-
-    const currentStats = getEventStats(active, submissions);
-    if (currentStats.attendeeSeats > 0 && Number(active.totalSeats) < currentStats.attendeeSeats) {
-      return toast.error(
-        `Total capacity (${active.totalSeats}) cannot be lower than the ${currentStats.attendeeSeats} already registered seats.`
-      );
-    }
-
-    const oldTitle = active.title;
-    const result = await saveEvent(active);
-    if (result.ok) {
-      const savedId = result.id || active.id;
-      const updatedActive: EventItem = {
-        ...active,
-        id: savedId,
-        bookedSeats: currentStats.attendeeSeats,
-        availableSeats: Math.max(0, (Number(active.totalSeats) || 0) - currentStats.attendeeSeats),
-      };
-      setActiveId(savedId);
-      onChange(events.map((e) => (String(e.id) === String(active.id) ? updatedActive : e)));
-
-      // Synchronize in-memory & localStorage submissions so the newly saved title/id keeps all registered members linked!
-      setSubmissions((prev) => {
-        const next = prev.map((sub) => {
-          const d = sub.data;
-          const subId = d?.event_id != null ? String(d.event_id).replace(/^evt_/, "") : "";
-          const targetId = String(savedId).replace(/^evt_/, "");
-          const matchesId = Boolean(subId && targetId && subId === targetId);
-          const matchesTitle = String(d?.event_name || "").trim().toLowerCase() === oldTitle.trim().toLowerCase();
-          if (matchesId || matchesTitle) {
-            return { ...sub, data: { ...d, event_name: updatedActive.title, event_id: savedId } };
-          }
-          return sub;
-        });
-        try {
-          if (typeof window !== "undefined") {
-            localStorage.setItem("mahila_submissions_v2", JSON.stringify(next));
-          }
-        } catch {}
-        return next;
-      });
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("mahila_sitedata_changed"));
-      }
-      toast.success("Event saved successfully!");
-    } else {
-      toast.error("Save failed — changes were NOT stored. Check the console (F12) for details.");
-    }
+    const rawId = String(active.id);
+    await persistEvent(resolveId(rawId) || rawId, { mode: "explicit" });
   }
 
   async function handleSetPublish(targetEv: EventItem | undefined, publish: boolean) {
@@ -1242,24 +1329,10 @@ export function EventsAdmin({
     if (!ev) return;
     if ((ev.published !== false) === publish) return;
 
-    const patched: EventItem = { ...ev, published: publish };
-
-    const result = await saveEvent(patched);
-    if (result.ok) {
-      const savedId = result.id || ev.id;
-      const updatedItem = { ...patched, id: savedId };
-      if (active && String(active.id) === String(ev.id)) {
-        setActiveId(savedId);
-      }
-      onChange(events.map((e) => (String(e.id) === String(ev.id) ? updatedItem : e)));
-      if (publish) {
-        toast.success(`"${ev.title}" is now Published and live on the website!`);
-      } else {
-        toast.success(`"${ev.title}" is now Unpublished (Draft) and hidden from the website.`);
-      }
-    } else {
-      toast.error(result.error || "Failed to update event publication status.");
-    }
+    const rawId = String(ev.id);
+    const canonicalId = resolveId(rawId);
+    applyLocalUpdate([rawId, canonicalId], { published: publish });
+    await persistEvent(canonicalId || rawId, { mode: "publish", forcePublished: publish });
   }
 
   async function handleTogglePublish(targetEv?: EventItem) {
@@ -1277,17 +1350,17 @@ export function EventsAdmin({
 
     const headers = ["Event Title", "Name", "Email", "Phone", "Role", "Seats Reserved", "Registration Date", "Status"];
     const rows = stats.registeredPeople.map((p) => [
-      `"${ev.title.replace(/"/g, '""')}"`,
-      `"${p.name.replace(/"/g, '""')}"`,
-      `"${p.email.replace(/"/g, '""')}"`,
-      `"${p.phone.replace(/"/g, '""')}"`,
+      ev.title,
+      p.name,
+      p.email,
+      p.phone,
       p.role,
       p.seats,
       new Date(p.date).toLocaleString(),
       p.status,
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const csvContent = buildCsvContent(headers, rows);
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -1706,7 +1779,13 @@ export function EventsAdmin({
                 <label className={labelBase}>Description</label>
                 <textarea value={active.description} onChange={(e) => update({ description: e.target.value })} rows={3} className={`${inputBase} resize-y`} />
               </div>
-              <ImageField label="Event Image" value={active.image} onChange={(v) => update({ image: v }, true)} title={active.title} />
+              <ImageField
+                key={`event-img-${activeEditorKey}`}
+                label="Event Image"
+                value={active.image}
+                onChange={(v) => update({ image: v }, true)}
+                title={active.title}
+              />
               <div>
                 <label className={labelBase}>Category (shown as the badge on the event image)</label>
                 <select
@@ -1870,10 +1949,10 @@ export function EventsAdmin({
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={!canEdit}
+                  disabled={!canEdit || saving}
                   className="bg-[#a65a4a] text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-[#993925] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Save Changes
+                  {saving ? "Saving..." : "Save Changes"}
                 </button>
 
                 {active.published === false ? (
@@ -1882,11 +1961,11 @@ export function EventsAdmin({
                     onClick={async () => {
                       await handleSetPublish(active, true);
                     }}
-                    disabled={!canEdit}
+                    disabled={!canEdit || saving}
                     className="inline-flex items-center gap-2 bg-emerald-600 text-white font-['Inter',sans-serif] font-semibold text-[14px] px-6 py-2.5 rounded-full hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Globe size={15} />
-                    <span>Publish & Save (Make Live)</span>
+                    <span>{saving ? "Saving..." : "Publish & Save (Make Live)"}</span>
                   </button>
                 ) : (
                   <button
@@ -1894,11 +1973,11 @@ export function EventsAdmin({
                     onClick={async () => {
                       await handleSetPublish(active, false);
                     }}
-                    disabled={!canEdit}
+                    disabled={!canEdit || saving}
                     className="inline-flex items-center gap-2 bg-amber-50 text-amber-800 border border-amber-300 font-['Inter',sans-serif] font-semibold text-[13px] px-5 py-2.5 rounded-full hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <EyeOff size={14} className="text-amber-700" />
-                    <span>Unpublish (Move to Draft)</span>
+                    <span>{saving ? "Saving..." : "Unpublish (Move to Draft)"}</span>
                   </button>
                 )}
               </div>

@@ -114,6 +114,8 @@ export function BlogContentEditor({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initialized = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const [bubble, setBubble] = useState<{ top: number; left: number } | null>(null);
   const [plusPos, setPlusPos] = useState<{ top: number } | null>(null);
@@ -180,7 +182,28 @@ export function BlogContentEditor({
   }, [value]);
 
   function emitChange() {
-    if (editorRef.current) onChange(editorRef.current.innerHTML);
+    if (editorRef.current) onChangeRef.current(editorRef.current.innerHTML);
+  }
+
+  async function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (!imageFiles.length) return;
+    e.preventDefault();
+    try {
+      const urls = await Promise.all(imageFiles.map((file) => uploadMediaToDb(file, file.name || "pasted-image.png")));
+      urls.forEach((url) => insertImageHtml(url));
+      toast.success(urls.length === 1 ? "Pasted image uploaded!" : `${urls.length} pasted images uploaded!`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to upload pasted image");
+    }
   }
 
   function focusEditor() {
@@ -514,6 +537,7 @@ export function BlogContentEditor({
           suppressContentEditableWarning
           onInput={emitChange}
           onBlur={emitChange}
+          onPaste={handlePaste}
           onDoubleClick={handleEditorDoubleClick}
           data-placeholder={placeholder}
           className="blog-rich-content focus:outline-none"

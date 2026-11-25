@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, X, CheckCircle, ShieldCheck, Printer, AlertTriangle, ExternalLink, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { inter, fraunces } from "../components/shared/styleHelpers";
@@ -32,6 +32,15 @@ export function TransactionCheckerModal({
       receiptUrl: string;
     };
   } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
