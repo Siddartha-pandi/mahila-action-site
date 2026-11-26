@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { verifyAdminPermission } from "@/lib/auth";
+import { isSuperAdminActor, verifyAdminPermission } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { firstError, normalizePhone, validateEmail, validateName, validatePassword, validatePhone } from "@/lib/validation";
 import { sendMemberWelcomeEmail } from "@/lib/email";
@@ -61,14 +61,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, email, phone, role, kind, status, password, skills, permissions } = body || {};
 
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
-    const isSuperadmin =
-      auth.admin?.role === "superadmin" ||
-      auth.admin?.sub === "superadmin_env" ||
-      Boolean(envSuperadminEmail && auth.admin?.email.toLowerCase().trim() === envSuperadminEmail);
+    const isSuperadmin = isSuperAdminActor(auth.admin);
+    const requestedRole = String(role || "user").toLowerCase().trim();
 
-    if (role === "superadmin" && !isSuperadmin) {
-      return NextResponse.json({ error: "Only a Super Admin can create Super Admin accounts." }, { status: 403 });
+    if ((requestedRole !== "user" || permissions) && !isSuperadmin) {
+      return NextResponse.json(
+        { error: "Only a Super Admin can create accounts with Admin or privileged roles/permissions." },
+        { status: 403 }
+      );
     }
 
     const invalid = firstError(
@@ -110,6 +110,20 @@ export async function POST(req: NextRequest) {
       [name.trim(), normalizedEmail, normalizedPhone, assignedRole, kind || null, password_hash, skills || null, serializedPerms, assignedStatus]
     );
     const id = insertRes.rows[0]?.id;
+
+    if (assignedRole !== "user" || serializedPerms) {
+      console.info(
+        "[AUDIT] User created with privileged role/permissions:",
+        JSON.stringify({
+          actor: auth.admin?.email,
+          targetId: id,
+          targetEmail: normalizedEmail,
+          role: assignedRole,
+          hasCustomPermissions: Boolean(serializedPerms),
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
 
     sendMemberWelcomeEmail(normalizedEmail, name.trim(), assignedRole, rawPassword).catch((err) =>
       console.error("sendMemberWelcomeEmail failed:", err)

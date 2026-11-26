@@ -42,6 +42,16 @@ export async function POST(req: NextRequest) {
           email: envSuperadminEmail || "superadmin",
           role: "superadmin",
           jwt: token,
+          profile: {
+            id: "superadmin_env",
+            name: "Lead Super Admin",
+            email: envSuperadminEmail || "superadmin",
+            phone: "",
+            skills: "Superadmin",
+            role: "superadmin",
+            permissions: null,
+            status: "Active",
+          },
         });
         res.headers.append("Set-Cookie", createAdminCookieHeader(adminPayload));
         res.headers.append("Set-Cookie", createUserCookieHeader(adminPayload));
@@ -79,6 +89,16 @@ export async function POST(req: NextRequest) {
       email: user.email,
       role: user.role || "user",
       jwt: token,
+      profile: {
+        id: String(user.id),
+        name: user.name,
+        email: user.email,
+        phone: user.phone || "",
+        skills: user.skills || "",
+        role: user.role || "user",
+        permissions: user.permissions ?? null,
+        status: user.status || "Active",
+      },
     });
     res.headers.append("Set-Cookie", createAdminCookieHeader(adminPayload));
     res.headers.append("Set-Cookie", createUserCookieHeader(adminPayload));

@@ -1,33 +1,45 @@
-import { canAccessAdminPanel, setCurrentAdminSession } from "./permissions";
+import { canAccessAdminPanel, clearAdminSession, setCurrentAdminSession } from "./permissions";
 import { api } from "./api";
 
 // ── Admin authentication ────────────────
 
-export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; email?: string; role?: string; error?: string }> {
+export async function signInAdmin(email: string, password: string): Promise<{ ok: boolean; email?: string; role?: string; profile?: VolunteerAccountProfile; error?: string }> {
   if (!email?.trim() || !password) {
     return { ok: false, error: "Enter your admin email and password." };
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const res = await api.post<{ ok?: boolean; email?: string; role?: string; jwt?: string; token?: string }>("/api/auth/login", {
+  const res = await api.post<{ ok?: boolean; email?: string; role?: string; jwt?: string; token?: string; profile?: VolunteerAccountProfile }>("/api/auth/login", {
     email: cleanEmail,
     password,
   });
 
   if (res.ok && res.data?.ok) {
     const token = res.data.jwt || res.data.token;
+    const resolvedEmail = res.data.email || cleanEmail;
+    const resolvedRole = res.data.role || "admin";
+    const resolvedProfile: VolunteerAccountProfile = res.data.profile || {
+      name: resolvedRole === "superadmin" ? "Lead Super Admin" : resolvedEmail.split("@")[0],
+      email: resolvedEmail,
+      phone: "",
+      skills: "",
+      role: resolvedRole,
+      status: "Active",
+    };
+
     if (typeof window !== "undefined") {
       if (token) {
         sessionStorage.setItem("admin_jwt", token);
-        localStorage.setItem("admin_jwt", token);
       }
+      saveUserSession(resolvedProfile);
+      setCurrentAdminSession(resolvedEmail, resolvedRole);
       localStorage.setItem("mahila_admin_active_tab", "adminCenter");
       sessionStorage.setItem("mahila_admin_active_tab", "adminCenter");
       sessionStorage.setItem("admin_just_logged_in", "1");
       window.dispatchEvent(new Event("mahila_admin_auth_changed"));
       window.dispatchEvent(new Event("storage"));
     }
-    return { ok: true, email: res.data?.email, role: res.data?.role };
+    return { ok: true, email: resolvedEmail, role: resolvedRole, profile: resolvedProfile };
   }
 
   if (res.status === 0) {
@@ -40,6 +52,8 @@ export async function signOutAdmin() {
   try {
     await api.post("/api/auth/logout");
   } catch {}
+  clearAdminSession();
+  saveUserSession(null);
   if (typeof window !== "undefined") {
     sessionStorage.removeItem("admin_jwt");
     localStorage.removeItem("admin_jwt");
@@ -61,19 +75,24 @@ export function onAdminAuthChange(cb: (loggedIn: boolean, sessionUser?: { email:
   }
 
   const check = async () => {
-    const token = typeof window !== "undefined" ? sessionStorage.getItem("admin_jwt") : null;
     const user = getSavedUserSession();
 
-    if (!token && (!user || !canAccessAdminPanel(user))) {
-      cb(false);
-      return;
-    }
-
     try {
-      const res = await api.get<{ loggedIn?: boolean; email?: string; role?: string; user?: { email: string; role: string } }>("/api/auth/session");
+      const res = await api.get<{ loggedIn?: boolean; revoked?: boolean; email?: string; role?: string; user?: { email: string; role: string } }>("/api/auth/session");
       if (res.ok && res.data?.loggedIn) {
         const sessionAdmin = res.data.user || (res.data.email ? { email: res.data.email, role: res.data.role || "admin" } : undefined);
         cb(true, sessionAdmin);
+        return;
+      }
+      if (res.ok && res.data?.revoked) {
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.removeItem("admin_jwt");
+          } catch {}
+        }
+        clearAdminSession();
+        void refreshUserProfile();
+        cb(false);
         return;
       }
     } catch {}
@@ -87,18 +106,20 @@ export function onAdminAuthChange(cb: (loggedIn: boolean, sessionUser?: { email:
         );
         if (sessRes.ok && sessRes.data?.jwt) {
           sessionStorage.setItem("admin_jwt", sessRes.data.jwt);
-          setCurrentAdminSession(user.email, user.role);
-          cb(true, { email: user.email, role: user.role || "admin" });
+          const freshRole = sessRes.data.profile?.role || user.role || "admin";
+          setCurrentAdminSession(user.email, freshRole);
+          cb(true, { email: user.email, role: freshRole });
           return;
         }
       } catch {}
     }
 
-    if (typeof window !== "undefined" && !user) {
+    if (typeof window !== "undefined") {
       try {
         sessionStorage.removeItem("admin_jwt");
       } catch {}
     }
+    clearAdminSession();
     cb(false);
   };
 
@@ -978,6 +999,15 @@ export function saveUserSession(session: VolunteerAccountProfile | null) {
 
 export async function signOutVolunteer() {
   saveUserSession(null);
+  clearAdminSession();
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem("admin_jwt");
+      localStorage.removeItem("admin_jwt");
+      sessionStorage.removeItem("admin_just_logged_in");
+      window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+    } catch {}
+  }
   try {
     await api.post("/api/volunteer-auth/logout");
   } catch {}
@@ -1017,15 +1047,21 @@ export async function refreshUserProfile(): Promise<VolunteerAccountProfile | nu
     email: fresh.email ?? current.email,
     phone: fresh.phone ?? "",
     skills: fresh.skills ?? "",
-    role: fresh.role ?? current.role ?? "user",
-    permissions: fresh.permissions ?? current.permissions ?? null,
-    status: fresh.status ?? current.status ?? "Active",
+    role: fresh.role ?? "user",
+    permissions: fresh.permissions !== undefined ? fresh.permissions : null,
+    status: fresh.status ?? "Active",
   };
 
-  if ((res.data as any).jwt && typeof window !== "undefined") {
-    sessionStorage.setItem("admin_jwt", (res.data as any).jwt);
-    setCurrentAdminSession(merged.email, merged.role);
-    window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+  if (typeof window !== "undefined") {
+    if ((res.data as any).jwt) {
+      sessionStorage.setItem("admin_jwt", (res.data as any).jwt);
+      setCurrentAdminSession(merged.email, merged.role);
+      window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+    } else if (sessionStorage.getItem("admin_jwt")) {
+      sessionStorage.removeItem("admin_jwt");
+      clearAdminSession();
+      window.dispatchEvent(new Event("mahila_admin_auth_changed"));
+    }
   }
 
   if (JSON.stringify(merged) !== JSON.stringify(current)) {

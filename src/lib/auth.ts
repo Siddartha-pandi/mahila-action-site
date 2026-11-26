@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { queryDb } from "./db";
-import { AdminModule, PermissionAction, MODULE_LABELS, hasPermission } from "./permissions";
+import { AdminModule, PermissionAction, MODULE_LABELS, hasPermission, canAccessAdminPanel } from "./permissions";
 import { getServerRoles } from "./rolesServer";
 import { auth as authJsSession } from "@/auth";
 
@@ -179,6 +179,96 @@ export async function getUserSessionFromRequest(req?: NextRequest): Promise<User
   }
 
   return null;
+}
+
+export interface LiveAdminSessionResult {
+  valid: boolean;
+  revoked: boolean;
+  admin: (AdminPayload & { name?: string; permissions?: any }) | null;
+}
+
+export function isSuperAdminActor(admin?: AdminPayload | null): boolean {
+  if (!admin) return false;
+  const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
+  return (
+    admin.role === "superadmin" ||
+    String(admin.sub) === "superadmin_env" ||
+    Boolean(envSuperadminEmail && admin.email.toLowerCase().trim() === envSuperadminEmail)
+  );
+}
+
+/**
+ * Verifies the admin session against live PostgreSQL user status, role, and RBAC permissions.
+ * Ensures revoked or deactivated admins are rejected immediately even with an unexpired JWT.
+ */
+export async function verifyLiveAdminSession(req?: NextRequest): Promise<LiveAdminSessionResult> {
+  const admin = await getAdminFromRequest(req);
+  if (!admin) {
+    return { valid: false, revoked: false, admin: null };
+  }
+
+  const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
+  const isEnvSuperadmin =
+    String(admin.sub) === "superadmin_env" &&
+    Boolean(envSuperadminEmail && admin.email.toLowerCase().trim() === envSuperadminEmail);
+
+  if (isEnvSuperadmin) {
+    return {
+      valid: true,
+      revoked: false,
+      admin: { ...admin, role: "superadmin", name: "Lead Super Admin" },
+    };
+  }
+
+  const isNumericSub = Boolean(admin.sub && /^\d+$/.test(String(admin.sub)));
+  try {
+    const userRes = isNumericSub
+      ? await queryDb("SELECT id, name, email, role, permissions, status FROM users WHERE id = $1 LIMIT 1", [admin.sub], { noCache: true })
+      : await queryDb("SELECT id, name, email, role, permissions, status FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1", [admin.email], { noCache: true });
+
+    if (userRes.rows.length === 0) {
+      return { valid: false, revoked: true, admin: null };
+    }
+
+    const row = userRes.rows[0];
+    if (row.status && row.status !== "Active") {
+      return { valid: false, revoked: true, admin: null };
+    }
+
+    const userRole = row.role || "user";
+    const isSuper =
+      userRole === "superadmin" ||
+      Boolean(envSuperadminEmail && String(row.email || admin.email).toLowerCase().trim() === envSuperadminEmail);
+
+    if (isSuper) {
+      return {
+        valid: true,
+        revoked: false,
+        admin: { ...admin, sub: String(row.id), email: row.email, role: "superadmin", name: row.name },
+      };
+    }
+
+    const serverRoles = await getServerRoles();
+    if (!canAccessAdminPanel({ role: userRole, permissions: row.permissions }, serverRoles)) {
+      return { valid: false, revoked: true, admin: null };
+    }
+
+    return {
+      valid: true,
+      revoked: false,
+      admin: {
+        ...admin,
+        sub: String(row.id),
+        email: row.email,
+        role: userRole,
+        name: row.name,
+        permissions: row.permissions ?? null,
+      },
+    };
+  } catch (err) {
+    console.error("verifyLiveAdminSession error:", err);
+    return { valid: false, revoked: false, admin: null };
+  }
 }
 
 export async function verifyAdminPermission(

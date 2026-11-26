@@ -158,6 +158,9 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
     try {
       const result = await loginVolunteer(identifier, loginPass);
       if (result.ok && result.profile) {
+        setProfile(result.profile);
+        saveUserSession(result.profile);
+
         if (canAccessAdminPanel(result.profile)) {
           setCurrentAdminSession(result.profile.email || identifier, result.profile.role);
           try {
@@ -172,13 +175,12 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
           return;
         }
 
-        setProfile(result.profile);
-        saveUserSession(result.profile);
         toast.success(`Signed in successfully! Welcome back, ${result.profile.name}!`);
         const dest = consumeIntendedDestination();
-        if (dest) {
+        const safeDest = dest && !dest.startsWith("/admin") ? dest : null;
+        if (safeDest) {
           if (onClose) onClose();
-          navigate(dest);
+          navigate(safeDest);
         } else {
           handleClose();
           navigate("/account");
@@ -189,6 +191,10 @@ export function VolunteerPortal({ onClose, initialStep, resetToken, events, prom
 
       const adminRes = await signInAdmin(identifier, loginPass);
       if (adminRes.ok) {
+        if (adminRes.profile) {
+          setProfile(adminRes.profile);
+          saveUserSession(adminRes.profile);
+        }
         setCurrentAdminSession(adminRes.email || identifier, adminRes.role);
         try {
           localStorage.setItem("mahila_admin_active_tab", "adminCenter");

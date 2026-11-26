@@ -65,6 +65,8 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
     const result = await loginVolunteer(identifier, password);
     if (result.ok && result.profile) {
       setAuthBusy(false);
+      saveUserSession(result.profile);
+      setProfile(result.profile);
       if (canAccessAdminPanel(result.profile)) {
         let canonicalEmail = result.profile.email || identifier;
         if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
@@ -81,8 +83,6 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
         return;
       }
 
-      saveUserSession(result.profile);
-      setProfile(result.profile);
       toast.success(`Welcome back, ${result.profile.name}!`);
       setPage("account");
       return;
@@ -95,6 +95,10 @@ export function LoginPage({ setPage }: { setPage: (p: Page) => void }) {
       let canonicalEmail = adminRes.email || identifier;
       if (lowerId === "superadmin" || lowerId === "super admin" || lowerId === "super") {
         canonicalEmail = adminRes.email || envSuperEmail || "superadmin";
+      }
+      if (adminRes.profile) {
+        saveUserSession(adminRes.profile);
+        setProfile(adminRes.profile);
       }
       setCurrentAdminSession(canonicalEmail, adminRes.role);
       try {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { verifyAdminPermission } from "@/lib/auth";
+import { isSuperAdminActor, verifyAdminPermission } from "@/lib/auth";
 import { firstError, normalizePhone, validateEmail, validateName, validatePhone } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -52,23 +52,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await req.json();
     const { role, kind, sub_role, status, name, email, phone, skills, permissions } = body || {};
 
-    const envSuperadminEmail = (process.env.SUPERADMIN_EMAIL || "").toLowerCase().trim();
-    const isSuperadmin =
-      auth.admin?.role === "superadmin" ||
-      auth.admin?.sub === "superadmin_env" ||
-      Boolean(envSuperadminEmail && auth.admin?.email.toLowerCase().trim() === envSuperadminEmail);
+    const isSuperadmin = isSuperAdminActor(auth.admin);
 
     if (id === "superadmin_env") {
       return NextResponse.json({ error: "The system Super Admin account cannot be modified." }, { status: 403 });
     }
 
-    const checkRes = await queryDb("SELECT role, email FROM users WHERE id = $1", [id]);
+    const checkRes = await queryDb("SELECT id, role, email, permissions, status FROM users WHERE id = $1", [id]);
     if (checkRes.rows.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (checkRes.rows[0]?.role === "superadmin" && !isSuperadmin) {
+    const existingUser = checkRes.rows[0];
+    const isSelfTarget =
+      String(auth.admin?.sub) === String(existingUser.id) ||
+      (auth.admin?.email && existingUser.email && auth.admin.email.toLowerCase().trim() === String(existingUser.email).toLowerCase().trim());
+
+    if (isSelfTarget && (role !== undefined || permissions !== undefined)) {
+      return NextResponse.json({ error: "Users cannot modify their own role or permissions." }, { status: 403 });
+    }
+
+    if (existingUser.role === "superadmin" && !isSuperadmin) {
       return NextResponse.json({ error: "Only a Super Admin can modify a Super Admin account." }, { status: 403 });
+    }
+
+    const isRoleChanging = role !== undefined && String(role).toLowerCase().trim() !== String(existingUser.role || "user").toLowerCase().trim();
+    const isPermissionsChanging = permissions !== undefined;
+
+    if ((isRoleChanging || isPermissionsChanging) && !isSuperadmin) {
+      return NextResponse.json({ error: "Only a Super Admin can grant, revoke, or modify Admin roles and permissions." }, { status: 403 });
     }
 
     if (role === "superadmin" && !isSuperadmin) {
@@ -133,6 +145,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     values.push(id);
     await queryDb(`UPDATE users SET ${updates.join(", ")} WHERE id = $${idx}`, values);
+
+    if (isRoleChanging || isPermissionsChanging || (status !== undefined && status !== existingUser.status)) {
+      console.info(
+        "[AUDIT] User role/permissions/status updated:",
+        JSON.stringify({
+          actor: auth.admin?.email,
+          targetId: id,
+          targetEmail: existingUser.email,
+          previousRole: existingUser.role,
+          newRole: role ?? existingUser.role,
+          permissionsChanged: isPermissionsChanging,
+          previousStatus: existingUser.status,
+          newStatus: status ?? existingUser.status,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error("PATCH /api/members/[id] error:", err);

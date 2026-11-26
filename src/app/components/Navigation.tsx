@@ -16,8 +16,8 @@ import {
   LayoutDashboard,
   Newspaper,
 } from "lucide-react";
-import { getSavedUserSession, type VolunteerAccountProfile } from "@/lib/backend";
-import { canAccessAdminPanel } from "@/lib/permissions";
+import { getSavedUserSession, refreshUserProfile, type VolunteerAccountProfile } from "@/lib/backend";
+import { canAccessAdminPanel, getStoredRoles, syncRolesFromServer, type AdminRole } from "@/lib/permissions";
 import { LogoMark } from "./LogoMark";
 import { useModal } from "../hooks/useModal";
 import { clearIntendedDestination } from "../hooks/useAuthGuard";
@@ -32,6 +32,7 @@ export function Navigation({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userSession, setUserSession] = useState<VolunteerAccountProfile | null>(getSavedUserSession);
+  const [roles, setRoles] = useState<AdminRole[]>(() => getStoredRoles());
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return Boolean(sessionStorage.getItem("admin_jwt"));
@@ -39,25 +40,46 @@ export function Navigation({
     return false;
   });
 
-  const hasAdminAccess = isAdmin || canAccessAdminPanel(userSession);
+  const hasAdminAccess = userSession
+    ? canAccessAdminPanel(userSession, roles)
+    : isAdmin;
   const { openModal } = useModal();
 
   useEffect(() => {
     function syncSession() {
       setUserSession(getSavedUserSession());
+      setRoles(getStoredRoles());
     }
     function syncAdmin() {
       setIsAdmin(Boolean(typeof window !== "undefined" && sessionStorage.getItem("admin_jwt")));
     }
+    function refreshFromServer() {
+      refreshUserProfile()
+        .then((fresh) => {
+          setUserSession(fresh ?? getSavedUserSession());
+          setIsAdmin(Boolean(typeof window !== "undefined" && sessionStorage.getItem("admin_jwt")));
+        })
+        .catch(() => {});
+    }
+
+    refreshFromServer();
+    if (getSavedUserSession()) {
+      syncRolesFromServer()
+        .then((serverRoles) => setRoles(serverRoles))
+        .catch(() => {});
+    }
+
     window.addEventListener("mahila_user_session_changed", syncSession);
     window.addEventListener("mahila_admin_auth_changed", syncAdmin);
     window.addEventListener("storage", syncSession);
     window.addEventListener("storage", syncAdmin);
+    window.addEventListener("focus", refreshFromServer);
     return () => {
       window.removeEventListener("mahila_user_session_changed", syncSession);
       window.removeEventListener("mahila_admin_auth_changed", syncAdmin);
       window.removeEventListener("storage", syncSession);
       window.removeEventListener("storage", syncAdmin);
+      window.removeEventListener("focus", refreshFromServer);
     };
   }, []);
 
@@ -118,15 +140,15 @@ export function Navigation({
           <LogoMark />
         </button>
 
-        {/* Navigation Links (Tablet & Desktop: md & lg & xl) */}
-        <nav className="hidden md:flex items-center gap-0.5 lg:gap-1.5 xl:gap-2">
+        {/* Navigation Links (Desktop: lg & xl) */}
+        <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
           {links.map((l) => {
             const isActive = page === l.page;
             return (
               <button
                 key={l.page}
                 onClick={() => nav(l.page)}
-                className={`${inter()} px-2.5 lg:px-4 py-1.5 lg:py-2 text-[13px] lg:text-[15px] font-medium rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                className={`${inter()} px-2.5 xl:px-4 py-1.5 lg:py-2 text-[13px] xl:text-[15px] font-medium rounded-full transition-all cursor-pointer whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a65a4a] ${
                   isActive
                     ? "bg-[#a65a4a]/12 text-[#a65a4a] font-semibold"
                     : "text-[#1e1e1e]/80 hover:text-[#a65a4a] hover:bg-[#a65a4a]/6"
@@ -214,9 +236,9 @@ export function Navigation({
             </div>
           )}
 
-          {/* Mobile Menu Hamburger Toggle */}
+          {/* Mobile & Tablet Menu Hamburger Toggle */}
           <button
-            className="md:hidden p-1.5 rounded-xl text-[#1e1e1e] hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 transition-colors cursor-pointer shrink-0"
+            className="lg:hidden p-1.5 rounded-xl text-[#1e1e1e] hover:text-[#a65a4a] hover:bg-[#a65a4a]/10 transition-colors cursor-pointer shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a65a4a]"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={menuOpen}
@@ -226,9 +248,9 @@ export function Navigation({
         </div>
       </div>
 
-      {/* Mobile Drawer Menu (Mobile Screens < 768px) */}
+      {/* Mobile & Tablet Drawer Menu (Screens < 1024px) */}
       {menuOpen && (
-        <div className="fixed inset-0 top-[52px] sm:top-[64px] z-40 md:hidden flex flex-col justify-start">
+        <div className="absolute left-0 right-0 top-full h-[calc(100dvh-100%)] z-40 lg:hidden flex flex-col justify-start">
           {/* Semi-transparent backdrop overlay */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-xs transition-opacity"

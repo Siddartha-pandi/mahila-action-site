@@ -4,12 +4,13 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { saveAllContent, type ContentMap } from "@/lib/content";
 import { type SiteData, saveLocalSiteData } from "@/lib/data";
-import { signInAdmin, signOutAdmin, onAdminAuthChange } from "@/lib/backend";
+import { getSavedUserSession, signInAdmin, signOutAdmin, onAdminAuthChange } from "@/lib/backend";
 import {
   getCurrentAdminSession,
   setCurrentAdminSession,
   clearAdminSession,
   hasPermission,
+  canAccessAdminPanel,
   getRoleById,
   syncRolesFromServer,
   type AdminUser,
@@ -350,6 +351,39 @@ export function AdminPage({
   }
 
   if (!loggedIn) {
+    const savedUser = getSavedUserSession();
+    const isNonAdminSignedIn = Boolean(savedUser && !canAccessAdminPanel(savedUser));
+
+    if (isNonAdminSignedIn) {
+      return (
+        <main className="min-h-screen bg-[#f4efe7] flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl p-8 border border-[#a65a4a]/15 text-center max-w-lg w-full shadow-xl">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3 text-xl">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h1 className="font-['Fraunces',serif] text-[22px] font-semibold text-[#1e1e1e]">Access Denied</h1>
+            <p className="font-['Inter',sans-serif] text-[13px] text-[#1e1e1e]/65 mt-2 leading-relaxed">
+              Your account (<strong>{savedUser?.email}</strong>) does not have Admin Panel permissions. Access is restricted to authorized Admins and Super Admins.
+            </p>
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => onExit("home")}
+                className="w-full sm:w-auto px-6 py-2.5 bg-[#a65a4a] text-white text-[13px] font-semibold rounded-full hover:bg-[#993925] transition-colors cursor-pointer"
+              >
+                ← Back to Website
+              </button>
+              <button
+                onClick={() => onExit("account")}
+                className="w-full sm:w-auto px-5 py-2.5 border border-[#a65a4a]/30 text-[#a65a4a] text-[13px] font-semibold rounded-full hover:bg-[#a65a4a]/10 transition-colors cursor-pointer"
+              >
+                Go to My Account
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="min-h-screen bg-[#f4efe7] flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-[420px] overflow-hidden">

@@ -108,6 +108,44 @@ export function RolesAdmin({
     if (editingUser?.role === "superadmin" && !isSuperAdmin) {
       return toast.error("Only Super Admin can assign the Super Admin role.");
     }
+
+    const originalUser = editingUser?.id ? dbUsers.find((u) => String(u.id) === String(editingUser.id)) : null;
+    const prevRole = originalUser?.role || "user";
+    const nextRole = editingUser?.role || "user";
+    const isSelfEdit = Boolean(
+      editingUser?.email &&
+        currentSession.email &&
+        editingUser.email.trim().toLowerCase() === currentSession.email.trim().toLowerCase()
+    );
+    const isRoleChanged = Boolean(editingUser?.id && nextRole !== prevRole);
+    const isPermsChanged = Boolean(
+      editingUser?.id && JSON.stringify(editingUser?.permissions ?? null) !== JSON.stringify(originalUser?.permissions ?? null)
+    );
+
+    if (isSelfEdit && (isRoleChanged || isPermsChanged)) {
+      return toast.error("You cannot modify your own role or permissions.");
+    }
+
+    if ((isRoleChanged || isPermsChanged || (!editingUser?.id && nextRole !== "user")) && !isSuperAdmin) {
+      return toast.error("Only Super Admin can grant, revoke, or modify Admin roles and permissions.");
+    }
+
+    const isPrivilegeChange =
+      isRoleChanged ||
+      isPermsChanged ||
+      (!editingUser?.id && (nextRole !== "user" || Boolean(editingUser?.permissions)));
+
+    if (isPrivilegeChange) {
+      const actionDesc =
+        nextRole === "user" && prevRole !== "user"
+          ? `revoke Admin/Staff privileges from "${editingUser.name}" (changing role from ${getRoleBadgeLabel(prevRole)} to User)`
+          : !editingUser?.id
+          ? `create "${editingUser.name}" with ${getRoleBadgeLabel(nextRole)} privileges`
+          : `update privileges for "${editingUser.name}" (${getRoleBadgeLabel(prevRole)} → ${getRoleBadgeLabel(nextRole)})`;
+      if (!confirm(`Are you sure you want to ${actionDesc}?`)) {
+        return;
+      }
+    }
     const hasPassword = Boolean(editingUser?.password && String(editingUser.password).trim());
     const invalid = firstError(
       validateName(editingUser?.name),
@@ -184,7 +222,7 @@ export function RolesAdmin({
   // ── Role Matrix Handlers ──────────────────────────────────────────────────
 
   async function handleTogglePermission(roleId: string, module: AdminModule, action: "view" | "edit" | "delete") {
-    if (!canEditRoles) return toast.error("You do not have permission to modify roles.");
+    if (!isSuperAdmin) return toast.error("Only Super Admin can modify the role permissions matrix.");
     if (roleId === "superadmin") {
       return toast.error("Super Admin permissions are locked to full access for security.");
     }
@@ -225,6 +263,7 @@ export function RolesAdmin({
 
   async function handleSaveCustomRole(e: React.FormEvent) {
     e.preventDefault();
+    if (!isSuperAdmin) return toast.error("Only Super Admin can create or modify roles.");
     if (!editingRole?.name) return toast.error("Role name is required.");
 
     try {
@@ -246,7 +285,7 @@ export function RolesAdmin({
   }
 
   async function handleDeleteCustomRole(role: AdminRole) {
-    if (!canDeleteRoles) return toast.error("You do not have permission to delete roles.");
+    if (!isSuperAdmin) return toast.error("Only Super Admin can delete custom roles.");
     if (role.isSystem) return toast.error("System roles (Super Admin, Admin, User) cannot be deleted.");
 
     const assignedCount = dbUsers.filter(u => u.role === role.id).length;
@@ -451,7 +490,7 @@ export function RolesAdmin({
           <button
             onClick={() => {
               if (!canEditRoles) return toast.error("Permission denied.");
-              setEditingUser({ role: "admin", status: "Active" });
+              setEditingUser({ role: isSuperAdmin ? "admin" : "user", status: "Active" });
               setShowUserModal(true);
             }}
             disabled={!canEditRoles}
@@ -904,6 +943,15 @@ export function RolesAdmin({
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-[12px] text-amber-900 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
                   <span>Super Admin role and Active status are locked for system security.</span>
+                </div>
+              ) : !isSuperAdmin || (editingUser?.email && currentSession.email && editingUser.email.trim().toLowerCase() === currentSession.email.trim().toLowerCase()) ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[12px] text-slate-700 flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>
+                    {editingUser?.email && currentSession.email && editingUser.email.trim().toLowerCase() === currentSession.email.trim().toLowerCase()
+                      ? "You cannot modify your own role or permissions."
+                      : "Only a Super Admin can grant, revoke, or modify Admin roles and permissions."}
+                  </span>
                 </div>
               ) : (
                 <>

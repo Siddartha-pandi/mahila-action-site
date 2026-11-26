@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
     const password_hash = bcrypt.hashSync(String(password), 10);
     const insertRes = await queryDb(
-      `INSERT INTO users (name, email, phone, role, password_hash, skills) VALUES ($1, $2, $3, 'user', $4, $5) RETURNING id`,
+      `INSERT INTO users (name, email, phone, role, status, password_hash, skills) VALUES ($1, $2, $3, 'user', 'Active', $4, $5) RETURNING id`,
       [name.trim(), normalizedEmail, normalizedPhone, password_hash, skills || null]
     );
     const insertedId = insertRes.rows[0]?.id;

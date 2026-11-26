@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDb } from "@/lib/db";
-import { createAdminCookieHeader, getUserSessionFromRequest, signAdminJwt } from "@/lib/auth";
+import { createAdminCookieHeader, createClearAdminCookieHeader, getUserSessionFromRequest, signAdminJwt } from "@/lib/auth";
 import { canAccessAdminPanel } from "@/lib/permissions";
 import { getServerRoles } from "@/lib/rolesServer";
 
@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
 
     let adminJwt: string | undefined;
     let cookieHeader: string | undefined;
+    let shouldClearAdminCookie = false;
     const serverRoles = await getServerRoles();
 
     // Only issue/refresh admin JWT session when the caller ALREADY proved identity via signed cookie/token
@@ -70,6 +71,8 @@ export async function POST(req: NextRequest) {
       const adminPayload = { sub: String(user.id), email: user.email, role: userRole };
       cookieHeader = createAdminCookieHeader(adminPayload);
       adminJwt = signAdminJwt(adminPayload);
+    } else {
+      shouldClearAdminCookie = true;
     }
 
     const res = NextResponse.json({
@@ -91,6 +94,8 @@ export async function POST(req: NextRequest) {
 
     if (cookieHeader) {
       res.headers.append("Set-Cookie", cookieHeader);
+    } else if (shouldClearAdminCookie) {
+      res.headers.append("Set-Cookie", createClearAdminCookieHeader());
     }
 
     return res;
